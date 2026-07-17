@@ -15,10 +15,12 @@ Classic conflict-driven clause learning:
 ```zig
 const r = try solver.solveAssumptions(&.{ lit_a.not(), lit_b.not() });
 // r.assumption_core: deletion-minimal subset (owned i32 DIMACS lits)
+// r.assumption_core_unique: true iff this is the unique MUS of the set
 ```
 
-Cores are **minimal under deletion**, not necessarily unique. Use
-`isDeletionMinimalCore` to re-verify after extraction.
+A core is the **unique MUS** of assumption set *A* when it is a MUS and
+∀a∈MUS. *A*\\{a} is SAT. When several MUSes exist, `unique` is false and the
+returned core is still deletion-minimal.
 
 ## PDR / IC3 (`circuit/pdr.zig`)
 

@@ -29,6 +29,7 @@ pub const pdr = @import("circuit/pdr.zig");
 pub const ternary = @import("circuit/ternary.zig");
 pub const justice = @import("circuit/justice.zig");
 pub const kliveness = @import("circuit/kliveness.zig");
+pub const blast = @import("circuit/blast.zig");
 pub const aiger_write = @import("bridge/aiger_write.zig");
 pub const fol_term = @import("fol/term.zig");
 pub const unify = @import("fol/unify.zig");
@@ -166,6 +167,7 @@ test {
     _ = ternary;
     _ = justice;
     _ = kliveness;
+    _ = blast;
     _ = aiger_write;
     _ = fol_term;
     _ = unify;

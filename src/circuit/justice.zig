@@ -36,62 +36,10 @@ pub const JusticeResult = struct {
     loop_end: ?u32 = null,
 };
 
+const blast = @import("blast.zig");
+
 fn blastFrame(cnf: *Cnf, nl: *const Netlist, frame: u32, nn: u32) !void {
-    for (nl.gates.items) |g| {
-        const y = Lit.positive(Var.fromIndex(frame * nn + g.output.index()));
-        switch (g.kind) {
-            .@"const" => {
-                if (g.const_val) try cnf.addClause(&.{y}) else try cnf.addClause(&.{y.not()});
-            },
-            .buf => {
-                const a = Lit.positive(Var.fromIndex(frame * nn + g.inputs[0].index()));
-                try cnf.addClause(&.{ y.not(), a });
-                try cnf.addClause(&.{ a.not(), y });
-            },
-            .not => {
-                const a = Lit.positive(Var.fromIndex(frame * nn + g.inputs[0].index()));
-                try cnf.addClause(&.{ y.not(), a.not() });
-                try cnf.addClause(&.{ a, y });
-            },
-            .and_, .and_n => {
-                for (g.inputs) |inp| {
-                    try cnf.addClause(&.{ y.not(), Lit.positive(Var.fromIndex(frame * nn + inp.index())) });
-                }
-                var lits: std.ArrayList(Lit) = .empty;
-                defer lits.deinit(cnf.allocator);
-                for (g.inputs) |inp| try lits.append(cnf.allocator, Lit.negative(Var.fromIndex(frame * nn + inp.index())));
-                try lits.append(cnf.allocator, y);
-                try cnf.addClause(lits.items);
-            },
-            .or_, .or_n => {
-                for (g.inputs) |inp| {
-                    try cnf.addClause(&.{ Lit.negative(Var.fromIndex(frame * nn + inp.index())), y });
-                }
-                var lits: std.ArrayList(Lit) = .empty;
-                defer lits.deinit(cnf.allocator);
-                try lits.append(cnf.allocator, y.not());
-                for (g.inputs) |inp| try lits.append(cnf.allocator, Lit.positive(Var.fromIndex(frame * nn + inp.index())));
-                try cnf.addClause(lits.items);
-            },
-            .xor => {
-                const a = Lit.positive(Var.fromIndex(frame * nn + g.inputs[0].index()));
-                const b = Lit.positive(Var.fromIndex(frame * nn + g.inputs[1].index()));
-                try cnf.addClause(&.{ y.not(), a, b });
-                try cnf.addClause(&.{ y.not(), a.not(), b.not() });
-                try cnf.addClause(&.{ y, a.not(), b });
-                try cnf.addClause(&.{ y, a, b.not() });
-            },
-            .mux => {
-                const s = Lit.positive(Var.fromIndex(frame * nn + g.inputs[0].index()));
-                const t = Lit.positive(Var.fromIndex(frame * nn + g.inputs[1].index()));
-                const f = Lit.positive(Var.fromIndex(frame * nn + g.inputs[2].index()));
-                try cnf.addClause(&.{ s.not(), t.not(), y });
-                try cnf.addClause(&.{ s.not(), t, y.not() });
-                try cnf.addClause(&.{ s, f.not(), y });
-                try cnf.addClause(&.{ s, f, y.not() });
-            },
-        }
-    }
+    try blast.blastFrameNn(cnf, nl, frame, nn);
 }
 
 fn unrollBase(allocator: std.mem.Allocator, nl: *const Netlist, bound: u32) !struct { cnf: Cnf, nn: u32, frames: u32 } {

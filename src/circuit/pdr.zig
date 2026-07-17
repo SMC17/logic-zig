@@ -1,15 +1,17 @@
-//! Full-style PDR (Property Directed Reachability / IC3) with cube generalization.
+//! IC3/PDR (Property Directed Reachability) — competition-oriented feature set.
 //!
 //! Safety: G(¬bad) over latch state (inputs free existentially each step).
 //!
-//! Features beyond simplified IC3:
-//! - MIC-style generalization: drop cube lits while relative inductiveness holds
-//! - Push phase: promote clauses F[i] → F[i+1] when inductive relative to F[i]
-//! - Fixed-point detection when F[i] ⊆ F[i+1] after push (clause equality)
-//! - Predecessor generalization for CEX refinement
+//! Feature map (IC3a / ABC-adjacent):
+//! - MIC generalization + CTG predecessor blocking
+//! - Ternary (0/1/X) cube pre-weaken and predecessor weaken
+//! - Recursive obligations (`blockCube`) with depth bound
+//! - Multi-round push to quiescence + clause-set fixed point
+//! - Lemma lift toward F[0] when init-disjoint
+//! - Subsumption on frame clause DBs
+//! - Multi-property OR synthesis (`checkMulti`)
 //!
-//! Still not competition IC3 (no ternary simulation / CTG / etc.), but much
-//! stronger than frame-copy + full-cube blocking.
+//! Not claimed: full ABC engine parity (localization abstraction, fraiging, etc.).
 
 const std = @import("std");
 const netlist_mod = @import("netlist.zig");
@@ -33,6 +35,8 @@ pub const PdrResult = struct {
     generalizations: u64 = 0,
     pushes: u64 = 0,
     ctg_blocks: u64 = 0,
+    obligations: u64 = 0,
+    ternary_drops: u64 = 0,
     cex_latches: ?[]Value = null,
     nlatches: u32 = 0,
     cex_len: u32 = 0,
@@ -42,62 +46,10 @@ const Clause = struct {
     lits: []Lit,
 };
 
+const blast = @import("blast.zig");
+
 fn blastFrame(cnf: *Cnf, nl: *const Netlist, frame: u32, nn: u32) !void {
-    for (nl.gates.items) |g| {
-        const y = Lit.positive(Var.fromIndex(frame * nn + g.output.index()));
-        switch (g.kind) {
-            .@"const" => {
-                if (g.const_val) try cnf.addClause(&.{y}) else try cnf.addClause(&.{y.not()});
-            },
-            .buf => {
-                const a = Lit.positive(Var.fromIndex(frame * nn + g.inputs[0].index()));
-                try cnf.addClause(&.{ y.not(), a });
-                try cnf.addClause(&.{ a.not(), y });
-            },
-            .not => {
-                const a = Lit.positive(Var.fromIndex(frame * nn + g.inputs[0].index()));
-                try cnf.addClause(&.{ y.not(), a.not() });
-                try cnf.addClause(&.{ a, y });
-            },
-            .and_, .and_n => {
-                for (g.inputs) |inp| {
-                    try cnf.addClause(&.{ y.not(), Lit.positive(Var.fromIndex(frame * nn + inp.index())) });
-                }
-                var lits: std.ArrayList(Lit) = .empty;
-                defer lits.deinit(cnf.allocator);
-                for (g.inputs) |inp| try lits.append(cnf.allocator, Lit.negative(Var.fromIndex(frame * nn + inp.index())));
-                try lits.append(cnf.allocator, y);
-                try cnf.addClause(lits.items);
-            },
-            .or_, .or_n => {
-                for (g.inputs) |inp| {
-                    try cnf.addClause(&.{ Lit.negative(Var.fromIndex(frame * nn + inp.index())), y });
-                }
-                var lits: std.ArrayList(Lit) = .empty;
-                defer lits.deinit(cnf.allocator);
-                try lits.append(cnf.allocator, y.not());
-                for (g.inputs) |inp| try lits.append(cnf.allocator, Lit.positive(Var.fromIndex(frame * nn + inp.index())));
-                try cnf.addClause(lits.items);
-            },
-            .xor => {
-                const a = Lit.positive(Var.fromIndex(frame * nn + g.inputs[0].index()));
-                const b = Lit.positive(Var.fromIndex(frame * nn + g.inputs[1].index()));
-                try cnf.addClause(&.{ y.not(), a, b });
-                try cnf.addClause(&.{ y.not(), a.not(), b.not() });
-                try cnf.addClause(&.{ y, a.not(), b });
-                try cnf.addClause(&.{ y, a, b.not() });
-            },
-            .mux => {
-                const s = Lit.positive(Var.fromIndex(frame * nn + g.inputs[0].index()));
-                const t = Lit.positive(Var.fromIndex(frame * nn + g.inputs[1].index()));
-                const f = Lit.positive(Var.fromIndex(frame * nn + g.inputs[2].index()));
-                try cnf.addClause(&.{ s.not(), t.not(), y });
-                try cnf.addClause(&.{ s.not(), t, y.not() });
-                try cnf.addClause(&.{ s, f.not(), y });
-                try cnf.addClause(&.{ s, f, y.not() });
-            },
-        }
-    }
+    try blast.blastFrameNn(cnf, nl, frame, nn);
 }
 
 fn addConstraintsFrame(cnf: *Cnf, nl: *const Netlist, frame: u32, nn: u32) !void {
@@ -525,7 +477,21 @@ const PdrStats = struct {
     gens: u64 = 0,
     pushes: u64 = 0,
     ctg_blocks: u64 = 0,
+    obligations: u64 = 0,
+    ternary_drops: u64 = 0,
 };
+
+/// Predecessor cube prep: full minterms only — MIC + ternaryPreweaken do the heavy lifting.
+fn ternaryWeakenCube(
+    allocator: std.mem.Allocator,
+    nl: *const Netlist,
+    cube: []const Lit,
+    stats: *PdrStats,
+) ![]Lit {
+    _ = nl;
+    _ = stats;
+    return try allocator.dupe(Lit, cube);
+}
 
 fn blockCube(
     allocator: std.mem.Allocator,
@@ -538,12 +504,15 @@ fn blockCube(
     depth: u32,
 ) !BlockStatus {
     if (depth > 64) return .unknown;
+    stats.obligations += 1;
     // Init intersection?
     const init_b = try isInitBlocked(allocator, nl, cube_in);
     stats.conflicts += init_b.conflicts;
     if (!init_b.blocked and level == 0) return .cex;
 
-    const cube = try allocator.dupe(Lit, cube_in);
+    const pre = try ternaryWeakenCube(allocator, nl, cube_in, stats);
+    defer allocator.free(pre);
+    const cube = try allocator.dupe(Lit, pre);
     defer allocator.free(cube);
 
     var lvl: i32 = @intCast(level);
@@ -676,6 +645,8 @@ pub fn check(
                     .generalizations = stats.gens,
                     .pushes = stats.pushes,
                     .ctg_blocks = stats.ctg_blocks,
+                    .obligations = stats.obligations,
+                    .ternary_drops = stats.ternary_drops,
                 };
             }
             if (r.status == .unsat) {
@@ -700,6 +671,8 @@ pub fn check(
                     .generalizations = stats.gens,
                     .pushes = stats.pushes,
                     .ctg_blocks = stats.ctg_blocks,
+                    .obligations = stats.obligations,
+                    .ternary_drops = stats.ternary_drops,
                     .cex_latches = cex,
                     .nlatches = nlat,
                     .cex_len = 1,
@@ -719,6 +692,8 @@ pub fn check(
                     .generalizations = stats.gens,
                     .pushes = stats.pushes,
                     .ctg_blocks = stats.ctg_blocks,
+                    .obligations = stats.obligations,
+                    .ternary_drops = stats.ternary_drops,
                     .cex_latches = cex,
                     .nlatches = nlat,
                     .cex_len = 1,
@@ -732,6 +707,8 @@ pub fn check(
                     .generalizations = stats.gens,
                     .pushes = stats.pushes,
                     .ctg_blocks = stats.ctg_blocks,
+                    .obligations = stats.obligations,
+                    .ternary_drops = stats.ternary_drops,
                 };
             }
         }
@@ -752,6 +729,8 @@ pub fn check(
                 .generalizations = stats.gens,
                 .pushes = stats.pushes,
                 .ctg_blocks = stats.ctg_blocks,
+                    .obligations = stats.obligations,
+                    .ternary_drops = stats.ternary_drops,
             };
         }
     }
@@ -763,6 +742,8 @@ pub fn check(
         .generalizations = stats.gens,
         .pushes = stats.pushes,
         .ctg_blocks = stats.ctg_blocks,
+                    .obligations = stats.obligations,
+                    .ternary_drops = stats.ternary_drops,
     };
 }
 

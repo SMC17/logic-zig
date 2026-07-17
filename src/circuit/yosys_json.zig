@@ -192,12 +192,18 @@ fn addCell(
     }
 
     const kind: ?GateKind = blk: {
-        if (std.mem.eql(u8, typ, "$and") or std.mem.eql(u8, typ, "$_AND_") or std.mem.eql(u8, typ, "$logic_and") or std.mem.eql(u8, typ, "$_ANDNOT_"))
+        if (std.mem.eql(u8, typ, "$and") or std.mem.eql(u8, typ, "$_AND_") or std.mem.eql(u8, typ, "$logic_and"))
             break :blk .and_;
-        if (std.mem.eql(u8, typ, "$or") or std.mem.eql(u8, typ, "$_OR_") or std.mem.eql(u8, typ, "$logic_or") or std.mem.eql(u8, typ, "$_ORNOT_"))
+        if (std.mem.eql(u8, typ, "$or") or std.mem.eql(u8, typ, "$_OR_") or std.mem.eql(u8, typ, "$logic_or"))
             break :blk .or_;
         if (std.mem.eql(u8, typ, "$xor") or std.mem.eql(u8, typ, "$_XOR_"))
             break :blk .xor;
+        if (std.mem.eql(u8, typ, "$xnor") or std.mem.eql(u8, typ, "$_XNOR_"))
+            break :blk .xnor;
+        if (std.mem.eql(u8, typ, "$nand") or std.mem.eql(u8, typ, "$_NAND_"))
+            break :blk .nand;
+        if (std.mem.eql(u8, typ, "$nor") or std.mem.eql(u8, typ, "$_NOR_"))
+            break :blk .nor;
         if (std.mem.eql(u8, typ, "$not") or std.mem.eql(u8, typ, "$_NOT_") or std.mem.eql(u8, typ, "$logic_not") or std.mem.eql(u8, typ, "$_INV_"))
             break :blk .not;
         if (std.mem.eql(u8, typ, "$mux") or std.mem.eql(u8, typ, "$_MUX_") or std.mem.eql(u8, typ, "$pmux"))
@@ -218,7 +224,7 @@ fn addCell(
             const y = try getNet(bit_map, nl, allocator, y_bit);
             try nl.addGate(k, &.{a}, y);
         },
-        .and_, .or_, .xor => {
+        .and_, .or_, .xor, .xnor, .nand, .nor => {
             const a_bit = firstBit(conns, "A") orelse return;
             const b_bit = firstBit(conns, "B") orelse return;
             const y_bit = firstBit(conns, "Y") orelse return;

@@ -200,6 +200,7 @@ fn lowerNetlist(allocator: std.mem.Allocator, nl: *const Netlist, opts: WriteOpt
             }
             if (!ready) continue;
 
+            // Full AIG lowering: every non-AND gate is expressed with hash-consed AND+NOT.
             const out_lit: u32 = switch (g.kind) {
                 .@"const" => if (g.const_val) @as(u32, 1) else 0,
                 .buf => try b.getOrCreateNet(g.inputs[0]),
@@ -213,6 +214,15 @@ fn lowerNetlist(allocator: std.mem.Allocator, nl: *const Netlist, opts: WriteOpt
                     }
                     break :blk acc;
                 },
+                .nand => blk: {
+                    if (g.inputs.len == 0) break :blk @as(u32, 0);
+                    var acc = try b.getOrCreateNet(g.inputs[0]);
+                    var j: usize = 1;
+                    while (j < g.inputs.len) : (j += 1) {
+                        acc = try b.mkAnd(acc, try b.getOrCreateNet(g.inputs[j]));
+                    }
+                    break :blk b.litNeg(acc);
+                },
                 .or_, .or_n => blk: {
                     if (g.inputs.len == 0) break :blk @as(u32, 0);
                     var acc = try b.getOrCreateNet(g.inputs[0]);
@@ -222,8 +232,19 @@ fn lowerNetlist(allocator: std.mem.Allocator, nl: *const Netlist, opts: WriteOpt
                     }
                     break :blk acc;
                 },
+                .nor => blk: {
+                    if (g.inputs.len == 0) break :blk @as(u32, 1);
+                    var acc = try b.getOrCreateNet(g.inputs[0]);
+                    var j: usize = 1;
+                    while (j < g.inputs.len) : (j += 1) {
+                        acc = try b.mkOr(acc, try b.getOrCreateNet(g.inputs[j]));
+                    }
+                    break :blk b.litNeg(acc);
+                },
                 .xor => try b.mkXor(try b.getOrCreateNet(g.inputs[0]), try b.getOrCreateNet(g.inputs[1])),
+                .xnor => b.litNeg(try b.mkXor(try b.getOrCreateNet(g.inputs[0]), try b.getOrCreateNet(g.inputs[1]))),
                 .mux => blk: {
+                    // s?t:f = (s∧t) ∨ (¬s∧f) — shared via hash-cons
                     const s = try b.getOrCreateNet(g.inputs[0]);
                     const t = try b.getOrCreateNet(g.inputs[1]);
                     const f = try b.getOrCreateNet(g.inputs[2]);
@@ -458,6 +479,34 @@ test "aiger write hash-cons shares common AND" {
     // Structural hash should keep AND count modest
     try std.testing.expect(bld.ands.items.len >= 1);
     try std.testing.expect(bld.ands.items.len <= 4);
+}
+
+test "aiger lower mux xor nand roundtrip" {
+    const aiger = @import("aiger.zig");
+    var nl = Netlist.init(std.testing.allocator);
+    defer nl.deinit();
+    const s = try nl.allocNetNamed("s");
+    const t = try nl.allocNetNamed("t");
+    const f = try nl.allocNetNamed("f");
+    const x = try nl.allocNetNamed("x");
+    const y = try nl.allocNetNamed("y");
+    const z = try nl.allocNetNamed("z");
+    try nl.addInput(s);
+    try nl.addInput(t);
+    try nl.addInput(f);
+    try nl.addGate(.mux, &.{ s, t, f }, x);
+    try nl.addGate(.xor, &.{ s, t }, y);
+    try nl.addGate(.nand, &.{ t, f }, z);
+    try nl.addOutput(x);
+    try nl.addOutput(y);
+    try nl.addOutput(z);
+    const bytes = try writeAsciiSimple(std.testing.allocator, &nl);
+    defer std.testing.allocator.free(bytes);
+    var nl2 = try aiger.parse(std.testing.allocator, bytes);
+    defer nl2.deinit();
+    try std.testing.expect(nl2.inputs.items.len == 3);
+    try std.testing.expect(nl2.outputs.items.len == 3);
+    try std.testing.expect(nl2.gates.items.len >= 1);
 }
 
 test "aiger write constant fold x and not x" {
