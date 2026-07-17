@@ -26,8 +26,8 @@ const agent_session = @import("../agent/session.zig");
 
 /// API major.minor — bump minor for additive; major requires new module path.
 pub const version_major: u32 = 1;
-pub const version_minor: u32 = 0;
-pub const version_string = "1.0.0";
+pub const version_minor: u32 = 1;
+pub const version_string = "1.1.0";
 
 /// Feature bits — consumers can feature-detect without parsing docs.
 pub const Capability = packed struct(u32) {
@@ -51,7 +51,9 @@ pub const Capability = packed struct(u32) {
     fol_resolution: bool = true, // Phase 4 skeleton
     ctl_bounded: bool = true,
     abc_interop: bool = true,
-    _pad: u12 = 0,
+    reason_abduce: bool = true, // subset-minimal propositional abduction
+    reason_induce: bool = true, // SAT-based k-term DNF inductive synthesis
+    _pad: u10 = 0,
 
     pub fn current() Capability {
         return .{};
@@ -254,14 +256,31 @@ pub const checkCtl = ctl_mod.check;
 pub const FolResolution = resolution.Prover;
 pub const Session = agent_session.Session;
 
+// ── Reasoning modes (Peircean triad; deduction is the shared oracle) ─
+
+const abduction_mod = @import("../reason/abduction.zig");
+const induction_mod = @import("../reason/induction.zig");
+
+/// Abduction: observation → subset-minimal consistent causes.
+pub const abduce = abduction_mod.abduce;
+pub const AbduceResult = abduction_mod.Result;
+pub const verifyExplanation = abduction_mod.verifyExplanation;
+
+/// Induction: labeled examples → minimal-k DNF rule, deductively re-verified.
+pub const induceDnf = induction_mod.induceDnf;
+pub const InduceResult = induction_mod.Result;
+pub const InduceExample = induction_mod.Example;
+
 test "api v1 version and caps" {
     const line = try versionLine(std.testing.allocator);
     defer std.testing.allocator.free(line);
-    try std.testing.expect(std.mem.indexOf(u8, line, "1.0.0") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, version_string) != null);
     const caps = Capability.current();
     try std.testing.expect(caps.sat_cdcl);
     try std.testing.expect(caps.fol_resolution);
     try std.testing.expect(caps.smt_uf);
+    try std.testing.expect(caps.reason_abduce);
+    try std.testing.expect(caps.reason_induce);
 }
 
 test "api v1 sat unsat" {

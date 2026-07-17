@@ -1,6 +1,6 @@
 # logic-zig status
 
-**Version:** 0.17.0  
+**Version:** 0.18.0  
 **North star:** universal logic library in Zig (`docs/UNIVERSAL.md`) — leave no stone unturned; stand on giants; deepen forever.
 
 ## Climb gates
@@ -24,6 +24,8 @@ zig build test && zig build
 | `type_theory/tt` | MLTT micro kernel (check) |
 | `modal/kripke` | Finite-frame K / diamond-box |
 | `bridge/giants` | Discover CaDiCaL, Kissat, Z3, ABC, Vampire, Lean, … |
+| `reason/abduction` | Subset-minimal consistent explanations (MARCO over SAT oracle) |
+| `reason/induction` | Minimal-k DNF synthesis from examples (SAT-exact, re-verified) |
 | `docs/UNIVERSAL.md` | Destination + non-fiction rules |
 
 ## Computational depth (unchanged spine)
@@ -36,6 +38,7 @@ Taxonomy map: `docs/TAXONOMY_COVERAGE.md`
 | Ambition | Now |
 |----------|-----|
 | Universal coverage of taxonomy | Registry + spines; most families `documented`/`skeleton` |
+| Peircean triad | Deduction industrial; abduction/induction real but **propositional fragment only** — no first-order abduction, no statistical/Bayesian induction |
 | Informal argument analysis | Structure OK; no NLP / full schemes library |
 | Full type theory / proof assistant | Micro checker only |
 | Beat Kissat/ABC/Z3/Vampire | Giants discover + CaDiCaL scoreboard; **no parity claim** |

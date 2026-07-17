@@ -63,6 +63,8 @@ pub const smt_uf = @import("smt/uf.zig");
 pub const smt_array = @import("smt/array.zig");
 pub const fol_resolution = @import("fol/resolution.zig");
 pub const sat_scoreboard = @import("track/sat_scoreboard.zig");
+pub const abduction = @import("reason/abduction.zig");
+pub const induction = @import("reason/induction.zig");
 pub const edge_suite = @import("track/edge_suite.zig");
 pub const taxonomy = @import("taxonomy/registry.zig");
 pub const informal = @import("informal/argument.zig");
@@ -234,6 +236,8 @@ test {
     _ = type_theory;
     _ = modal;
     _ = giants;
+    _ = abduction;
+    _ = induction;
 }
 
 test "end-to-end tautology a|!a" {
