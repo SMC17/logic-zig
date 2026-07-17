@@ -5,6 +5,41 @@ All notable changes to **logic-zig** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/).
 
+## [0.19.0] — 2026-07-17
+
+### Reasoning-mode wave: MaxSAT · cost-ranked & first-order abduction · Bayesian induction · nonmonotonic family
+
+- **`sat/maxsat.zig`**: weighted partial MaxSAT — exact optimum via descending upper-bound
+  search with a sequential weighted counter PB encoding; verified against brute force on
+  60 random instances
+- **`reason/abduction.zig` + `abduceMinCost`**: cost-optimal explanations via the implicit
+  hitting-set duality (min-cost hitting sets of accumulated MCSes via MaxSAT, candidates
+  checked deductively, inconsistent candidates blocked); cardinality-minimal by default,
+  weighted objectives supported; brute-force cross-checked incl. 25 random instances
+- **`reason/alp.zig`**: abductive logic programming — **first-order abduction** over the
+  Horn substrate: SLD with hypothesis collection (KKT-style, definite fragment), trail-based
+  Robinson unification with occurs check, integrity denials with variables, set-semantic Δ,
+  independent deductive re-check (`derives`); hypotheses genuinely instantiated by
+  unification (flies(tweety) → normal(tweety))
+- **`reason/bayes.zig`**: Bayesian/statistical induction — Laplace rule of succession
+  (Beta priors) and exact posterior over the conjunction hypothesis class with Occam prior
+  and ε-noise likelihood; MAP + predictive by full model averaging
+- **`reason/default_logic.zig`**: Reiter default logic — extension enumeration with
+  groundedness, justification consistency against the final extension, and stability;
+  credulous/skeptical consequence; canon: Tweety, Nixon diamond (2 extensions),
+  ( :p / ¬p ) (0 extensions), self-support rejected, inconsistent-W degeneracy
+- **`reason/klm.zig`**: KLM rational closure — Lehmann–Magidor exceptionality ranking and
+  entailment, all SAT-backed; canon: specificity overrides, irrelevance preserved
+  (red bird flies), nonmonotonicity, vacuous impossible antecedents
+- **api/v1 → 1.2.0**: six new capability bits + re-exports for all engines
+- Taxonomy: `default-logic`, `probabilistic` → `fragment`; new rows `klm-rational`,
+  `alp`, `maxsat`
+- CLI: `reason-demo` exercising all five new engines
+- Pre-registered and confirmed: exp-1784300107-552194486 (MaxSAT),
+  exp-1784300107-605449209 (min-cost abduction), exp-1784300112-349635420 (ALP),
+  exp-1784300112-405562520 (Bayes), exp-1784300117-164722046 (defaults),
+  exp-1784300117-228825284 (rational closure)
+
 ## [0.18.0] — 2026-07-17
 
 ### Peircean triad: abduction and induction as first-class engines

@@ -18,6 +18,7 @@ const usage =
     \\  logic-zig klive-demo [--max-k K]        # infinite justice proof (k-liveness)
     \\  logic-zig abduce-demo                   # observation → minimal causes (diagnosis)
     \\  logic-zig induce-demo                   # examples → minimal-k DNF rule
+    \\  logic-zig reason-demo                   # min-cost abduce · ALP · Bayes · defaults · KLM
     \\  logic-zig ternary-demo
     \\  logic-zig doctor                        # self-check smoke suite
     \\  logic-zig api-info                      # stable api/v1 version + capabilities
@@ -190,6 +191,10 @@ pub fn main(init: std.process.Init) !void {
         try cmdInduceDemo(gpa);
         return;
     }
+    if (std.mem.eql(u8, cmd, "reason-demo")) {
+        try cmdReasonDemo(gpa);
+        return;
+    }
     if (std.mem.eql(u8, cmd, "ternary-demo")) {
         try cmdTernaryDemo(gpa);
         return;
@@ -217,8 +222,11 @@ pub fn main(init: std.process.Init) !void {
         std.debug.print("  ctl_bounded={} agent_session={} abc_interop={}\n", .{
             caps.ctl_bounded, caps.agent_session, caps.abc_interop,
         });
-        std.debug.print("  reason_abduce={} reason_induce={}\n", .{
-            caps.reason_abduce, caps.reason_induce,
+        std.debug.print("  reason_abduce={} reason_induce={} reason_abduce_cost={} sat_maxsat={}\n", .{
+            caps.reason_abduce, caps.reason_induce, caps.reason_abduce_cost, caps.sat_maxsat,
+        });
+        std.debug.print("  reason_alp={} reason_bayes={} reason_default={} reason_klm={}\n", .{
+            caps.reason_alp, caps.reason_bayes, caps.reason_default, caps.reason_klm,
         });
         std.debug.print("program: docs/INDUSTRIAL.md\n", .{});
         return;
@@ -1175,6 +1183,93 @@ fn cmdInduceDemo(gpa: std.mem.Allocator) !void {
         std.debug.print("  term:", .{});
         for (t) |l| std.debug.print(" {s}x{d}", .{ if (l.negated) "!" else "", l.feature });
         std.debug.print("\n", .{});
+    }
+}
+
+fn cmdReasonDemo(gpa: std.mem.Allocator) !void {
+    const Lit = logic.lit.Lit;
+    const Var = logic.lit.Var;
+    const lp = Lit.positive;
+    const ln = Lit.negative;
+    const v = Var.fromIndex;
+
+    // 1. Min-cost abduction: a→o (w=5) vs b∧c→o (w=1+1).
+    {
+        var b = logic.cnf.Cnf.init(gpa);
+        defer b.deinit();
+        try b.addClause(&.{ ln(v(0)), lp(v(3)) });
+        try b.addClause(&.{ ln(v(1)), ln(v(2)), lp(v(3)) });
+        const w = [_]u32{ 5, 1, 1 };
+        var r = try logic.abduction.abduceMinCost(gpa, &b, &.{lp(v(3))}, &.{ lp(v(0)), lp(v(1)), lp(v(2)) }, .{ .weights = &w });
+        defer r.deinit();
+        std.debug.print("min-cost abduce: cost={d} optimal={} size={d}\n", .{
+            r.cost, r.optimal, if (r.explanation) |e| e.len else 0,
+        });
+    }
+    // 2. ALP: flies(tweety) needs normal(tweety).
+    {
+        var pool = logic.fol_term.TermPool.init(gpa);
+        defer pool.deinit();
+        const tweety = try pool.mkConst("tweety");
+        const x = try pool.mkVar("X");
+        const clauses = [_]logic.alp.Clause{
+            .{ .head = try pool.mkFunc("bird", &.{tweety}) },
+            .{ .head = try pool.mkFunc("flies", &.{x}), .body = &.{
+                try pool.mkFunc("bird", &.{x}),
+                try pool.mkFunc("normal", &.{x}),
+            } },
+        };
+        const abd = [_][]const u8{"normal"};
+        var r = try logic.alp.abduce(gpa, &pool, .{ .clauses = &clauses, .abducibles = &abd }, &.{
+            try pool.mkFunc("flies", &.{tweety}),
+        }, .{});
+        defer r.deinit();
+        std.debug.print("alp: flies(tweety) ← {d} hypothesis set(s), first has {d} atom(s)\n", .{
+            r.solutions.items.len,
+            if (r.solutions.items.len > 0) r.solutions.items[0].len else 0,
+        });
+    }
+    // 3. Bayesian induction: rule of succession + MAP.
+    {
+        std.debug.print("bayes: laplace(7 of 10)={d:.4}\n", .{logic.bayes.laplace(7, 10)});
+        const ex = [_]logic.bayes.Example{
+            .{ .features = &.{ true, true }, .label = true },
+            .{ .features = &.{ false, false }, .label = false },
+        };
+        var post = try logic.bayes.posterior(gpa, 2, &ex, .{ .noise = 0.0 });
+        defer post.deinit();
+        std.debug.print("bayes: MAP size={d} P(true|{{t,t}})={d:.3}\n", .{
+            post.map.size(), post.predict(&.{ true, true }),
+        });
+    }
+    // 4. Default logic: Nixon diamond.
+    {
+        var w = logic.cnf.Cnf.init(gpa);
+        defer w.deinit();
+        try w.addClause(&.{lp(v(0))});
+        try w.addClause(&.{lp(v(1))});
+        const d = [_]logic.default_logic.Default{
+            .{ .prereq = &.{lp(v(0))}, .justifications = &.{&.{lp(v(2))}}, .consequent = &.{lp(v(2))} },
+            .{ .prereq = &.{lp(v(1))}, .justifications = &.{&.{ln(v(2))}}, .consequent = &.{ln(v(2))} },
+        };
+        var exts = try logic.default_logic.extensions(gpa, &w, &d, .{});
+        defer exts.deinit();
+        std.debug.print("default: nixon diamond → {d} extensions\n", .{exts.generating.items.len});
+    }
+    // 5. KLM rational closure: penguin canon.
+    {
+        const kb = [_]logic.klm.Conditional{
+            .{ .antecedent = &.{lp(v(0))}, .consequent = &.{lp(v(1))} },
+            .{ .antecedent = &.{lp(v(2))}, .consequent = &.{ln(v(1))} },
+            .{ .antecedent = &.{lp(v(2))}, .consequent = &.{lp(v(0))} },
+        };
+        var rk = try logic.klm.rank(gpa, null, &kb);
+        defer rk.deinit();
+        const pf = try logic.klm.query(gpa, null, &kb, &rk, &.{lp(v(2))}, &.{ln(v(1))});
+        const rb = try logic.klm.query(gpa, null, &kb, &rk, &.{ lp(v(3)), lp(v(0)) }, &.{lp(v(1))});
+        std.debug.print("klm: penguin|~¬fly={} red∧bird|~fly={} levels={d}\n", .{
+            pf.entailed, rb.entailed, rk.levels,
+        });
     }
 }
 
