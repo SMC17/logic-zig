@@ -5,6 +5,17 @@ All notable changes to **logic-zig** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/).
 
+## [0.16.0] — 2026-07-16
+
+### Industrial wave: vivify · sat_hard · UF · ABC path
+
+- **Vivification** in preprocess (literal/clause strengthen via UP under ~others)
+- **sat-scoreboard --industrial**: portfolio + vivify + higher timeout; `sat_hard` CI sample
+- **SMT UF spine** (`smt/uf.zig`): congruence closure, diseq, unary preds; capability `smt_uf=true`
+- **ABC path**: `abc-delta` compares internal MC vs ABC PDR when `abc` present
+- Trust report: SMT UF checks
+- Honest residual: PAR-2 vs CaDiCaL not guaranteed; full industrial parity not claimed
+
 ## [0.15.1] — 2026-07-16
 
 ### Industrial SAT Phase 1

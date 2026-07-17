@@ -44,7 +44,7 @@ pub const Capability = packed struct(u32) {
     cert_pdr: bool = true,
     agent_session: bool = true,
     smt_bv: bool = true,
-    smt_uf: bool = false, // Phase 3
+    smt_uf: bool = true, // ground EUF spine
     smt_array: bool = false, // Phase 3
     fol_unify: bool = true,
     fol_finite_model: bool = true,
@@ -222,7 +222,7 @@ test "api v1 version and caps" {
     const caps = Capability.current();
     try std.testing.expect(caps.sat_cdcl);
     try std.testing.expect(caps.fol_resolution);
-    try std.testing.expect(!caps.smt_uf); // not yet industrial UF
+    try std.testing.expect(caps.smt_uf);
 }
 
 test "api v1 sat unsat" {

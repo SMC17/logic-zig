@@ -24,10 +24,19 @@ pub const Stats = struct {
     units_propagated: u32 = 0,
     pure_assigned: u32 = 0,
     self_subsumed: u32 = 0,
+    vivified_lits: u32 = 0,
+    vivified_removed: u32 = 0,
     clauses_in: u32 = 0,
     clauses_out: u32 = 0,
     /// True if empty clause derived (UNSAT).
     unsat: bool = false,
+};
+
+pub const PreprocessOptions = struct {
+    vivify: bool = true,
+    /// Cap clauses considered for vivification (industrial cost control).
+    vivify_max_clauses: u32 = 4000,
+    vivify_max_len: u32 = 32,
 };
 
 fn isTautology(cl: []const Lit) bool {
@@ -300,7 +309,162 @@ fn unitSelfSubsume(allocator: std.mem.Allocator, kept: *ClauseList, stats: *Stat
     }
 }
 
+/// Unit-propagate under assumptions; return true if conflict.
+fn propUnder(
+    allocator: std.mem.Allocator,
+    clauses: []const []const Lit,
+    assumptions: []const Lit,
+    assign_out: []Value,
+) !bool {
+    @memset(assign_out, .undef);
+    var queue: std.ArrayList(Lit) = .empty;
+    defer queue.deinit(allocator);
+    for (assumptions) |a| {
+        const vi = a.variable().index();
+        const want: Value = if (a.isNeg()) .false_ else .true_;
+        if (assign_out[vi] == .undef) {
+            assign_out[vi] = want;
+            try queue.append(allocator, a);
+        } else if (assign_out[vi] != want) return true;
+    }
+    var qh: usize = 0;
+    while (qh < queue.items.len) {
+        // scan all clauses for units (cheap vivify-scale)
+        var progress = true;
+        while (progress) {
+            progress = false;
+            for (clauses) |cl| {
+                var sat = false;
+                var undef_count: u32 = 0;
+                var last_undef: ?Lit = null;
+                for (cl) |l| {
+                    const v = assign_out[l.variable().index()];
+                    if (v == .undef) {
+                        undef_count += 1;
+                        last_undef = l;
+                    } else {
+                        const want_true = !l.isNeg();
+                        if ((v == .true_ and want_true) or (v == .false_ and !want_true)) {
+                            sat = true;
+                            break;
+                        }
+                    }
+                }
+                if (sat) continue;
+                if (undef_count == 0) return true; // conflict
+                if (undef_count == 1) {
+                    const u = last_undef.?;
+                    const vi = u.variable().index();
+                    const want: Value = if (u.isNeg()) .false_ else .true_;
+                    if (assign_out[vi] == .undef) {
+                        assign_out[vi] = want;
+                        try queue.append(allocator, u);
+                        progress = true;
+                    } else if (assign_out[vi] != want) return true;
+                }
+            }
+        }
+        qh = queue.items.len; // one wave
+        break;
+    }
+    return false;
+}
+
+/// Build list of clauses excluding index `skip` (views into kept — not owned).
+fn othersSlice(allocator: std.mem.Allocator, kept: *const ClauseList, skip: usize) ![][]const Lit {
+    var out: std.ArrayList([]const Lit) = .empty;
+    errdefer out.deinit(allocator);
+    for (kept.items.items, 0..) |cl, j| {
+        if (j == skip) continue;
+        try out.append(allocator, cl);
+    }
+    return try out.toOwnedSlice(allocator);
+}
+
+/// Vivification: remove redundant clauses / literals via unit propagation under
+/// partial falsifying assumptions (industrial SAT standard technique).
+/// Uses **other** clauses only so a fully-falsified target does not self-conflict.
+fn vivify(allocator: std.mem.Allocator, nvars: u32, kept: *ClauseList, stats: *Stats, opts: PreprocessOptions) !void {
+    if (!opts.vivify) return;
+    const assign = try allocator.alloc(Value, nvars);
+    defer allocator.free(assign);
+
+    const max_c = @min(opts.vivify_max_clauses, @as(u32, @intCast(kept.items.items.len)));
+    var i: usize = 0;
+    var considered: u32 = 0;
+    while (i < kept.items.items.len and considered < max_c) {
+        const cl = kept.items.items[i];
+        considered += 1;
+        if (cl.len < 2 or cl.len > opts.vivify_max_len) {
+            i += 1;
+            continue;
+        }
+
+        const others = try othersSlice(allocator, kept, i);
+        defer allocator.free(others);
+
+        // Redundancy: assume all ~l for l in C; if conflict in *others* → C redundant
+        var ass_all: std.ArrayList(Lit) = .empty;
+        defer ass_all.deinit(allocator);
+        for (cl) |l| try ass_all.append(allocator, l.not());
+
+        if (try propUnder(allocator, others, ass_all.items, assign)) {
+            allocator.free(cl);
+            _ = kept.items.orderedRemove(i);
+            stats.vivified_removed += 1;
+            continue;
+        }
+
+        // Literal elimination: for each lit, assume ~others in C; if conflict → redundant;
+        // if lit forced false under UP → drop lit
+        var new_lits: std.ArrayList(Lit) = .empty;
+        defer new_lits.deinit(allocator);
+        var removed_clause = false;
+        var li: usize = 0;
+        while (li < cl.len) : (li += 1) {
+            var ass: std.ArrayList(Lit) = .empty;
+            defer ass.deinit(allocator);
+            for (cl, 0..) |l, j| {
+                if (j != li) try ass.append(allocator, l.not());
+            }
+            if (try propUnder(allocator, others, ass.items, assign)) {
+                allocator.free(cl);
+                _ = kept.items.orderedRemove(i);
+                stats.vivified_removed += 1;
+                removed_clause = true;
+                break;
+            }
+            const l = cl[li];
+            const v = assign[l.variable().index()];
+            const want_true = !l.isNeg();
+            if ((v == .false_ and want_true) or (v == .true_ and !want_true)) {
+                stats.vivified_lits += 1;
+                continue;
+            }
+            try new_lits.append(allocator, l);
+        }
+        if (removed_clause) continue;
+        if (new_lits.items.len == 0) {
+            stats.unsat = true;
+            const empty = try allocator.alloc(Lit, 0);
+            allocator.free(cl);
+            kept.items.items[i] = empty;
+            return;
+        }
+        if (new_lits.items.len < cl.len) {
+            allocator.free(cl);
+            const ncl = try allocator.dupe(Lit, new_lits.items);
+            kept.items.items[i] = ncl;
+        }
+        i += 1;
+    }
+}
+
 pub fn preprocess(allocator: std.mem.Allocator, cnf: *Cnf) !Stats {
+    return preprocessOpts(allocator, cnf, .{});
+}
+
+pub fn preprocessOpts(allocator: std.mem.Allocator, cnf: *Cnf, opts: PreprocessOptions) !Stats {
     var stats: Stats = .{};
     stats.clauses_in = cnf.numClauses();
     if (stats.clauses_in == 0) {
@@ -320,7 +484,18 @@ pub fn preprocess(allocator: std.mem.Allocator, cnf: *Cnf) !Stats {
     }
     try unitSelfSubsume(allocator, &kept, &stats);
     forwardSubsumption(&kept, &stats);
-    // second BCP after strengthen
+    try bcpAndPure(allocator, cnf.num_vars, &kept, &stats);
+    if (stats.unsat) {
+        try rebuildCnf(allocator, cnf, &kept);
+        stats.clauses_out = cnf.numClauses();
+        return stats;
+    }
+    try vivify(allocator, cnf.num_vars, &kept, &stats, opts);
+    if (stats.unsat) {
+        try rebuildCnf(allocator, cnf, &kept);
+        stats.clauses_out = cnf.numClauses();
+        return stats;
+    }
     try bcpAndPure(allocator, cnf.num_vars, &kept, &stats);
 
     try rebuildCnf(allocator, cnf, &kept);
@@ -377,4 +552,21 @@ test "preprocess pure literal" {
     try cnf.addClause(&.{ Lit.positive(lit_mod.Var.fromIndex(0)), Lit.negative(lit_mod.Var.fromIndex(1)) });
     const st = try preprocess(std.testing.allocator, &cnf);
     try std.testing.expect(st.pure_assigned >= 1 or st.units_propagated >= 0);
+}
+
+test "preprocess vivify preserves unsat" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    cnf.ensureVars(2);
+    try cnf.addClause(&.{ Lit.positive(lit_mod.Var.fromIndex(0)), Lit.positive(lit_mod.Var.fromIndex(1)) });
+    try cnf.addClause(&.{Lit.negative(lit_mod.Var.fromIndex(0))});
+    try cnf.addClause(&.{Lit.negative(lit_mod.Var.fromIndex(1))});
+    _ = try preprocessOpts(std.testing.allocator, &cnf, .{ .vivify = true });
+    const r = try @import("solver.zig").solveCnf(std.testing.allocator, &cnf, .{});
+    defer if (r.model) |m| std.testing.allocator.free(m);
+    defer if (r.proof) |*p| {
+        var pp = p.*;
+        pp.deinit();
+    };
+    try std.testing.expect(r.status == .unsat);
 }

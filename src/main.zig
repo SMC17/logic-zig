@@ -20,7 +20,8 @@ const usage =
     \\  logic-zig doctor                        # self-check smoke suite
     \\  logic-zig api-info                      # stable api/v1 version + capabilities
     \\  logic-zig trust-report                  # DRAT + CaDiCaL + PDR certs + sequential
-    \\  logic-zig sat-scoreboard [--dir DIR] [--limit N] [--conflicts N] [--portfolio]
+    \\  logic-zig sat-scoreboard [--dir DIR] [--limit N] [--conflicts N] [--portfolio] [--industrial]
+    \\  logic-zig abc-delta <file.aag> [--frames N]   # internal MC vs ABC when present
     \\  logic-zig diff-external [--iters N]
     \\  logic-zig bench-suite [--dir DIR] [--timeout S] [--max-conflicts N] [--json] [--fair]
     \\  logic-zig bench-comp [--dir DIR] [--timeout S] [--max-conflicts N] [--no-drat]
@@ -271,6 +272,7 @@ pub fn main(init: std.process.Init) !void {
         var limit: u32 = 30;
         var conflicts: u64 = 300_000;
         var use_portfolio = false;
+        var industrial = false;
         while (iter.next()) |a| {
             if (std.mem.eql(u8, a, "--dir")) {
                 dir = iter.next() orelse return fail("dir");
@@ -280,6 +282,8 @@ pub fn main(init: std.process.Init) !void {
                 conflicts = std.fmt.parseInt(u64, iter.next() orelse return fail("conflicts"), 10) catch return fail("bad conflicts");
             } else if (std.mem.eql(u8, a, "--portfolio")) {
                 use_portfolio = true;
+            } else if (std.mem.eql(u8, a, "--industrial") or std.mem.eql(u8, a, "--hard")) {
+                industrial = true;
             }
         }
         var sb = try logic.sat_scoreboard.run(gpa, io, .{
@@ -290,10 +294,41 @@ pub fn main(init: std.process.Init) !void {
             .portfolio_budget = conflicts,
             .preprocess = true,
             .inprocess = true,
+            .industrial = industrial,
+            .timeout_s = if (industrial) 30.0 else 10.0,
         });
         defer sb.deinit(gpa);
         logic.sat_scoreboard.print(&sb);
         if (!sb.correctnessOk()) std.process.exit(1);
+        return;
+    }
+    if (std.mem.eql(u8, cmd, "abc-delta")) {
+        var path: ?[]const u8 = null;
+        var frames: u32 = 16;
+        while (iter.next()) |a| {
+            if (std.mem.eql(u8, a, "--frames")) {
+                frames = std.fmt.parseInt(u32, iter.next() orelse return fail("frames"), 10) catch return fail("bad frames");
+            } else if (path == null) path = a;
+        }
+        const aig = path orelse return fail("missing aiger");
+        const src = try std.Io.Dir.cwd().readFileAlloc(io, aig, gpa, .limited(32 * 1024 * 1024));
+        defer gpa.free(src);
+        const mr = try logic.api.mcAiger(gpa, src, .{ .max_frames = frames, .engine = .auto, .cert = false });
+        const ar = try logic.abc_interop.checkAigerSafety(gpa, io, aig);
+        defer {
+            var aa = ar;
+            aa.deinit(gpa);
+        }
+        const proven = mr.status == .proven;
+        const violated = mr.status == .violated;
+        const label = logic.abc_interop.deltaLabel(proven, violated, ar.status);
+        std.debug.print("internal={s} engine={s} abc={s} delta={s}\n", .{
+            @tagName(mr.status),
+            mr.engine,
+            @tagName(ar.status),
+            label,
+        });
+        if (std.mem.eql(u8, label, "MISMATCH")) std.process.exit(1);
         return;
     }
     if (std.mem.eql(u8, cmd, "diff-external")) {
