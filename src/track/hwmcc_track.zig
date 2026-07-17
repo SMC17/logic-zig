@@ -14,6 +14,7 @@ const pdr = @import("../circuit/pdr.zig");
 const bmc = @import("../circuit/bmc.zig");
 const justice = @import("../circuit/justice.zig");
 const kliveness = @import("../circuit/kliveness.zig");
+const certificate = @import("../cert/certificate.zig");
 const netlist_mod = @import("../circuit/netlist.zig");
 
 pub const HwmccOpts = struct {
@@ -24,6 +25,8 @@ pub const HwmccOpts = struct {
     /// k-liveness infinite proof for justice (after lasso search).
     klive: bool = false,
     max_k: u32 = 8,
+    /// On proven: re-check inductive cert and print text.
+    cert: bool = false,
 };
 
 pub fn runFile(allocator: std.mem.Allocator, path: []const u8, io: std.Io, max_frames: u32) !u8 {
@@ -49,7 +52,35 @@ pub fn runBytesOptsLegacy(allocator: std.mem.Allocator, src: []const u8, max_fra
     return runBytesOpts(allocator, src, .{ .max_frames = max_frames, .each = each });
 }
 
-fn checkOne(allocator: std.mem.Allocator, nl: *netlist_mod.Netlist, bad: netlist_mod.NetId, max_frames: u32) !u8 {
+fn emitCert(allocator: std.mem.Allocator, nl: *netlist_mod.Netlist, bad: netlist_mod.NetId, max_frames: u32) !void {
+    const inv = try certificate.fromPdrProven(allocator, nl, bad, max_frames);
+    if (inv) |*i| {
+        defer {
+            var ii = i.*;
+            ii.deinit();
+        }
+        const ok = try i.verify(allocator, nl);
+        std.debug.print("c cert source={s} clauses={d} verified={}\n", .{
+            @tagName(i.source),
+            i.clauses.len,
+            ok,
+        });
+        if (ok) {
+            const text = try i.writeText(allocator);
+            defer allocator.free(text);
+            // prefix each line
+            var lines = std.mem.splitScalar(u8, text, '\n');
+            while (lines.next()) |ln| {
+                if (ln.len == 0) continue;
+                std.debug.print("c cert-line {s}\n", .{ln});
+            }
+        }
+    } else {
+        std.debug.print("c cert unavailable\n", .{});
+    }
+}
+
+fn checkOne(allocator: std.mem.Allocator, nl: *netlist_mod.Netlist, bad: netlist_mod.NetId, max_frames: u32, do_cert: bool) !u8 {
     var pdr_r = try pdr.check(allocator, nl, bad, max_frames);
     defer pdr_r.deinit(allocator);
     switch (pdr_r.status) {
@@ -59,6 +90,7 @@ fn checkOne(allocator: std.mem.Allocator, nl: *netlist_mod.Netlist, bad: netlist
                 pdr_r.generalizations,
                 pdr_r.ctg_blocks,
             });
+            if (do_cert) try emitCert(allocator, nl, bad, max_frames);
             return 0;
         },
         .violated => {
@@ -112,7 +144,7 @@ pub fn runBytesOpts(allocator: std.mem.Allocator, src: []const u8, opts: HwmccOp
         for (props, 0..) |bad, i| {
             const name = if (bad.index() < nl.names.items.len) nl.names.items[bad.index()] else null;
             std.debug.print("c property {d} {s}\n", .{ i, name orelse "?" });
-            const code = try checkOne(allocator, &nl, bad, opts.max_frames);
+            const code = try checkOne(allocator, &nl, bad, opts.max_frames, opts.cert);
             std.debug.print("{d}\n", .{code});
             if (code == 1) worst = 1;
             if (code == 2 and worst != 1) worst = 2;
@@ -130,6 +162,7 @@ pub fn runBytesOpts(allocator: std.mem.Allocator, src: []const u8, opts: HwmccOp
                 pdr_r.generalizations,
                 pdr_r.ctg_blocks,
             });
+            if (opts.cert and props.len > 0) try emitCert(allocator, &nl, props[0], opts.max_frames);
             std.debug.print("0\n", .{});
             return 0;
         },

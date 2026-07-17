@@ -156,3 +156,61 @@ test "one dead among toggles klive" {
     const r = try kliveness.checkNetlist(std.testing.allocator, &nl, 6, 16, 0);
     try std.testing.expect(r.status == .proven_infinite);
 }
+
+/// Mutex: two latches, never both 1 if constraint ~(q0&q1); bad = both 1 without constraint.
+pub fn makeMutex(allocator: std.mem.Allocator, with_constraint: bool) !struct { nl: Netlist, bad: NetId } {
+    var nl = Netlist.init(allocator);
+    errdefer nl.deinit();
+    const q0 = try nl.allocNetNamed("q0");
+    const q1 = try nl.allocNetNamed("q1");
+    const d0 = try nl.allocNetNamed("d0");
+    const d1 = try nl.allocNetNamed("d1");
+    const a = try nl.allocNetNamed("a");
+    const b = try nl.allocNetNamed("b");
+    try nl.addInput(a);
+    try nl.addInput(b);
+    // free next via inputs (buf)
+    try nl.addGate(.buf, &.{a}, d0);
+    try nl.addGate(.buf, &.{b}, d1);
+    try nl.addLatch(d0, q0, false);
+    try nl.addLatch(d1, q1, false);
+    const both = try nl.allocNetNamed("both");
+    try nl.addGate(.and_, &.{ q0, q1 }, both);
+    try nl.addBad(both);
+    if (with_constraint) {
+        const nboth = try nl.allocNetNamed("nboth");
+        try nl.addGate(.not, &.{both}, nboth);
+        try nl.addConstraint(nboth);
+    }
+    return .{ .nl = nl, .bad = both };
+}
+
+test "mutex with constraint never bad in bmc" {
+    const bmc = @import("bmc.zig");
+    var d = try makeMutex(std.testing.allocator, true);
+    defer d.nl.deinit();
+    const r = try bmc.check(std.testing.allocator, &d.nl, d.bad, 6);
+    defer if (r.trace) |t| std.testing.allocator.free(t);
+    try std.testing.expect(r.status == .safe_up_to_bound);
+}
+
+test "mutex without constraint can violate" {
+    const bmc = @import("bmc.zig");
+    var d = try makeMutex(std.testing.allocator, false);
+    defer d.nl.deinit();
+    const r = try bmc.check(std.testing.allocator, &d.nl, d.bad, 2);
+    defer if (r.trace) |t| std.testing.allocator.free(t);
+    try std.testing.expect(r.status == .violated);
+}
+
+test "counter 5bit bound" {
+    const bmc = @import("bmc.zig");
+    var d = try makeCounter(std.testing.allocator, 5);
+    defer d.nl.deinit();
+    const r30 = try bmc.check(std.testing.allocator, &d.nl, d.bad, 30);
+    defer if (r30.trace) |t| std.testing.allocator.free(t);
+    const r31 = try bmc.check(std.testing.allocator, &d.nl, d.bad, 31);
+    defer if (r31.trace) |t| std.testing.allocator.free(t);
+    try std.testing.expect(r30.status == .safe_up_to_bound);
+    try std.testing.expect(r31.status == .violated);
+}
