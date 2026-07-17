@@ -5,6 +5,16 @@ All notable changes to **logic-zig** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/).
 
+## [0.12.2] — 2026-07-16
+
+### Added
+
+- More AIGER goldens: `stuck0_b`, `init1_bad`, `const0_safe`, `toggle_justice`
+- Expanded manifest (13 file cases) + fair multi builtin → **golden 30/30**
+- `logic-sat drat-fuzz` external DRAT fuzz loop
+- `logic-sat hard` portfolio directory bench (`portfolio_bench.zig`)
+- Fair multi depth: 2J+2F one stuck, justice+fairness toggle, round-robin attach
+
 ## [0.12.1] — 2026-07-16
 
 ### Added

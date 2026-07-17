@@ -23,8 +23,12 @@ jobs:
         run: ./zig-out/bin/logic-zig doctor
       - name: Golden corpus (builtin + AIGER manifest + DRAT)
         run: ./zig-out/bin/logic-hwmcc golden
-      - name: DRAT-trim on unit unsat
-        run: ./zig-out/bin/logic-sat check-drat corpus/bench/sat/simple_unsat.cnf || true
+      - name: DRAT-trim unit + fuzz
+        run: |
+          ./zig-out/bin/logic-sat check-drat corpus/bench/sat/simple_unsat.cnf
+          ./zig-out/bin/logic-sat drat-fuzz --iters 20 --vars 5
+      - name: Portfolio hard smoke (small suite)
+        run: ./zig-out/bin/logic-sat hard --dir corpus/bench/sat --limit 10 --conflicts 100000
       - name: Spin-off smoke
         run: |
           ./zig-out/bin/logic-agent profile
