@@ -26,7 +26,9 @@ jobs:
       - name: Spin-off smoke
         run: |
           ./zig-out/bin/logic-agent profile
+          ./zig-out/bin/logic-agent session-demo
           ./zig-out/bin/logic-sat profile
           ./zig-out/bin/logic-cert klive-demo
+          ./zig-out/bin/logic-cert pdr-demo
           ./zig-out/bin/logic-smt demo-add
           ./zig-out/bin/logic-ctl demo

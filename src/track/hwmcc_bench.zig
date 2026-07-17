@@ -106,9 +106,9 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, frames: u32, aiger_dir: []c
         defer nl.deinit();
         const bad = nl.outputs.items[0];
         const t0 = monoNs();
-        const r = try pdr.check(allocator, &nl, bad, frames);
+        var r = try pdr.check(allocator, &nl, bad, frames);
         const ns = monoNs() - t0;
-        defer if (r.cex_latches) |c| allocator.free(c);
+        defer r.deinit(allocator);
         total += ns;
         const ok = r.status == .proven or r.status == .unknown;
         if (!ok) all_ok = false;
@@ -134,9 +134,9 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, frames: u32, aiger_dir: []c
         defer nl.deinit();
         const bad = nl.outputs.items[0];
         const t0 = monoNs();
-        const r = try pdr.check(allocator, &nl, bad, frames);
+        var r = try pdr.check(allocator, &nl, bad, frames);
         const ns = monoNs() - t0;
-        defer if (r.cex_latches) |c| allocator.free(c);
+        defer r.deinit(allocator);
         total += ns;
         const ok = r.status == .violated or r.status == .unknown;
         if (r.status == .proven) all_ok = false;
@@ -175,9 +175,9 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, frames: u32, aiger_dir: []c
             if (nl.outputs.items.len == 0 and nl.bad.items.len == 0) continue;
             const bad = if (nl.bad.items.len > 0) nl.bad.items[0] else nl.outputs.items[0];
             const t0 = monoNs();
-            const r = try pdr.check(allocator, &nl, bad, frames);
+            var r = try pdr.check(allocator, &nl, bad, frames);
             const ns = monoNs() - t0;
-            defer if (r.cex_latches) |c| allocator.free(c);
+            defer r.deinit(allocator);
             total += ns;
             // No oracle: any non-crash status is ok
             try push(allocator, &cases, e.name, "pdr", @tagName(r.status), ns, true);

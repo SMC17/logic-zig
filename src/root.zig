@@ -52,6 +52,7 @@ pub const bv = @import("smt/bv.zig");
 pub const portfolio = @import("sat/portfolio.zig");
 pub const abc_interop = @import("bridge/abc_interop.zig");
 pub const btor2 = @import("bridge/btor2.zig");
+pub const agent_session = @import("agent/session.zig");
 
 pub const Lit = lit.Lit;
 pub const Var = lit.Var;
@@ -200,6 +201,7 @@ test {
     _ = portfolio;
     _ = abc_interop;
     _ = btor2;
+    _ = agent_session;
 }
 
 test "end-to-end tautology a|!a" {
