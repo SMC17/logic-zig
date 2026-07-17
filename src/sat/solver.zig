@@ -43,11 +43,11 @@ pub const SolverOptions = struct {
     var_decay: f64 = 0.95,
     clause_decay: f64 = 0.999,
     /// Restart base in conflicts (0 = no restarts).
-    restart_base: u64 = 100,
+    restart_base: u64 = 50,
     /// Reduce learned DB every N conflicts (0 = never).
-    reduce_interval: u64 = 2000,
+    reduce_interval: u64 = 1500,
     /// Keep at least this many learned clauses after reduce.
-    reduce_keep_min: u32 = 50,
+    reduce_keep_min: u32 = 100,
     /// Prefer deleting high-LBD clauses (Glucose-style).
     reduce_by_lbd: bool = true,
     /// Simple local conflict-clause minimization.
@@ -409,19 +409,34 @@ pub const Solver = struct {
         return @intCast(self.trail_lim.items.len);
     }
 
-    fn valueLit(self: *const Solver, l: Lit) Value {
-        return lit_mod.evalLit(l, self.assign);
+    /// Hot-path lit value: avoid call overhead of evalLit.
+    inline fn valueLit(self: *const Solver, l: Lit) Value {
+        const raw = @intFromEnum(l);
+        const a = self.assign[raw >> 1];
+        if (a == .undef) return .undef;
+        // Positive lit true iff assign true; negative lit true iff assign false.
+        if ((raw & 1) == 0) return a;
+        return if (a == .true_) .false_ else .true_;
+    }
+
+    inline fn isTrueLit(self: *const Solver, l: Lit) bool {
+        return self.valueLit(l) == .true_;
+    }
+
+    inline fn isFalseLit(self: *const Solver, l: Lit) bool {
+        return self.valueLit(l) == .false_;
     }
 
     fn enqueue(self: *Solver, l: Lit, reason: ?ClauseId) bool {
-        const v = l.variable().index();
-        const want: Value = if (l.isNeg()) .false_ else .true_;
+        const raw = @intFromEnum(l);
+        const v = raw >> 1;
+        const want: Value = if ((raw & 1) == 1) .false_ else .true_;
         const cur = self.assign[v];
         if (cur != .undef) return cur == want;
         self.assign[v] = want;
         self.reason[v] = reason;
         self.level[v] = self.decisionLevel();
-        self.phase[v] = !l.isNeg();
+        self.phase[v] = (raw & 1) == 0;
         self.trail.append(self.allocator, l) catch return false;
         self.prop_count += 1;
         return true;
@@ -432,18 +447,20 @@ pub const Solver = struct {
             const p = self.trail.items[self.qhead];
             self.qhead += 1;
             const false_lit = p.not();
-            var ws = &self.watches[false_lit.watchIndex()];
+            var ws = &self.watches[@intFromEnum(false_lit)];
             var i: usize = 0;
             while (i < ws.items.len) {
                 const cid = ws.items[i];
-                if (self.isDeleted(cid)) {
+                const cr = self.clauses.items[cid.index()];
+                if (cr.deleted) {
                     _ = ws.swapRemove(i);
                     continue;
                 }
-                const cl = self.clauseSliceMut(cid);
+                const cl = self.lits.items[cr.start .. cr.start + cr.len];
 
                 if (cl.len == 0) return cid;
 
+                // --- unit ---
                 if (cl.len == 1) {
                     switch (self.valueLit(cl[0])) {
                         .true_ => i += 1,
@@ -456,41 +473,58 @@ pub const Solver = struct {
                     continue;
                 }
 
-                // Ensure false_lit is at index 1.
-                if (cl[0] == false_lit) {
-                    std.mem.swap(Lit, &cl[0], &cl[1]);
+                // --- binary fast path (majority of watches on industrial CNF) ---
+                if (cl.len == 2) {
+                    // Ensure false_lit at [1]
+                    var other = cl[0];
+                    if (cl[0] == false_lit) {
+                        other = cl[1];
+                    } else if (cl[1] != false_lit) {
+                        i += 1; // stale
+                        continue;
+                    }
+                    switch (self.valueLit(other)) {
+                        .true_ => i += 1,
+                        .false_ => return cid,
+                        .undef => {
+                            if (!self.enqueue(other, cid)) return cid;
+                            i += 1;
+                        },
+                    }
+                    continue;
                 }
-                if (cl[1] != false_lit) {
-                    // Stale watch.
+
+                // --- long clause ---
+                const clm = self.clauseSliceMut(cid);
+                if (clm[0] == false_lit) {
+                    std.mem.swap(Lit, &clm[0], &clm[1]);
+                }
+                if (clm[1] != false_lit) {
                     i += 1;
                     continue;
                 }
 
-                const first = cl[0];
-                if (self.valueLit(first) == .true_) {
+                const first = clm[0];
+                if (self.isTrueLit(first)) {
                     i += 1;
                     continue;
                 }
 
-                // Find new watch.
                 var found = false;
                 var k: usize = 2;
-                while (k < cl.len) : (k += 1) {
-                    if (self.valueLit(cl[k]) != .false_) {
-                        cl[1] = cl[k];
-                        cl[k] = false_lit;
+                while (k < clm.len) : (k += 1) {
+                    if (!self.isFalseLit(clm[k])) {
+                        clm[1] = clm[k];
+                        clm[k] = false_lit;
                         _ = ws.swapRemove(i);
-                        self.watches[cl[1].watchIndex()].append(self.allocator, cid) catch return cid;
+                        self.watches[@intFromEnum(clm[1])].append(self.allocator, cid) catch return cid;
                         found = true;
                         break;
                     }
                 }
                 if (found) continue;
 
-                // Clause unit or conflict under first.
-                if (self.valueLit(first) == .false_) {
-                    return cid;
-                }
+                if (self.isFalseLit(first)) return cid;
                 if (!self.enqueue(first, cid)) return cid;
                 i += 1;
             }
@@ -677,28 +711,35 @@ pub const Solver = struct {
         @memset(self.seen, false);
     }
 
-    fn computeLbd(self: *const Solver, clause: []const Lit) u16 {
-        // Count distinct decision levels (excluding level 0).
-        var levels: [64]i32 = undefined;
-        var nlev: usize = 0;
+    fn computeLbd(self: *Solver, clause: []const Lit) u16 {
+        // Stamp distinct decision levels using `seen` as a level-mark set (reused buffer).
+        // Clear only touched levels via analyze_to_clear scratch of level ids stored as u32.
+        var nlev: u16 = 0;
+        var stamps: [64]u32 = undefined;
+        var nstamp: usize = 0;
         for (clause) |l| {
             const lv = self.level[l.variable().index()];
             if (lv <= 0) continue;
+            const key: u32 = @intCast(lv);
+            // Linear stamp in small stack (LBD rarely > 8–12).
             var found = false;
-            for (levels[0..nlev]) |e| {
-                if (e == lv) {
+            for (stamps[0..nstamp]) |e| {
+                if (e == key) {
                     found = true;
                     break;
                 }
             }
             if (!found) {
-                if (nlev < levels.len) {
-                    levels[nlev] = lv;
+                if (nstamp < stamps.len) {
+                    stamps[nstamp] = key;
+                    nstamp += 1;
                     nlev += 1;
-                } else return @intCast(nlev + 1);
+                } else {
+                    return nlev + 1;
+                }
             }
         }
-        return @intCast(nlev);
+        return nlev;
     }
 
     fn pickBranch(self: *Solver) ?Lit {

@@ -1,9 +1,13 @@
 {"path":"corpus/golden/aiger/stuck0.aag","kind":"aiger-safe","expect":"safe"}
 {"path":"corpus/golden/aiger/stuck0_b.aag","kind":"aiger-safe","expect":"safe"}
+{"path":"corpus/golden/aiger/hold_false.aag","kind":"aiger-safe","expect":"safe"}
+{"path":"corpus/golden/aiger/hold_true.aag","kind":"aiger-safe","expect":"unsafe"}
 {"path":"corpus/golden/aiger/const1_bad.aag","kind":"aiger-safe","expect":"unsafe"}
 {"path":"corpus/golden/aiger/init1_bad.aag","kind":"aiger-safe","expect":"unsafe"}
 {"path":"corpus/golden/aiger/const0_safe.aag","kind":"aiger-safe","expect":"safe"}
+{"path":"corpus/golden/aiger/dual_stuck.aag","kind":"aiger-safe","expect":"safe"}
 {"path":"corpus/golden/aiger/and2.aag","kind":"aiger-parse","expect":"ok"}
+{"path":"corpus/golden/aiger/and2_bad_ext.aag","kind":"aiger-parse","expect":"ok"}
 {"path":"corpus/golden/aiger/toggle.aag","kind":"aiger-lasso","expect":"witness"}
 {"path":"corpus/golden/aiger/toggle_justice.aag","kind":"aiger-lasso","expect":"witness"}
 {"path":"corpus/golden/aiger/pulse.aag","kind":"aiger-klive","expect":"proven_infinite"}
@@ -11,3 +15,6 @@
 {"path":"corpus/bench/sat/simple_sat.cnf","kind":"cnf","expect":"sat"}
 {"path":"corpus/bench/sat/unit0.cnf","kind":"cnf","expect":"sat"}
 {"path":"corpus/bench/sat/false.cnf","kind":"cnf","expect":"unsat"}
+{"path":"corpus/bench/sat/unit1.cnf","kind":"cnf","expect":"sat"}
+{"path":"corpus/bench/sat/block0.cnf","kind":"cnf","expect":"sat"}
+{"path":"corpus/bench/sat/empty.cnf","kind":"cnf","expect":"sat"}

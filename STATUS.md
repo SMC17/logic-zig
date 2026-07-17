@@ -1,28 +1,29 @@
 # logic-zig status
 
-**Version:** 0.12.2  
-**Last green:** golden **30/30** · DRAT fuzz **verified=9 failed=0** · portfolio hard **0 failed**
+**Version:** 0.12.3  
+**Last green:** golden **44/44** · `STACK_OK` · DRAT fuzz clean · sat_hard sample · `DOCTOR_OK`
 
-## Gates
+## One-liner stack
 
 ```sh
 zig build test && zig build
-./zig-out/bin/logic-hwmcc golden
-./zig-out/bin/logic-sat check-drat corpus/bench/sat/simple_unsat.cnf
+./zig-out/bin/logic-hwmcc stack
 ./zig-out/bin/logic-sat drat-fuzz --iters 15 --vars 5
-./zig-out/bin/logic-sat hard --dir corpus/bench/sat --limit 8 --conflicts 80000
-# optional: --dir corpus/bench/sat_hard --limit 5 --conflicts 500000
+./zig-out/bin/logic-sat hard --dir corpus/bench/sat --limit 12
+./zig-out/bin/logic-sat hard --dir corpus/bench/sat_hard --limit 3 --conflicts 150000
+./zig-out/bin/logic-zig doctor
 ```
 
-## Spin-offs
+## Flagships
 
-| Binary | Commands |
-|--------|----------|
-| `logic-sat` | solve, portfolio, check-drat, **drat-fuzz**, **hard** |
-| `logic-hwmcc` | track, klive, **golden** |
-| `logic-agent` | multishot, session-demo |
-| `logic-cert` | unsat-demo, klive-demo, pdr-demo |
+| Binary | Depth |
+|--------|--------|
+| `logic-hwmcc` | golden, stack, fair-demo, track, klive |
+| `logic-sat` | portfolio, check-drat, drat-fuzz, hard |
+| `logic-agent` | session-demo, multishot |
+| `logic-cert` | pdr-demo, klive-demo |
+| `logic-smt` / `logic-ctl` | demos |
 
-## Stack
+## Repo
 
-Core library + 6 flagships · CI · DRAT-trim · portfolio · fair multi-justice · AIGER goldens · certs · CTL · BV
+https://github.com/SMC17/logic-zig

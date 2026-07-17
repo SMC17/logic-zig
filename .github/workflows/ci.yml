@@ -28,7 +28,13 @@ jobs:
           ./zig-out/bin/logic-sat check-drat corpus/bench/sat/simple_unsat.cnf
           ./zig-out/bin/logic-sat drat-fuzz --iters 20 --vars 5
       - name: Portfolio hard smoke (small suite)
-        run: ./zig-out/bin/logic-sat hard --dir corpus/bench/sat --limit 10 --conflicts 100000
+        run: ./zig-out/bin/logic-sat hard --dir corpus/bench/sat --limit 12 --conflicts 100000
+      - name: Portfolio sat_hard sample
+        run: ./zig-out/bin/logic-sat hard --dir corpus/bench/sat_hard --limit 3 --conflicts 150000
+      - name: HWMCC stack + fair-demo
+        run: |
+          ./zig-out/bin/logic-hwmcc fair-demo
+          ./zig-out/bin/logic-hwmcc stack
       - name: Spin-off smoke
         run: |
           ./zig-out/bin/logic-agent profile
@@ -39,3 +45,5 @@ jobs:
           ./zig-out/bin/logic-cert pdr-demo
           ./zig-out/bin/logic-smt demo-add
           ./zig-out/bin/logic-ctl demo
+          ./zig-out/bin/logic-hwmcc track corpus/golden/aiger/stuck0.aag --frames 8
+          ./zig-out/bin/logic-hwmcc track corpus/golden/aiger/const1_bad.aag --frames 4
