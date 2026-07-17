@@ -5,6 +5,21 @@ All notable changes to **logic-zig** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/).
 
+## [0.15.0] — 2026-07-16
+
+### Industrial program foundation
+
+- **`docs/INDUSTRIAL.md`**: phased path to industrial SAT/MC, SMT, FOL, ABC-class, stable API
+- **`src/api/v1.zig`**: stable contract — version `1.0.0`, `Capability` bits, `satCnf`/`satDimacs`, `mcSafety`/`mcAiger`
+- **CLI `api-info`**: print version + feature matrix
+- **SAT preprocess**: tautology-aware clean path, forward subsumption, dedup (`sat/preprocess.zig`)
+- **SMT facade**: `SmtSolver` + theory enum (BV live; UF/array/UFBV → `unsupported` honestly)
+- **FOL resolution**: given-clause resolution skeleton with unify (`fol/resolution.zig`)
+
+### Residual
+
+- Industrial *parity* not claimed; pillars mature per INDUSTRIAL.md phases
+
 ## [0.14.0] — 2026-07-16
 
 ### Competition + robustness
