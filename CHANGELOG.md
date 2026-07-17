@@ -5,6 +5,26 @@ All notable changes to **logic-zig** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/).
 
+## [0.14.0] — 2026-07-16
+
+### Competition + robustness
+
+- **`sat-track`**: competition s/v output, exit codes 10/20/0, `--max-conflicts`,
+  `--portfolio`, `--proof` (RUP gate before UNSAT claim), `--quiet`, model validation
+- **Portfolio**: 9 sequential configs (pure-literal, no-min+rephase, glue-keep1, …)
+- **DIMACS harden**: var/clause caps, reject garbage lines, empty formula, `%` section end
+- **HWMCC track**: PDR → k-induction → BMC; CLI `--cert` / `--no-kind`
+- **Designs**: one-hot ring, Johnson counter, dual-rail safe, parity-never-bad
+- **`logic-cert suite`**: multi-design cert battery; **`designs-demo`** depth
+- **Solver**: allocation failure is `OutOfMemory`, never reported as conflict/UNSAT
+- **PDR**: bounded max_conflicts on init queries
+- **CI**: sat-track competition smoke + cert suite
+- Trust report: kind cert, one-hot, agent structured/stress counters
+
+### Residual
+
+- Not industrial SAT/HWMCC race parity; RUP-centric proofs; IPASIR callbacks partial
+
 ## [0.13.1] — 2026-07-16
 
 ### Climb

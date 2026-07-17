@@ -12,6 +12,7 @@ const std = @import("std");
 const aiger = @import("../bridge/aiger.zig");
 const pdr = @import("../circuit/pdr.zig");
 const bmc = @import("../circuit/bmc.zig");
+const kinduction = @import("../circuit/kinduction.zig");
 const justice = @import("../circuit/justice.zig");
 const kliveness = @import("../circuit/kliveness.zig");
 const certificate = @import("../cert/certificate.zig");
@@ -27,6 +28,8 @@ pub const HwmccOpts = struct {
     max_k: u32 = 8,
     /// On proven: re-check inductive cert and print text.
     cert: bool = false,
+    /// Try k-induction between PDR and BMC (deeper competition path).
+    kind: bool = true,
 };
 
 pub fn runFile(allocator: std.mem.Allocator, path: []const u8, io: std.Io, max_frames: u32) !u8 {
@@ -80,7 +83,7 @@ fn emitCert(allocator: std.mem.Allocator, nl: *netlist_mod.Netlist, bad: netlist
     }
 }
 
-fn checkOne(allocator: std.mem.Allocator, nl: *netlist_mod.Netlist, bad: netlist_mod.NetId, max_frames: u32, do_cert: bool) !u8 {
+fn checkOne(allocator: std.mem.Allocator, nl: *netlist_mod.Netlist, bad: netlist_mod.NetId, max_frames: u32, do_cert: bool, use_kind: bool) !u8 {
     var pdr_r = try pdr.check(allocator, nl, bad, max_frames);
     defer pdr_r.deinit(allocator);
     switch (pdr_r.status) {
@@ -98,6 +101,24 @@ fn checkOne(allocator: std.mem.Allocator, nl: *netlist_mod.Netlist, bad: netlist
             return 1;
         },
         .unknown => {},
+    }
+    // k-induction: deep competition path before BMC bound-only answer
+    if (use_kind) {
+        const k_max = @min(max_frames, 8);
+        const kr = try kinduction.search(allocator, nl, bad, k_max);
+        defer if (kr.base.trace) |t| allocator.free(t);
+        switch (kr.status) {
+            .proven => {
+                std.debug.print("c kind proven k={d}\n", .{kr.k});
+                if (do_cert) try emitCert(allocator, nl, bad, max_frames);
+                return 0;
+            },
+            .violated => {
+                std.debug.print("c kind violated k={d}\n", .{kr.k});
+                return 1;
+            },
+            .base_only, .unknown => {},
+        }
     }
     const b = try bmc.check(allocator, nl, bad, max_frames);
     defer if (b.trace) |t| allocator.free(t);
@@ -144,7 +165,7 @@ pub fn runBytesOpts(allocator: std.mem.Allocator, src: []const u8, opts: HwmccOp
         for (props, 0..) |bad, i| {
             const name = if (bad.index() < nl.names.items.len) nl.names.items[bad.index()] else null;
             std.debug.print("c property {d} {s}\n", .{ i, name orelse "?" });
-            const code = try checkOne(allocator, &nl, bad, opts.max_frames, opts.cert);
+            const code = try checkOne(allocator, &nl, bad, opts.max_frames, opts.cert, opts.kind);
             std.debug.print("{d}\n", .{code});
             if (code == 1) worst = 1;
             if (code == 2 and worst != 1) worst = 2;
@@ -152,7 +173,7 @@ pub fn runBytesOpts(allocator: std.mem.Allocator, src: []const u8, opts: HwmccOp
         return worst;
     }
 
-    // Combined multi-property PDR then BMC
+    // Combined multi-property: PDR → k-induction (prop0) → BMC
     var pdr_r = try pdr.checkMulti(allocator, &nl, props, opts.max_frames);
     defer pdr_r.deinit(allocator);
     switch (pdr_r.status) {
@@ -172,6 +193,26 @@ pub fn runBytesOpts(allocator: std.mem.Allocator, src: []const u8, opts: HwmccOp
             return 1;
         },
         .unknown => {},
+    }
+
+    if (opts.kind and props.len == 1) {
+        const k_max = @min(opts.max_frames, 8);
+        const kr = try kinduction.search(allocator, &nl, props[0], k_max);
+        defer if (kr.base.trace) |t| allocator.free(t);
+        switch (kr.status) {
+            .proven => {
+                std.debug.print("c kind proven k={d}\n", .{kr.k});
+                if (opts.cert) try emitCert(allocator, &nl, props[0], opts.max_frames);
+                std.debug.print("0\n", .{});
+                return 0;
+            },
+            .violated => {
+                std.debug.print("c kind violated k={d}\n", .{kr.k});
+                std.debug.print("1\n", .{});
+                return 1;
+            },
+            .base_only, .unknown => {},
+        }
     }
 
     const b = try bmc.checkMulti(allocator, &nl, props, opts.max_frames);
