@@ -16,6 +16,8 @@ const usage =
     \\  logic-zig aiger-write <in.aag|aig> <out.aag> [--binary] [--extended]
     \\  logic-zig justice-demo [--bound K] [--lasso]
     \\  logic-zig klive-demo [--max-k K]        # infinite justice proof (k-liveness)
+    \\  logic-zig abduce-demo                   # observation → minimal causes (diagnosis)
+    \\  logic-zig induce-demo                   # examples → minimal-k DNF rule
     \\  logic-zig ternary-demo
     \\  logic-zig doctor                        # self-check smoke suite
     \\  logic-zig api-info                      # stable api/v1 version + capabilities
@@ -180,6 +182,14 @@ pub fn main(init: std.process.Init) !void {
         try cmdKliveDemo(gpa, max_k);
         return;
     }
+    if (std.mem.eql(u8, cmd, "abduce-demo")) {
+        try cmdAbduceDemo(gpa);
+        return;
+    }
+    if (std.mem.eql(u8, cmd, "induce-demo")) {
+        try cmdInduceDemo(gpa);
+        return;
+    }
     if (std.mem.eql(u8, cmd, "ternary-demo")) {
         try cmdTernaryDemo(gpa);
         return;
@@ -206,6 +216,9 @@ pub fn main(init: std.process.Init) !void {
         });
         std.debug.print("  ctl_bounded={} agent_session={} abc_interop={}\n", .{
             caps.ctl_bounded, caps.agent_session, caps.abc_interop,
+        });
+        std.debug.print("  reason_abduce={} reason_induce={}\n", .{
+            caps.reason_abduce, caps.reason_induce,
         });
         std.debug.print("program: docs/INDUSTRIAL.md\n", .{});
         return;
@@ -1102,6 +1115,67 @@ fn cmdBenchComp(
     defer r.deinit(gpa);
     logic.comp_bench.printResult(&r);
     if (!r.correctnessOk()) std.process.exit(1);
+}
+
+fn cmdAbduceDemo(gpa: std.mem.Allocator) !void {
+    const Lit = logic.lit.Lit;
+    const Var = logic.lit.Var;
+    const lp = Lit.positive;
+    const ln = Lit.negative;
+    const v = Var.fromIndex;
+
+    // Diagnosis theory: faultA → s1, faultB → s1, faultB → s2.
+    var b = logic.cnf.Cnf.init(gpa);
+    defer b.deinit();
+    try b.addClause(&.{ ln(v(0)), lp(v(2)) });
+    try b.addClause(&.{ ln(v(1)), lp(v(2)) });
+    try b.addClause(&.{ ln(v(1)), lp(v(3)) });
+    const names = [_][]const u8{ "faultA", "faultB", "s1", "s2" };
+
+    const cases = [_]struct { obs: []const Lit, label: []const u8 }{
+        .{ .obs = &.{lp(v(2))}, .label = "s1" },
+        .{ .obs = &.{ lp(v(2)), lp(v(3)) }, .label = "s1 & s2" },
+    };
+    for (cases) |c| {
+        var r = try logic.abduction.abduce(gpa, &b, c.obs, &.{ lp(v(0)), lp(v(1)) }, .{});
+        defer r.deinit();
+        std.debug.print("observe {s}: {d} minimal explanation(s), complete={}\n", .{
+            c.label, r.explanations.items.len, r.complete,
+        });
+        for (r.explanations.items) |e| {
+            std.debug.print("  {{", .{});
+            for (e, 0..) |l, i| {
+                std.debug.print("{s}{s}{s}", .{
+                    if (i > 0) ", " else " ",
+                    if (l.isNeg()) "!" else "",
+                    names[l.variable().index()],
+                });
+            }
+            std.debug.print(" }} verified={}\n", .{
+                try logic.abduction.verifyExplanation(gpa, &b, c.obs, e),
+            });
+        }
+    }
+}
+
+fn cmdInduceDemo(gpa: std.mem.Allocator) !void {
+    // Learn xor(x0, x1) from all four labeled rows.
+    const examples = [_]logic.induction.Example{
+        .{ .features = &.{ false, false }, .label = false },
+        .{ .features = &.{ true, true }, .label = false },
+        .{ .features = &.{ true, false }, .label = true },
+        .{ .features = &.{ false, true }, .label = true },
+    };
+    var r = try logic.induction.induceDnf(gpa, 2, &examples, .{});
+    defer r.deinit();
+    std.debug.print("xor: status={s} k={d} minimal={} verified={}\n", .{
+        @tagName(r.status), r.k_used, r.minimal, r.verified,
+    });
+    for (r.terms) |t| {
+        std.debug.print("  term:", .{});
+        for (t) |l| std.debug.print(" {s}x{d}", .{ if (l.negated) "!" else "", l.feature });
+        std.debug.print("\n", .{});
+    }
 }
 
 fn cmdKindDemo(gpa: std.mem.Allocator, max_k: u32) !void {
