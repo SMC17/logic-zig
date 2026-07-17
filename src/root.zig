@@ -65,6 +65,11 @@ pub const fol_resolution = @import("fol/resolution.zig");
 pub const sat_scoreboard = @import("track/sat_scoreboard.zig");
 pub const abduction = @import("reason/abduction.zig");
 pub const induction = @import("reason/induction.zig");
+pub const maxsat = @import("sat/maxsat.zig");
+pub const klm = @import("reason/klm.zig");
+pub const default_logic = @import("reason/default_logic.zig");
+pub const bayes = @import("reason/bayes.zig");
+pub const alp = @import("reason/alp.zig");
 pub const edge_suite = @import("track/edge_suite.zig");
 pub const taxonomy = @import("taxonomy/registry.zig");
 pub const informal = @import("informal/argument.zig");
@@ -238,6 +243,11 @@ test {
     _ = giants;
     _ = abduction;
     _ = induction;
+    _ = maxsat;
+    _ = klm;
+    _ = default_logic;
+    _ = bayes;
+    _ = alp;
 }
 
 test "end-to-end tautology a|!a" {
