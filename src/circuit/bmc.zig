@@ -247,3 +247,46 @@ test "bmc multi bad or" {
     defer if (r.trace) |t| std.testing.allocator.free(t);
     try std.testing.expect(r.status == .violated);
 }
+
+test "bmc empty bads safe" {
+    var nl = Netlist.init(std.testing.allocator);
+    defer nl.deinit();
+    const q = try nl.allocNetNamed("q");
+    const d = try nl.allocNetNamed("d");
+    try nl.addConst(d, false);
+    try nl.addLatch(d, q, false);
+    const r = try checkMulti(std.testing.allocator, &nl, &.{}, 5);
+    defer if (r.trace) |t| std.testing.allocator.free(t);
+    try std.testing.expect(r.status == .safe_up_to_bound);
+    try std.testing.expect(r.bound == 5);
+}
+
+test "bmc multi bad true or of two props" {
+    // q0 stuck 0 (never bad alone); q1 init 1 (bad@0). Combined OR → violated@0.
+    var nl = Netlist.init(std.testing.allocator);
+    defer nl.deinit();
+    const q0 = try nl.allocNetNamed("q0");
+    const d0 = try nl.allocNetNamed("d0");
+    try nl.addConst(d0, false);
+    try nl.addLatch(d0, q0, false);
+    const q1 = try nl.allocNetNamed("q1");
+    const d1 = try nl.allocNetNamed("d1");
+    try nl.addConst(d1, true);
+    try nl.addLatch(d1, q1, true);
+    const r = try checkMulti(std.testing.allocator, &nl, &.{ q0, q1 }, 0);
+    defer if (r.trace) |t| std.testing.allocator.free(t);
+    try std.testing.expect(r.status == .violated);
+    // only safe prop
+    const rs = try checkMulti(std.testing.allocator, &nl, &.{q0}, 3);
+    defer if (rs.trace) |t| std.testing.allocator.free(t);
+    try std.testing.expect(rs.status == .safe_up_to_bound);
+}
+
+test "bmc invalid bad net error" {
+    var nl = Netlist.init(std.testing.allocator);
+    defer nl.deinit();
+    _ = try nl.allocNetNamed("q");
+    const bogus = NetId.fromIndex(99);
+    const err = check(std.testing.allocator, &nl, bogus, 1);
+    try std.testing.expectError(error.BadNet, err);
+}

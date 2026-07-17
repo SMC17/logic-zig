@@ -31,11 +31,21 @@ Property-directed reachability for \(G(\neg\mathrm{bad})\):
 - Ternary (0/1/X) pre-weakening of latch cubes
 - Recursive `blockCube` obligations
 - Push-to-quiescence and **clause-set** fixed-point detection
+- Multi-property: `checkMulti` ORs all bad nets; empty bads → proven
+- Resource caps: block-iteration limit, per-call `max_conflicts` (unknown ≠ hang)
 
 ## BMC & k-induction
 
 - **BMC**: unroll *k* frames; OR of bad over time; constraints as units per frame.
+- Multi-property `checkMulti`; empty bads → `safe_up_to_bound`.
+- Init×constraint conflict ⇒ no legal path ⇒ vacuous safe (not violated).
 - **k-induction**: base safety for 0…*k* plus step \(\neg\mathrm{bad}^{0..k-1} \land T^k \land \mathrm{bad}^k\) unsat.
+
+## ABC delta (`bridge/abc_interop.zig`)
+
+- Soft path: missing ABC → `abc_skip` (not a hard fail).
+- `deltaLabel` matrix unit-tested without ABC.
+- CLI: `logic-zig abc-delta <aig>`; multi-bad uses `mcSafetyMulti` (OR of props).
 
 ## Justice & k-Liveness
 

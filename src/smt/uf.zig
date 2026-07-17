@@ -5,6 +5,7 @@
 //!
 //! Industrial bar: full Nelson-Oppen / CC(X) not claimed; this is a correct
 //! ground EUF checker for equalities, disequalities, and nullary/unary/binary preds.
+//! Binary apps and multi-step congruence chains are supported; not a Z3 replacement.
 
 const std = @import("std");
 
@@ -41,7 +42,6 @@ pub const UfSolver = struct {
     /// Simplified: unary preds only for spine (P(t) / ¬P(t)).
     unary_pos: std.StringHashMapUnmanaged(std.ArrayList(u32)) = .{},
     unary_neg: std.StringHashMapUnmanaged(std.ArrayList(u32)) = .{},
-    /// Name interning not needed if callers pass stable strings.
 
     pub fn init(allocator: std.mem.Allocator) UfSolver {
         return .{ .allocator = allocator };
@@ -118,6 +118,12 @@ pub const UfSolver = struct {
         if (self.rank.items[ra] == self.rank.items[rb]) self.rank.items[ra] += 1;
     }
 
+    /// Public class query (after congruence closure runs inside `check`, or
+    /// after explicit `assertEq` merges). Useful for array/UF combination stubs.
+    pub fn sameClass(self: *UfSolver, a: TermId, b: TermId) bool {
+        return self.find(a.index()) == self.find(b.index());
+    }
+
     pub fn assertEq(self: *UfSolver, a: TermId, b: TermId) void {
         self.union_(a.index(), b.index());
     }
@@ -143,7 +149,8 @@ pub const UfSolver = struct {
     }
 
     /// Congruence closure: merge f(a) and f(b) when a~b (iterative).
-    fn congruenceClose(self: *UfSolver) void {
+    /// Also binary: g(a,b)~g(c,d) when a~c and b~d.
+    pub fn congruenceClose(self: *UfSolver) void {
         var changed = true;
         while (changed) {
             changed = false;
@@ -191,6 +198,8 @@ pub const UfSolver = struct {
     }
 };
 
+// ── unit tests (edge coverage) ───────────────────────────────────────
+
 test "uf equality sat" {
     var u = UfSolver.init(std.testing.allocator);
     defer u.deinit();
@@ -210,6 +219,22 @@ test "uf disequality unsat" {
     try std.testing.expect(u.check() == .unsat);
 }
 
+test "uf diseq alone sat" {
+    var u = UfSolver.init(std.testing.allocator);
+    defer u.deinit();
+    const a = try u.mkConst("a");
+    const b = try u.mkConst("b");
+    try u.assertDiseq(a, b);
+    try std.testing.expect(u.check() == .sat);
+}
+
+test "uf empty theory sat" {
+    var u = UfSolver.init(std.testing.allocator);
+    defer u.deinit();
+    _ = try u.mkConst("a");
+    try std.testing.expect(u.check() == .sat);
+}
+
 test "uf congruence f(a)=f(b) when a=b" {
     var u = UfSolver.init(std.testing.allocator);
     defer u.deinit();
@@ -223,6 +248,119 @@ test "uf congruence f(a)=f(b) when a=b" {
     try std.testing.expect(u.check() == .unsat);
 }
 
+test "uf congruence chain f(f(a))~f(f(b))" {
+    var u = UfSolver.init(std.testing.allocator);
+    defer u.deinit();
+    const a = try u.mkConst("a");
+    const b = try u.mkConst("b");
+    const fa = try u.mkApp1("f", a);
+    const fb = try u.mkApp1("f", b);
+    const ffa = try u.mkApp1("f", fa);
+    const ffb = try u.mkApp1("f", fb);
+    u.assertEq(a, b);
+    try u.assertDiseq(ffa, ffb);
+    try std.testing.expect(u.check() == .unsat);
+}
+
+test "uf congruence chain depth 3" {
+    var u = UfSolver.init(std.testing.allocator);
+    defer u.deinit();
+    const a = try u.mkConst("a");
+    const b = try u.mkConst("b");
+    const fa = try u.mkApp1("f", a);
+    const fb = try u.mkApp1("f", b);
+    const f2a = try u.mkApp1("f", fa);
+    const f2b = try u.mkApp1("f", fb);
+    const f3a = try u.mkApp1("f", f2a);
+    const f3b = try u.mkApp1("f", f2b);
+    u.assertEq(a, b);
+    try u.assertDiseq(f3a, f3b);
+    try std.testing.expect(u.check() == .unsat);
+}
+
+test "uf congruence via intermediate equality f(a)=c implies f(b)=c" {
+    var u = UfSolver.init(std.testing.allocator);
+    defer u.deinit();
+    const a = try u.mkConst("a");
+    const b = try u.mkConst("b");
+    const c = try u.mkConst("c");
+    const fa = try u.mkApp1("f", a);
+    const fb = try u.mkApp1("f", b);
+    u.assertEq(a, b);
+    u.assertEq(fa, c);
+    try u.assertDiseq(fb, c);
+    try std.testing.expect(u.check() == .unsat);
+}
+
+test "uf binary app congruence g(a,b)~g(c,d)" {
+    var u = UfSolver.init(std.testing.allocator);
+    defer u.deinit();
+    const a = try u.mkConst("a");
+    const b = try u.mkConst("b");
+    const c = try u.mkConst("c");
+    const d = try u.mkConst("d");
+    const gab = try u.mkApp2("g", a, b);
+    const gcd = try u.mkApp2("g", c, d);
+    u.assertEq(a, c);
+    u.assertEq(b, d);
+    try u.assertDiseq(gab, gcd);
+    try std.testing.expect(u.check() == .unsat);
+}
+
+test "uf binary app no merge when only one arg equal" {
+    var u = UfSolver.init(std.testing.allocator);
+    defer u.deinit();
+    const a = try u.mkConst("a");
+    const b = try u.mkConst("b");
+    const c = try u.mkConst("c");
+    const d = try u.mkConst("d");
+    const gab = try u.mkApp2("g", a, b);
+    const gcd = try u.mkApp2("g", c, d);
+    u.assertEq(a, c);
+    // b not ~ d
+    try u.assertDiseq(gab, gcd);
+    try std.testing.expect(u.check() == .sat);
+}
+
+test "uf binary different symbols no merge" {
+    var u = UfSolver.init(std.testing.allocator);
+    defer u.deinit();
+    const a = try u.mkConst("a");
+    const b = try u.mkConst("b");
+    const gab = try u.mkApp2("g", a, b);
+    const hab = try u.mkApp2("h", a, b);
+    try u.assertDiseq(gab, hab);
+    try std.testing.expect(u.check() == .sat);
+}
+
+test "uf multi-merge transitive a=b=c=d" {
+    var u = UfSolver.init(std.testing.allocator);
+    defer u.deinit();
+    const a = try u.mkConst("a");
+    const b = try u.mkConst("b");
+    const c = try u.mkConst("c");
+    const d = try u.mkConst("d");
+    u.assertEq(a, b);
+    u.assertEq(b, c);
+    u.assertEq(c, d);
+    try u.assertDiseq(a, d);
+    try std.testing.expect(u.check() == .unsat);
+}
+
+test "uf multi-merge with apps" {
+    var u = UfSolver.init(std.testing.allocator);
+    defer u.deinit();
+    const a = try u.mkConst("a");
+    const b = try u.mkConst("b");
+    const c = try u.mkConst("c");
+    const fa = try u.mkApp1("f", a);
+    const fc = try u.mkApp1("f", c);
+    u.assertEq(a, b);
+    u.assertEq(b, c);
+    try u.assertDiseq(fa, fc);
+    try std.testing.expect(u.check() == .unsat);
+}
+
 test "uf pred conflict" {
     var u = UfSolver.init(std.testing.allocator);
     defer u.deinit();
@@ -232,4 +370,87 @@ test "uf pred conflict" {
     try u.assertPred1("P", a, true);
     try u.assertPred1("P", b, false);
     try std.testing.expect(u.check() == .unsat);
+}
+
+test "uf pred conflict via congruence" {
+    var u = UfSolver.init(std.testing.allocator);
+    defer u.deinit();
+    const a = try u.mkConst("a");
+    const b = try u.mkConst("b");
+    const fa = try u.mkApp1("f", a);
+    const fb = try u.mkApp1("f", b);
+    u.assertEq(a, b);
+    try u.assertPred1("P", fa, true);
+    try u.assertPred1("P", fb, false);
+    try std.testing.expect(u.check() == .unsat);
+}
+
+test "uf pred same polarity sat" {
+    var u = UfSolver.init(std.testing.allocator);
+    defer u.deinit();
+    const a = try u.mkConst("a");
+    const b = try u.mkConst("b");
+    u.assertEq(a, b);
+    try u.assertPred1("P", a, true);
+    try u.assertPred1("P", b, true);
+    try std.testing.expect(u.check() == .sat);
+}
+
+test "uf pred different names no conflict" {
+    var u = UfSolver.init(std.testing.allocator);
+    defer u.deinit();
+    const a = try u.mkConst("a");
+    try u.assertPred1("P", a, true);
+    try u.assertPred1("Q", a, false);
+    try std.testing.expect(u.check() == .sat);
+}
+
+test "uf pred without equality sat (P(a) and not P(b))" {
+    var u = UfSolver.init(std.testing.allocator);
+    defer u.deinit();
+    const a = try u.mkConst("a");
+    const b = try u.mkConst("b");
+    try u.assertPred1("P", a, true);
+    try u.assertPred1("P", b, false);
+    try std.testing.expect(u.check() == .sat);
+}
+
+test "uf mixed binary and unary congruence" {
+    var u = UfSolver.init(std.testing.allocator);
+    defer u.deinit();
+    const a = try u.mkConst("a");
+    const b = try u.mkConst("b");
+    const x = try u.mkConst("x");
+    const y = try u.mkConst("y");
+    const gax = try u.mkApp2("g", a, x);
+    const gby = try u.mkApp2("g", b, y);
+    const f_gax = try u.mkApp1("f", gax);
+    const f_gby = try u.mkApp1("f", gby);
+    u.assertEq(a, b);
+    u.assertEq(x, y);
+    try u.assertDiseq(f_gax, f_gby);
+    try std.testing.expect(u.check() == .unsat);
+}
+
+test "uf sameClass after eq" {
+    var u = UfSolver.init(std.testing.allocator);
+    defer u.deinit();
+    const a = try u.mkConst("a");
+    const b = try u.mkConst("b");
+    try std.testing.expect(!u.sameClass(a, b));
+    u.assertEq(a, b);
+    try std.testing.expect(u.sameClass(a, b));
+}
+
+test "uf re-check idempotent" {
+    var u = UfSolver.init(std.testing.allocator);
+    defer u.deinit();
+    const a = try u.mkConst("a");
+    const b = try u.mkConst("b");
+    const fa = try u.mkApp1("f", a);
+    const fb = try u.mkApp1("f", b);
+    u.assertEq(a, b);
+    try std.testing.expect(u.check() == .sat);
+    try std.testing.expect(u.sameClass(fa, fb));
+    try std.testing.expect(u.check() == .sat);
 }

@@ -60,8 +60,15 @@ pub const api = @import("api/v1.zig");
 pub const preprocess = @import("sat/preprocess.zig");
 pub const smt = @import("smt/smt.zig");
 pub const smt_uf = @import("smt/uf.zig");
+pub const smt_array = @import("smt/array.zig");
 pub const fol_resolution = @import("fol/resolution.zig");
 pub const sat_scoreboard = @import("track/sat_scoreboard.zig");
+pub const edge_suite = @import("track/edge_suite.zig");
+pub const taxonomy = @import("taxonomy/registry.zig");
+pub const informal = @import("informal/argument.zig");
+pub const type_theory = @import("type_theory/tt.zig");
+pub const modal = @import("modal/kripke.zig");
+pub const giants = @import("bridge/giants.zig");
 
 pub const Lit = lit.Lit;
 pub const Var = lit.Var;
@@ -218,8 +225,15 @@ test {
     _ = preprocess;
     _ = smt;
     _ = smt_uf;
+    _ = smt_array;
     _ = fol_resolution;
     _ = sat_scoreboard;
+    _ = edge_suite;
+    _ = taxonomy;
+    _ = informal;
+    _ = type_theory;
+    _ = modal;
+    _ = giants;
 }
 
 test "end-to-end tautology a|!a" {

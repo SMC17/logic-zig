@@ -314,3 +314,42 @@ test "hwmcc extended bad props" {
     try std.testing.expect(nl.bad.items.len == 1);
     try std.testing.expect(nl.badProps().len == 1);
 }
+
+test "hwmcc empty bad treated as safe" {
+    // O=0 B=0 → no properties
+    const src =
+        \\aag 1 0 1 0 0
+        \\0 0
+        \\c stuck latch, no outputs/bad
+    ;
+    const code = try runBytesOpts(std.testing.allocator, src, .{ .max_frames = 4 });
+    try std.testing.expect(code == 0);
+}
+
+test "hwmcc multi bad one unsafe" {
+    // two latches: stuck0 + init1 stuck1; B section both
+    const src =
+        \\aag 2 0 2 0 0 2 0 0 0
+        \\0 0
+        \\1 1
+        \\2
+        \\4
+        \\c multi-bad: q0 safe, q1 unsafe
+    ;
+    const code = try runBytesOpts(std.testing.allocator, src, .{ .max_frames = 8 });
+    try std.testing.expect(code == 1);
+}
+
+test "hwmcc constraint blocks bad" {
+    // q' = !q, init 0, constraint ~q (lit 3), bad = q (B=2)
+    // Header: M I L O A B C J F
+    const src =
+        \\aag 1 0 1 0 0 1 1 0 0
+        \\3 0
+        \\2
+        \\3
+        \\c toggle under constraint ~q — safe
+    ;
+    const code = try runBytesOpts(std.testing.allocator, src, .{ .max_frames = 8 });
+    try std.testing.expect(code == 0 or code == 2);
+}

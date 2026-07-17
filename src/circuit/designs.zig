@@ -360,3 +360,254 @@ test "parity never-bad proven kind" {
     defer if (r.base.trace) |t| std.testing.allocator.free(t);
     try std.testing.expect(r.status == .proven);
 }
+
+/// Dual-rail with illegal init (q=nq=0): bad = q∧nq is false at 0, but q=nq=1 is also
+/// illegal — use bad = ~(q xor nq) i.e. q==nq (coding error). Init both 0 → violated@0.
+pub fn makeDualRailBadInit(allocator: std.mem.Allocator) !struct { nl: Netlist, bad: NetId } {
+    var nl = Netlist.init(allocator);
+    errdefer nl.deinit();
+    const q = try nl.allocNetNamed("q");
+    const nq = try nl.allocNetNamed("nq");
+    const inp = try nl.allocNetNamed("in");
+    try nl.addInput(inp);
+    const ninp = try nl.allocNetNamed("nin");
+    try nl.addGate(.not, &.{inp}, ninp);
+    // illegal init: both 0 (not dual-rail)
+    try nl.addLatch(inp, q, false);
+    try nl.addLatch(ninp, nq, false);
+    // bad = equal (both 0 or both 1)
+    const x = try nl.allocNetNamed("xor");
+    try nl.addGate(.xor, &.{ q, nq }, x);
+    const bad = try nl.allocNetNamed("eq");
+    try nl.addGate(.not, &.{x}, bad);
+    try nl.addBad(bad);
+    return .{ .nl = nl, .bad = bad };
+}
+
+/// Two independent stuck latches as separate bad props: one safe (stuck0), one unsafe (init1).
+pub fn makeMultiBadMixed(allocator: std.mem.Allocator) !struct { nl: Netlist, safe_bad: NetId, unsafe_bad: NetId } {
+    var nl = Netlist.init(allocator);
+    errdefer nl.deinit();
+    const q0 = try nl.allocNetNamed("safe_q");
+    const d0 = try nl.allocNetNamed("safe_d");
+    try nl.addConst(d0, false);
+    try nl.addLatch(d0, q0, false);
+    try nl.addBad(q0);
+    const q1 = try nl.allocNetNamed("unsafe_q");
+    const d1 = try nl.allocNetNamed("unsafe_d");
+    try nl.addConst(d1, true);
+    try nl.addLatch(d1, q1, true);
+    try nl.addBad(q1);
+    return .{ .nl = nl, .safe_bad = q0, .unsafe_bad = q1 };
+}
+
+/// Init conflicts with invariant constraint: q init 1, constraint ~q.
+/// No legal initial state → vacuous safety for any bad (BMC: safe_up_to_bound).
+pub fn makeInitConstraintConflict(allocator: std.mem.Allocator) !struct { nl: Netlist, bad: NetId } {
+    var nl = Netlist.init(allocator);
+    errdefer nl.deinit();
+    const q = try nl.allocNetNamed("q");
+    const d = try nl.allocNetNamed("d");
+    try nl.addConst(d, true);
+    try nl.addLatch(d, q, true); // init 1
+    const nq = try nl.allocNetNamed("nq");
+    try nl.addGate(.not, &.{q}, nq);
+    try nl.addConstraint(nq); // forces q=0 every frame — conflicts with init
+    try nl.addBad(q);
+    return .{ .nl = nl, .bad = q };
+}
+
+/// Constraint-only safety: free next via input, constraint keeps q=0, bad=q.
+pub fn makeConstraintOnlySafe(allocator: std.mem.Allocator) !struct { nl: Netlist, bad: NetId } {
+    var nl = Netlist.init(allocator);
+    errdefer nl.deinit();
+    const q = try nl.allocNetNamed("q");
+    const inp = try nl.allocNetNamed("in");
+    try nl.addInput(inp);
+    try nl.addLatch(inp, q, false);
+    const nq = try nl.allocNetNamed("nq");
+    try nl.addGate(.not, &.{q}, nq);
+    try nl.addConstraint(nq);
+    try nl.addBad(q);
+    return .{ .nl = nl, .bad = q };
+}
+
+/// One-hot ring with weight≠1 as bad (OR of pairwise ANDs + all-zero already covered by pairs empty).
+/// From one-hot init, multi-hot / zero should be unreachable under ring transition.
+pub fn makeOneHotWeightBad(allocator: std.mem.Allocator, n: u32) !struct { nl: Netlist, bad: NetId } {
+    std.debug.assert(n >= 2 and n <= 6);
+    var nl = Netlist.init(allocator);
+    errdefer nl.deinit();
+    const q = try allocator.alloc(NetId, n);
+    defer allocator.free(q);
+    var i: u32 = 0;
+    while (i < n) : (i += 1) q[i] = try nl.allocNet();
+    i = 0;
+    while (i < n) : (i += 1) {
+        const prev = if (i == 0) q[n - 1] else q[i - 1];
+        try nl.addLatch(prev, q[i], i == 0);
+    }
+    // bad = any pairwise both-1 OR all-zero
+    var bad_acc: ?NetId = null;
+    i = 0;
+    while (i < n) : (i += 1) {
+        var j: u32 = i + 1;
+        while (j < n) : (j += 1) {
+            const both = try nl.allocNet();
+            try nl.addGate(.and_, &.{ q[i], q[j] }, both);
+            if (bad_acc) |a| {
+                const y = try nl.allocNet();
+                try nl.addGate(.or_, &.{ a, both }, y);
+                bad_acc = y;
+            } else bad_acc = both;
+        }
+    }
+    // all-zero
+    var zacc: ?NetId = null;
+    i = 0;
+    while (i < n) : (i += 1) {
+        const nq = try nl.allocNet();
+        try nl.addGate(.not, &.{q[i]}, nq);
+        if (zacc) |a| {
+            const y = try nl.allocNet();
+            try nl.addGate(.and_, &.{ a, nq }, y);
+            zacc = y;
+        } else zacc = nq;
+    }
+    const bad = try nl.allocNet();
+    try nl.addGate(.or_, &.{ bad_acc.?, zacc.? }, bad);
+    try nl.addBad(bad);
+    return .{ .nl = nl, .bad = bad };
+}
+
+test "empty bad props pdr proven and bmc safe" {
+    const pdr = @import("pdr.zig");
+    const bmc = @import("bmc.zig");
+    var nl = Netlist.init(std.testing.allocator);
+    defer nl.deinit();
+    const q = try nl.allocNet();
+    const d = try nl.allocNet();
+    try nl.addConst(d, false);
+    try nl.addLatch(d, q, false);
+    // no addBad / no outputs → badProps empty
+    try std.testing.expect(nl.badProps().len == 0);
+    var pr = try pdr.checkMulti(std.testing.allocator, &nl, nl.badProps(), 8);
+    defer pr.deinit(std.testing.allocator);
+    try std.testing.expect(pr.status == .proven);
+    const br = try bmc.checkMulti(std.testing.allocator, &nl, nl.badProps(), 4);
+    defer if (br.trace) |t| std.testing.allocator.free(t);
+    try std.testing.expect(br.status == .safe_up_to_bound);
+}
+
+test "multi-bad mixed: combined violated, safe alone proven" {
+    const pdr = @import("pdr.zig");
+    const bmc = @import("bmc.zig");
+    var d = try makeMultiBadMixed(std.testing.allocator);
+    defer d.nl.deinit();
+    const props = d.nl.badProps();
+    try std.testing.expect(props.len == 2);
+    var pr = try pdr.checkMulti(std.testing.allocator, &d.nl, props, 12);
+    defer pr.deinit(std.testing.allocator);
+    try std.testing.expect(pr.status == .violated);
+    const br = try bmc.checkMulti(std.testing.allocator, &d.nl, props, 2);
+    defer if (br.trace) |t| std.testing.allocator.free(t);
+    try std.testing.expect(br.status == .violated);
+    // safe property alone
+    var ps = try pdr.check(std.testing.allocator, &d.nl, d.safe_bad, 12);
+    defer ps.deinit(std.testing.allocator);
+    try std.testing.expect(ps.status == .proven or ps.status == .unknown);
+    try std.testing.expect(ps.status != .violated);
+}
+
+test "init constraint conflict is vacuously safe under bmc" {
+    const bmc = @import("bmc.zig");
+    const pdr = @import("pdr.zig");
+    var d = try makeInitConstraintConflict(std.testing.allocator);
+    defer d.nl.deinit();
+    const br = try bmc.check(std.testing.allocator, &d.nl, d.bad, 4);
+    defer if (br.trace) |t| std.testing.allocator.free(t);
+    try std.testing.expect(br.status == .safe_up_to_bound);
+    var pr = try pdr.check(std.testing.allocator, &d.nl, d.bad, 12);
+    defer pr.deinit(std.testing.allocator);
+    // No legal init under constraint: should not report violated
+    try std.testing.expect(pr.status != .violated);
+}
+
+test "constraint-only safe under bmc and not violated pdr" {
+    const bmc = @import("bmc.zig");
+    const pdr = @import("pdr.zig");
+    var d = try makeConstraintOnlySafe(std.testing.allocator);
+    defer d.nl.deinit();
+    const br = try bmc.check(std.testing.allocator, &d.nl, d.bad, 8);
+    defer if (br.trace) |t| std.testing.allocator.free(t);
+    try std.testing.expect(br.status == .safe_up_to_bound);
+    var pr = try pdr.check(std.testing.allocator, &d.nl, d.bad, 16);
+    defer pr.deinit(std.testing.allocator);
+    try std.testing.expect(pr.status != .violated);
+}
+
+test "dual rail bad init violated at 0" {
+    const bmc = @import("bmc.zig");
+    const pdr = @import("pdr.zig");
+    var d = try makeDualRailBadInit(std.testing.allocator);
+    defer d.nl.deinit();
+    const br = try bmc.check(std.testing.allocator, &d.nl, d.bad, 0);
+    defer if (br.trace) |t| std.testing.allocator.free(t);
+    try std.testing.expect(br.status == .violated);
+    var pr = try pdr.check(std.testing.allocator, &d.nl, d.bad, 8);
+    defer pr.deinit(std.testing.allocator);
+    try std.testing.expect(pr.status == .violated);
+}
+
+test "one-hot weight bad not violated" {
+    const pdr = @import("pdr.zig");
+    const bmc = @import("bmc.zig");
+    var d = try makeOneHotWeightBad(std.testing.allocator, 3);
+    defer d.nl.deinit();
+    const br = try bmc.check(std.testing.allocator, &d.nl, d.bad, 6);
+    defer if (br.trace) |t| std.testing.allocator.free(t);
+    try std.testing.expect(br.status == .safe_up_to_bound);
+    var pr = try pdr.check(std.testing.allocator, &d.nl, d.bad, 16);
+    defer pr.deinit(std.testing.allocator);
+    try std.testing.expect(pr.status != .violated);
+}
+
+test "counter 1bit bounds" {
+    const bmc = @import("bmc.zig");
+    var d = try makeCounter(std.testing.allocator, 1);
+    defer d.nl.deinit();
+    // 1-bit: init 0, next 1 at step 1 → all-1s at frame 1
+    const r0 = try bmc.check(std.testing.allocator, &d.nl, d.bad, 0);
+    defer if (r0.trace) |t| std.testing.allocator.free(t);
+    const r1 = try bmc.check(std.testing.allocator, &d.nl, d.bad, 1);
+    defer if (r1.trace) |t| std.testing.allocator.free(t);
+    try std.testing.expect(r0.status == .safe_up_to_bound);
+    try std.testing.expect(r1.status == .violated);
+}
+
+test "counter 4bit exact bound" {
+    const bmc = @import("bmc.zig");
+    var d = try makeCounter(std.testing.allocator, 4);
+    defer d.nl.deinit();
+    // reaches 1111 at step 15
+    const r14 = try bmc.check(std.testing.allocator, &d.nl, d.bad, 14);
+    defer if (r14.trace) |t| std.testing.allocator.free(t);
+    const r15 = try bmc.check(std.testing.allocator, &d.nl, d.bad, 15);
+    defer if (r15.trace) |t| std.testing.allocator.free(t);
+    try std.testing.expect(r14.status == .safe_up_to_bound);
+    try std.testing.expect(r15.status == .violated);
+}
+
+test "dual rail safe proven under kind or pdr" {
+    const pdr = @import("pdr.zig");
+    const kinduction = @import("kinduction.zig");
+    var d = try makeDualRailSafe(std.testing.allocator);
+    defer d.nl.deinit();
+    var pr = try pdr.check(std.testing.allocator, &d.nl, d.bad, 20);
+    defer pr.deinit(std.testing.allocator);
+    try std.testing.expect(pr.status != .violated);
+    const kr = try kinduction.search(std.testing.allocator, &d.nl, d.bad, 4);
+    defer if (kr.base.trace) |t| std.testing.allocator.free(t);
+    try std.testing.expect(kr.status == .proven or kr.status == .base_only or kr.status == .unknown);
+    try std.testing.expect(kr.status != .violated);
+}

@@ -1,0 +1,4 @@
+c edge: high variable index, few clauses — SAT
+p cnf 1000 2
+1 1000 0
+-1 -1000 0

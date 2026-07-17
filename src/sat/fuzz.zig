@@ -59,6 +59,25 @@ pub fn random3Sat(allocator: std.mem.Allocator, rng: std.Random, n_vars: u32, n_
 
 /// Run `iters` random instances; return mismatch count (0 = ok).
 pub fn fuzzVsBrute(allocator: std.mem.Allocator, seed: u64, iters: u32, n_vars: u32, density: f64) !u32 {
+    return fuzzVsBruteOpts(allocator, seed, iters, n_vars, density, .{});
+}
+
+pub const FuzzOpts = struct {
+    preprocess: bool = false,
+    pure_literal: bool = false,
+    inprocess_interval: u32 = 0,
+    max_conflicts: u64 = std.math.maxInt(u64),
+};
+
+/// Differential fuzz with optional industrial solve flags.
+pub fn fuzzVsBruteOpts(
+    allocator: std.mem.Allocator,
+    seed: u64,
+    iters: u32,
+    n_vars: u32,
+    density: f64,
+    fopts: FuzzOpts,
+) !u32 {
     var prng = std.Random.DefaultPrng.init(seed);
     const rng = prng.random();
     var mismatches: u32 = 0;
@@ -68,12 +87,23 @@ pub fn fuzzVsBrute(allocator: std.mem.Allocator, seed: u64, iters: u32, n_vars: 
         var cnf = try random3Sat(allocator, rng, n_vars, n_clauses);
         defer cnf.deinit();
         const brute = bruteSat(&cnf);
-        const r = try solver_mod.solveCnf(allocator, &cnf, .{});
+        const r = try solver_mod.solveCnf(allocator, &cnf, .{
+            .preprocess = fopts.preprocess,
+            .pure_literal = fopts.pure_literal,
+            .inprocess_interval = fopts.inprocess_interval,
+            .max_conflicts = fopts.max_conflicts,
+            .minimize = true,
+            .reduce_by_lbd = true,
+        });
         defer if (r.model) |m| allocator.free(m);
         defer if (r.proof) |*p| {
             var pp = p.*;
             pp.deinit();
         };
+        if (r.status == .unknown) {
+            mismatches += 1;
+            continue;
+        }
         const sat = r.status == .sat;
         if (sat != brute) {
             mismatches += 1;
@@ -113,4 +143,43 @@ test "brute unsat known" {
     try cnf.addClause(&.{a});
     try cnf.addClause(&.{a.not()});
     try std.testing.expect(!bruteSat(&cnf));
+}
+
+test "fuzz empty CNF brute and solve agree" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    try std.testing.expect(bruteSat(&cnf));
+    const r = try solver_mod.solveCnf(std.testing.allocator, &cnf, .{});
+    defer if (r.model) |m| std.testing.allocator.free(m);
+    try std.testing.expect(r.status == .sat);
+}
+
+test "fuzz empty clause brute and solve agree" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    try cnf.addClause(&.{});
+    try std.testing.expect(!bruteSat(&cnf));
+    const r = try solver_mod.solveCnf(std.testing.allocator, &cnf, .{});
+    defer if (r.model) |m| std.testing.allocator.free(m);
+    try std.testing.expect(r.status == .unsat);
+}
+
+test "fuzz vs brute industrial flags 8 vars" {
+    const mm = try fuzzVsBruteOpts(std.testing.allocator, 0xBEE5, 30, 8, 4.0, .{
+        .preprocess = true,
+        .pure_literal = true,
+        .inprocess_interval = 150,
+        .max_conflicts = 100_000,
+    });
+    try std.testing.expect(mm == 0);
+}
+
+test "fuzz vs brute industrial flags 10 vars sparse" {
+    const mm = try fuzzVsBruteOpts(std.testing.allocator, 0xF00D, 20, 10, 3.1, .{
+        .preprocess = true,
+        .pure_literal = true,
+        .inprocess_interval = 100,
+        .max_conflicts = 150_000,
+    });
+    try std.testing.expect(mm == 0);
 }

@@ -42,6 +42,11 @@ pub const Cnf = struct {
     }
 
     pub fn addClause(self: *Cnf, clause: []const Lit) !void {
+        // Always track vars mentioned (even if clause is dropped as tautology).
+        for (clause) |l| {
+            const vi = l.variable().index() + 1;
+            if (vi > self.num_vars) self.num_vars = vi;
+        }
         // Skip tautological clauses (contains l and ~l).
         var i: usize = 0;
         while (i < clause.len) : (i += 1) {
@@ -54,8 +59,6 @@ pub const Cnf = struct {
         var tmp: std.ArrayList(Lit) = .empty;
         defer tmp.deinit(self.allocator);
         for (clause) |l| {
-            const vi = l.variable().index() + 1;
-            if (vi > self.num_vars) self.num_vars = vi;
             var dup = false;
             for (tmp.items) |e| {
                 if (e == l) {
@@ -135,4 +138,32 @@ test "cnf add and check" {
     try std.testing.expect(cnf.checkModel(&assign));
     assign[1] = .false_;
     try std.testing.expect(!cnf.checkModel(&assign));
+}
+
+test "cnf empty clause is unsat marker" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    try cnf.addClause(&.{});
+    try std.testing.expect(cnf.numClauses() == 1);
+    try std.testing.expect(cnf.clauseSlice(ClauseId.fromIndex(0)).len == 0);
+    var assign = [_]Value{};
+    try std.testing.expect(!cnf.checkModel(&assign));
+}
+
+test "cnf tautology dropped but vars counted" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    const x = Lit.positive(Var.fromIndex(2));
+    try cnf.addClause(&.{ x, x.not() });
+    try std.testing.expect(cnf.numClauses() == 0);
+    try std.testing.expect(cnf.num_vars == 3);
+}
+
+test "cnf duplicate lits collapsed" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    const x = Lit.positive(Var.fromIndex(0));
+    try cnf.addClause(&.{ x, x, x });
+    try std.testing.expect(cnf.numClauses() == 1);
+    try std.testing.expect(cnf.clauseSlice(ClauseId.fromIndex(0)).len == 1);
 }

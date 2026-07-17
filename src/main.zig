@@ -19,6 +19,9 @@ const usage =
     \\  logic-zig ternary-demo
     \\  logic-zig doctor                        # self-check smoke suite
     \\  logic-zig api-info                      # stable api/v1 version + capabilities
+    \\  logic-zig edge-suite                    # cross-domain adversarial edges
+    \\  logic-zig taxonomy                      # universal named-systems registry
+    \\  logic-zig giants                        # discover Kissat/Z3/ABC/Vampire/…
     \\  logic-zig trust-report                  # DRAT + CaDiCaL + PDR certs + sequential
     \\  logic-zig sat-scoreboard [--dir DIR] [--limit N] [--conflicts N] [--portfolio] [--industrial]
     \\  logic-zig abc-delta <file.aag> [--frames N]   # internal MC vs ABC when present
@@ -205,6 +208,20 @@ pub fn main(init: std.process.Init) !void {
             caps.ctl_bounded, caps.agent_session, caps.abc_interop,
         });
         std.debug.print("program: docs/INDUSTRIAL.md\n", .{});
+        return;
+    }
+    if (std.mem.eql(u8, cmd, "edge-suite")) {
+        const r = try logic.edge_suite.run(gpa);
+        logic.edge_suite.print(&r);
+        if (!r.ok()) std.process.exit(1);
+        return;
+    }
+    if (std.mem.eql(u8, cmd, "taxonomy")) {
+        logic.taxonomy.printAll();
+        return;
+    }
+    if (std.mem.eql(u8, cmd, "giants")) {
+        try logic.giants.printDiscover(gpa);
         return;
     }
     if (std.mem.eql(u8, cmd, "trust-report")) {
