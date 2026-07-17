@@ -43,11 +43,11 @@ golden hook, (4) STATUS residual if not industrial.
 - Deprecation policy: internals may change; `api.v1` is the contract
 - **Falsifier:** spin-offs or tests fail; missing capability bits
 
-### Phase 1 — Industrial SAT
-- Preprocess: unit/pure (existing), subsumption, self-subsuming resolution
-- Inprocessing hooks, better reduce, optional vivify later
-- Frozen scoreboard: `corpus/bench/sat_comp` + `sat_hard` sample
-- **Falsifier:** CaDiCaL mismatch; scoreboard regression
+### Phase 1 — Industrial SAT · *active*
+- Preprocess: subsumption, BCP, pure literal, unit self-subsume (`sat/preprocess.zig`)
+- Inprocessing: satisfied learned deletion (`inprocess_interval`)
+- Scoreboard: `logic-zig sat-scoreboard` vs CaDiCaL on frozen suites
+- **Falsifier:** `VERDICT_SCOREBOARD_CORRECTNESS=FAIL` or mismatches > 0
 
 ### Phase 2 — Industrial MC + ABC-class *path*
 - PDR/IC3 depth (generalize, clause sharing, better CTG)

@@ -20,6 +20,7 @@ const usage =
     \\  logic-zig doctor                        # self-check smoke suite
     \\  logic-zig api-info                      # stable api/v1 version + capabilities
     \\  logic-zig trust-report                  # DRAT + CaDiCaL + PDR certs + sequential
+    \\  logic-zig sat-scoreboard [--dir DIR] [--limit N] [--conflicts N] [--portfolio]
     \\  logic-zig diff-external [--iters N]
     \\  logic-zig bench-suite [--dir DIR] [--timeout S] [--max-conflicts N] [--json] [--fair]
     \\  logic-zig bench-comp [--dir DIR] [--timeout S] [--max-conflicts N] [--no-drat]
@@ -264,6 +265,36 @@ pub fn main(init: std.process.Init) !void {
             .kind = use_kind,
         });
         std.process.exit(code);
+    }
+    if (std.mem.eql(u8, cmd, "sat-scoreboard")) {
+        var dir: []const u8 = "corpus/bench/sat_comp";
+        var limit: u32 = 30;
+        var conflicts: u64 = 300_000;
+        var use_portfolio = false;
+        while (iter.next()) |a| {
+            if (std.mem.eql(u8, a, "--dir")) {
+                dir = iter.next() orelse return fail("dir");
+            } else if (std.mem.eql(u8, a, "--limit")) {
+                limit = std.fmt.parseInt(u32, iter.next() orelse return fail("limit"), 10) catch return fail("bad limit");
+            } else if (std.mem.eql(u8, a, "--conflicts")) {
+                conflicts = std.fmt.parseInt(u64, iter.next() orelse return fail("conflicts"), 10) catch return fail("bad conflicts");
+            } else if (std.mem.eql(u8, a, "--portfolio")) {
+                use_portfolio = true;
+            }
+        }
+        var sb = try logic.sat_scoreboard.run(gpa, io, .{
+            .suite_dir = dir,
+            .limit = limit,
+            .max_conflicts = conflicts,
+            .portfolio = use_portfolio,
+            .portfolio_budget = conflicts,
+            .preprocess = true,
+            .inprocess = true,
+        });
+        defer sb.deinit(gpa);
+        logic.sat_scoreboard.print(&sb);
+        if (!sb.correctnessOk()) std.process.exit(1);
+        return;
     }
     if (std.mem.eql(u8, cmd, "diff-external")) {
         var iters: u32 = 20;

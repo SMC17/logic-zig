@@ -1,7 +1,7 @@
 # logic-zig status
 
-**Version:** 0.15.0  
-**Last green:** industrial foundation — `api/v1` · preprocess · SMT facade · FOL resolution · TRUST path from 0.14
+**Version:** 0.15.1  
+**Last green:** industrial SAT scoreboard · deep preprocess · inprocess · CaDiCaL Δ
 
 ## Climb gates
 
@@ -9,6 +9,7 @@
 zig build test && zig build
 ./zig-out/bin/logic-zig api-info
 ./zig-out/bin/logic-zig trust-report
+./zig-out/bin/logic-zig sat-scoreboard --dir corpus/bench/sat_comp --limit 20 --conflicts 200000
 ./zig-out/bin/logic-zig sat-track corpus/bench/sat/simple_unsat.cnf --proof
 ./zig-out/bin/logic-hwmcc golden
 ./zig-out/bin/logic-cert suite
@@ -16,14 +17,14 @@ zig build test && zig build
 
 ## Industrial program
 
-See **[docs/INDUSTRIAL.md](docs/INDUSTRIAL.md)** — full path to industrial SAT/MC, SMT, FOL, ABC-class, stable API.
+See **[docs/INDUSTRIAL.md](docs/INDUSTRIAL.md)**.
 
 | Phase | Goal | Status |
 |-------|------|--------|
-| **0** Stable `api/v1` | version + capabilities + sat/mc entry | **landing** |
-| **1** Industrial SAT | preprocess + scoreboard | preprocess ✓ · scoreboard ongoing |
+| **0** Stable `api/v1` | version + capabilities | **done** (v0.15.0) |
+| **1** Industrial SAT | preprocess + scoreboard vs CaDiCaL | **active** (v0.15.1) |
 | **2** Industrial MC + ABC path | PDR depth + ABC Δ | engines exist · ABC interop probe |
-| **3** Industrial SMT | BV + UF/array | facade ✓ · BV micro · UF unsupported |
+| **3** Industrial SMT | BV + UF/array | facade ✓ · UF unsupported |
 | **4** Full FOL prover | resolution → superposition | resolution skeleton ✓ |
 | **5** CTL/BV polish | bounded CTL · BV ops | present · deepen |
 

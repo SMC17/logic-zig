@@ -59,6 +59,10 @@ pub const SolverOptions = struct {
     /// Run pure-literal elimination once after initial units (non-assumption solve only).
     /// Default off: level-0 pure pins interact poorly with multi-shot reuse.
     pure_literal: bool = false,
+    /// Run CNF preprocess (subsumption/BCP/pure) before search. Off by default for multi-shot.
+    preprocess: bool = false,
+    /// Every N conflicts at decision level 0-ish restart: delete satisfied learned clauses (0 = off).
+    inprocess_interval: u32 = 0,
 };
 
 const ClauseRange = struct {
@@ -843,6 +847,24 @@ pub const Solver = struct {
         while (i < drop_n) : (i += 1) {
             self.deleteClause(learned_ids.items[i]);
         }
+    }
+
+    /// Inprocessing: drop learned clauses satisfied under current assignment (not reasons).
+    fn inprocessSatisfied(self: *Solver) void {
+        for (self.clauses.items, 0..) |c, i| {
+            if (!c.learned or c.deleted or c.len == 0) continue;
+            const id = ClauseId.fromIndex(@intCast(i));
+            if (self.isLocked(id)) continue;
+            const cl = self.clauseSlice(id);
+            var sat = false;
+            for (cl) |l| {
+                if (self.valueLit(l) == .true_) {
+                    sat = true;
+                    break;
+                }
+            }
+            if (sat) self.deleteClause(id);
+        }
         // Compact when many soft-deletes accumulate.
         if (self.reduced_count > 0 and self.reduced_count % 100 == 0) {
             self.compact() catch {};
@@ -1246,6 +1268,11 @@ pub const Solver = struct {
                 if (self.opts.reduce_interval > 0 and self.conflict_count % self.opts.reduce_interval == 0) {
                     self.reduceDb();
                 }
+                if (self.opts.inprocess_interval > 0 and
+                    self.conflict_count % self.opts.inprocess_interval == 0)
+                {
+                    self.inprocessSatisfied();
+                }
 
                 if (self.opts.restart_base > 0) {
                     conflicts_at_restart += 1;
@@ -1431,6 +1458,20 @@ test "compact after deletes" {
 }
 
 pub fn solveCnf(allocator: std.mem.Allocator, cnf: *const Cnf, opts: SolverOptions) !SolveResult {
+    if (opts.preprocess) {
+        const preprocess_mod = @import("preprocess.zig");
+        var work = Cnf.init(allocator);
+        defer work.deinit();
+        work.ensureVars(cnf.num_vars);
+        var ci: u32 = 0;
+        while (ci < cnf.numClauses()) : (ci += 1) {
+            try work.addClause(cnf.clauseSlice(ClauseId.fromIndex(ci)));
+        }
+        _ = try preprocess_mod.preprocess(allocator, &work);
+        var s = try Solver.init(allocator, &work, opts);
+        defer s.deinit();
+        return try s.solve();
+    }
     var s = try Solver.init(allocator, cnf, opts);
     defer s.deinit();
     return try s.solve();
