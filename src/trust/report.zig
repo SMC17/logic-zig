@@ -16,6 +16,7 @@ const kliveness = @import("../circuit/kliveness.zig");
 const aiger = @import("../bridge/aiger.zig");
 const lit_mod = @import("../core/lit.zig");
 const agent_session = @import("../agent/session.zig");
+const smt_mod = @import("../smt/smt.zig");
 
 pub const TrustReport = struct {
     drat_available: bool = false,
@@ -33,6 +34,8 @@ pub const TrustReport = struct {
     klive_fail: u32 = 0,
     agent_ok: u32 = 0,
     agent_fail: u32 = 0,
+    smt_ok: u32 = 0,
+    smt_fail: u32 = 0,
     all_pass: bool = false,
 };
 
@@ -243,10 +246,36 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io) !TrustReport {
         }
     }
 
+    // SMT UF spine
+    {
+        var s = try smt_mod.SmtSolver.init(allocator, .uf);
+        defer s.deinit();
+        const u = try s.ufSolver();
+        const a = try u.mkConst("a");
+        const b = try u.mkConst("b");
+        u.assertEq(a, b);
+        try u.assertDiseq(a, b);
+        const r = try s.check();
+        if (r.status == .unsat) rep.smt_ok += 1 else rep.smt_fail += 1;
+    }
+    {
+        var s = try smt_mod.SmtSolver.init(allocator, .uf);
+        defer s.deinit();
+        const u = try s.ufSolver();
+        const a = try u.mkConst("a");
+        const b = try u.mkConst("b");
+        const fa = try u.mkApp1("f", a);
+        const fb = try u.mkApp1("f", b);
+        u.assertEq(a, b);
+        try u.assertDiseq(fa, fb);
+        const r = try s.check();
+        if (r.status == .unsat) rep.smt_ok += 1 else rep.smt_fail += 1;
+    }
+
     rep.all_pass = rep.drat_failed == 0 and rep.cadical_mismatches == 0 and
         rep.pdr_certs_fail == 0 and rep.sequential_fail == 0 and rep.klive_fail == 0 and
-        rep.agent_fail == 0 and
-        (rep.pdr_certs_ok + rep.sequential_ok + rep.klive_ok + rep.agent_ok) > 0;
+        rep.agent_fail == 0 and rep.smt_fail == 0 and
+        (rep.pdr_certs_ok + rep.sequential_ok + rep.klive_ok + rep.agent_ok + rep.smt_ok) > 0;
 
     return rep;
 }
@@ -268,6 +297,7 @@ pub fn print(r: *const TrustReport) void {
     std.debug.print("sequential: ok={d} fail={d}\n", .{ r.sequential_ok, r.sequential_fail });
     std.debug.print("klive: ok={d} fail={d}\n", .{ r.klive_ok, r.klive_fail });
     std.debug.print("agent: ok={d} fail={d}\n", .{ r.agent_ok, r.agent_fail });
+    std.debug.print("smt_uf: ok={d} fail={d}\n", .{ r.smt_ok, r.smt_fail });
     std.debug.print("TRUST_{s}\n", .{if (r.all_pass) "OK" else "FAIL"});
 }
 

@@ -44,10 +44,15 @@ golden hook, (4) STATUS residual if not industrial.
 - **Falsifier:** spin-offs or tests fail; missing capability bits
 
 ### Phase 1 — Industrial SAT · *active*
-- Preprocess: subsumption, BCP, pure literal, unit self-subsume (`sat/preprocess.zig`)
+- Preprocess: subsumption, BCP, pure, self-subsume, **vivification**
 - Inprocessing: satisfied learned deletion (`inprocess_interval`)
-- Scoreboard: `logic-zig sat-scoreboard` vs CaDiCaL on frozen suites
-- **Falsifier:** `VERDICT_SCOREBOARD_CORRECTNESS=FAIL` or mismatches > 0
+- Scoreboard: `sat-scoreboard` / `--industrial` on `sat_comp` + **`sat_hard`**
+- **Falsifier:** mismatches > 0 when both decide; crash
+- **PAR-2:** measured; WIN not required for phase pass (correctness is)
+
+### Phase 2 — Industrial MC + ABC · *path live*
+- `abc-delta <aig>` internal vs ABC; soft-skip if ABC missing
+- **Falsifier:** `delta=MISMATCH` when both decide
 
 ### Phase 2 — Industrial MC + ABC-class *path*
 - PDR/IC3 depth (generalize, clause sharing, better CTG)
@@ -55,10 +60,10 @@ golden hook, (4) STATUS residual if not industrial.
 - Design library growth; HWMCC track cert density
 - **Falsifier:** trust sequential fail; golden drop
 
-### Phase 3 — Industrial SMT
-- `SmtSolver` facade; BV completeness (add/mul/cmp/ite/extract/concat)
-- Theory stubs → real UF equality + array axioms (eager/lazy)
-- **Falsifier:** wrong BV model; unsat without blast consistency
+### Phase 3 — Industrial SMT · *UF spine*
+- `SmtSolver` + BV + **ground EUF** (`uf.zig` congruence / diseq / preds)
+- Arrays / UFBV still unsupported
+- **Falsifier:** wrong EUF unsat/sat on unit tests
 
 ### Phase 4 — Full FOL prover
 - Clausal FOL + resolution + subsumption + given-clause

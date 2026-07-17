@@ -66,6 +66,8 @@ pub const ScoreOpts = struct {
     portfolio_budget: u64 = 500_000,
     preprocess: bool = true,
     inprocess: bool = true,
+    /// Industrial mode: portfolio + high budget + vivify preprocess (best-effort PAR-2).
+    industrial: bool = false,
 };
 
 pub fn run(allocator: std.mem.Allocator, io: std.Io, opts: ScoreOpts) !Scoreboard {
@@ -129,22 +131,22 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, opts: ScoreOpts) !Scoreboar
         defer cnf.deinit();
 
         var pp_units: u32 = 0;
-        if (opts.preprocess) {
-            const st = try preprocess.preprocess(allocator, &cnf);
-            pp_units = st.units_propagated + st.pure_assigned;
-            if (st.unsat) {
-                // force empty unsat for solver
-            }
+        const use_port = opts.portfolio or opts.industrial;
+        const budget = if (opts.industrial) @max(opts.portfolio_budget, opts.max_conflicts) else if (use_port) opts.portfolio_budget else opts.max_conflicts;
+        if (opts.preprocess or opts.industrial) {
+            const st = try preprocess.preprocessOpts(allocator, &cnf, .{ .vivify = true });
+            pp_units = st.units_propagated + st.pure_assigned + st.vivified_lits;
         }
 
         // Internal solve
         const t0 = monoNs();
         var model_ok = true;
         var istatus: bench.Status = .unknown;
-        if (opts.portfolio) {
+        if (use_port) {
             var pr = try portfolio.solvePortfolioOpts(allocator, &cnf, .{
-                .total_conflicts = opts.portfolio_budget,
+                .total_conflicts = budget,
                 .validate_model = true,
+                .ramp = true,
             });
             defer if (pr.model) |m| allocator.free(m);
             defer if (pr.proof) |*p| {
@@ -163,8 +165,10 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, opts: ScoreOpts) !Scoreboar
             const r = try solver.solveCnf(allocator, &cnf, .{
                 .max_conflicts = opts.max_conflicts,
                 .preprocess = false, // already did
-                .inprocess_interval = if (opts.inprocess) 2000 else 0,
+                .inprocess_interval = if (opts.inprocess or opts.industrial) 1500 else 0,
                 .pure_literal = true,
+                .minimize = true,
+                .reduce_by_lbd = true,
             });
             defer if (r.model) |m| allocator.free(m);
             defer if (r.proof) |*p| {

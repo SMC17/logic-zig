@@ -59,6 +59,7 @@ pub const trust_report = @import("trust/report.zig");
 pub const api = @import("api/v1.zig");
 pub const preprocess = @import("sat/preprocess.zig");
 pub const smt = @import("smt/smt.zig");
+pub const smt_uf = @import("smt/uf.zig");
 pub const fol_resolution = @import("fol/resolution.zig");
 pub const sat_scoreboard = @import("track/sat_scoreboard.zig");
 
@@ -216,6 +217,7 @@ test {
     _ = api;
     _ = preprocess;
     _ = smt;
+    _ = smt_uf;
     _ = fol_resolution;
     _ = sat_scoreboard;
 }
