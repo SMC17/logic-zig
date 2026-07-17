@@ -141,12 +141,23 @@ fn evalGate(g: netlist_mod.Gate, vals: []const Tri) Tri {
             for (g.inputs) |inp| acc = Tri.bitAnd(acc, vals[inp.index()]);
             break :blk acc;
         },
+        .nand => blk: {
+            var acc: Tri = .one;
+            for (g.inputs) |inp| acc = Tri.bitAnd(acc, vals[inp.index()]);
+            break :blk acc.not();
+        },
         .or_, .or_n => blk: {
             var acc: Tri = .zero;
             for (g.inputs) |inp| acc = Tri.bitOr(acc, vals[inp.index()]);
             break :blk acc;
         },
+        .nor => blk: {
+            var acc: Tri = .zero;
+            for (g.inputs) |inp| acc = Tri.bitOr(acc, vals[inp.index()]);
+            break :blk acc.not();
+        },
         .xor => Tri.bitXor(vals[g.inputs[0].index()], vals[g.inputs[1].index()]),
+        .xnor => Tri.bitXor(vals[g.inputs[0].index()], vals[g.inputs[1].index()]).not(),
         .mux => Tri.mux(
             vals[g.inputs[0].index()],
             vals[g.inputs[1].index()],

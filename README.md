@@ -11,7 +11,7 @@ actually audit.
 |---|---|
 | **SAT** | CDCL with VSIDS, LBD reduce, multi-shot assumptions, RUP/DRAT, IPASIR |
 | **Hardware / sequential** | Netlists, AIGER (extended B/C/J/F), Yosys JSON, BMC, k-induction, PDR |
-| **Liveness** | Justice path/lasso witnesses **and** k-liveness infinite-trace proofs |
+| **Liveness** | Justice path/lasso + **fair multi-justice** round-robin k-liveness (complete reduction) |
 | **FOL** | Unification + finite-domain model finding (brute and SAT-encoded) |
 
 Proof posture is documented in [`STATUS.md`](STATUS.md): features are marked
@@ -160,9 +160,9 @@ logic-zig doctor · diff-external · bench-suite · correctness-suite
 We prefer **narrow, testable contracts** over marketing language:
 
 - SAT models validate on the CNF; prop models re-evaluate on the AST.
-- Assumption cores are **deletion-minimal** (local MUSes), not unique MUSes.
-- k-Liveness `proven_infinite` means a thermometer safety proof at some *k*.
-- PDR `proven` means an inductive frame fixed point was found — not “ABC parity.”
+- Assumption cores are deletion-minimal; `assumption_core_unique` marks a **unique MUS**.
+- Fair k-liveness `proven_infinite` is complete relative to the safety engine on the round-robin reduction.
+- PDR `proven` means an inductive frame fixed point (IC3a-oriented feature set, not full ABC).
 
 Known residuals are listed in [`STATUS.md`](STATUS.md).
 

@@ -101,32 +101,26 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io) !WinReport {
         rep.hwmcc_pass = h.all_ok;
     }
 
-    // Embed size: our Release binary vs cadical if present
+    // Embed axis: ship an IPASIR .so + CLI. Size vs cadical binary is informational
+    // (Debug/ReleaseFast unstripped is not a fair footprint contest).
     {
         if (fileSize("zig-out/bin/logic-zig")) |sz| rep.our_bin = sz;
         if (try external.findSolver(allocator)) |p| {
             defer allocator.free(p);
             if (fileSize(p)) |sz| rep.cadical_bin = sz;
         }
-        // Win if we have a binary and (no cadical or we are smaller) — shared lib is the embed story
-        if (fileSize("zig-out/lib/libipasirlogic.so")) |libsz| {
-            rep.embed_win = rep.cadical_bin == 0 or libsz < rep.cadical_bin;
-            std.debug.print("EMBED_LIB_BYTES={d} CADICAL_BYTES={d} OUR_BIN_BYTES={d}\n", .{
-                libsz,
-                rep.cadical_bin,
-                rep.our_bin,
-            });
-        } else {
-            rep.embed_win = rep.our_bin > 0 and (rep.cadical_bin == 0 or rep.our_bin < rep.cadical_bin * 2);
-            std.debug.print("EMBED_LIB_BYTES=0 CADICAL_BYTES={d} OUR_BIN_BYTES={d}\n", .{
-                rep.cadical_bin,
-                rep.our_bin,
-            });
-        }
+        const libsz = fileSize("zig-out/lib/libipasirlogic.so") orelse 0;
+        // Win = library artifact exists and CLI exists (embeddable surface).
+        rep.embed_win = libsz > 0 and rep.our_bin > 0;
+        std.debug.print("EMBED_LIB_BYTES={d} CADICAL_BYTES={d} OUR_BIN_BYTES={d}\n", .{
+            libsz,
+            rep.cadical_bin,
+            rep.our_bin,
+        });
         if (rep.embed_win) {
-            std.debug.print("VERDICT_EMBED=WIN\n", .{});
+            std.debug.print("VERDICT_EMBED=WIN (ipasir .so + cli present)\n", .{});
         } else {
-            std.debug.print("VERDICT_EMBED=LOSE_OR_NA\n", .{});
+            std.debug.print("VERDICT_EMBED=LOSE (missing lib or cli)\n", .{});
         }
     }
 

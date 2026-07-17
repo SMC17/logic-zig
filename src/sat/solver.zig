@@ -31,6 +31,8 @@ pub const SolveResult = struct {
     proof: ?drat_mod.Proof = null,
     /// After unsat under assumptions: minimal assumption core (owned dimacs lits); free with allocator.free.
     assumption_core: ?[]i32 = null,
+    /// True when `assumption_core` is the unique MUS of the assumption set.
+    assumption_core_unique: bool = false,
 };
 
 pub const SolverOptions = struct {
@@ -930,14 +932,55 @@ pub const Solver = struct {
 
     /// Multi-shot solve with assumptions (kept as decision levels 1..a).
     /// On UNSAT, fills `assumption_core` with a **deletion-minimal** unsat core
-    /// over the assumption set (a local MUS; uniqueness is not guaranteed when
-    /// multiple MUSes exist).
+    /// and sets `assumption_core_unique` when it is the unique MUS of the set.
     pub fn solveAssumptions(self: *Solver, assumptions: []const Lit) !SolveResult {
         var r = try self.solveAssumptionsRaw(assumptions);
         if (r.status == .unsat and assumptions.len > 0) {
-            r.assumption_core = try self.minimizeAssumptionCore(assumptions);
+            const extracted = try self.extractAssumptionMus(assumptions);
+            r.assumption_core = extracted.core;
+            r.assumption_core_unique = extracted.unique;
         }
         return r;
+    }
+
+    pub const MusResult = struct {
+        /// Deletion-minimal unsat core (DIMACS lits), owned.
+        core: []i32,
+        /// True iff this is the **unique** MUS of the assumption set:
+        /// ∀a∈MUS. assumptions\{a} is SAT.
+        unique: bool,
+    };
+
+    /// Extract a MUS of `assumptions` and test uniqueness.
+    pub fn extractAssumptionMus(self: *Solver, assumptions: []const Lit) !MusResult {
+        const core_dimacs = try self.minimizeAssumptionCore(assumptions);
+        errdefer self.allocator.free(core_dimacs);
+
+        var core_lits: std.ArrayList(Lit) = .empty;
+        defer core_lits.deinit(self.allocator);
+        for (core_dimacs) |d| try core_lits.append(self.allocator, Lit.fromDimacs(d));
+
+        // Uniqueness: for every a in MUS, full assumption set without a is SAT.
+        var unique = true;
+        for (core_lits.items) |drop| {
+            var reduced: std.ArrayList(Lit) = .empty;
+            defer reduced.deinit(self.allocator);
+            for (assumptions) |a| {
+                if (a.toDimacs() != drop.toDimacs()) try reduced.append(self.allocator, a);
+            }
+            self.hardReset();
+            const r = try self.solveAssumptionsRaw(reduced.items);
+            defer if (r.model) |m| self.allocator.free(m);
+            defer if (r.proof) |*p| {
+                var pp = p.*;
+                pp.deinit();
+            };
+            if (r.status == .unsat) {
+                unique = false;
+                break;
+            }
+        }
+        return .{ .core = core_dimacs, .unique = unique };
     }
 
     /// Full reset to decision level −1 / empty trail for a clean multi-shot probe.
@@ -1258,11 +1301,36 @@ test "assumption core is deletion-minimal" {
     try std.testing.expect(r.assumption_core != null);
     try std.testing.expect(r.assumption_core.?.len >= 2);
     try std.testing.expect(r.assumption_core.?.len < 3 or r.assumption_core.?.len == 2);
-    // Rebuild core lits and check minimality
     var core_lits: std.ArrayList(Lit) = .empty;
     defer core_lits.deinit(std.testing.allocator);
     for (r.assumption_core.?) |d| try core_lits.append(std.testing.allocator, Lit.fromDimacs(d));
     try std.testing.expect(try s.isDeletionMinimalCore(core_lits.items));
+    // Two MUSes exist → not unique
+    try std.testing.expect(!r.assumption_core_unique);
+}
+
+test "unique MUS when single minimal core" {
+    // (a) ∧ (¬a ∨ b) ∧ (¬b) unsat under assumptions ~ forced... use units in formula
+    // Formula: (x∨y) only, assumptions ~x,~y → unique MUS {~x,~y}
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    cnf.ensureVars(2);
+    const x = Lit.positive(Var.fromIndex(0));
+    const y = Lit.positive(Var.fromIndex(1));
+    try cnf.addClause(&.{ x, y });
+    var s = try Solver.init(std.testing.allocator, &cnf, .{});
+    defer s.deinit();
+    const ass = [_]Lit{ x.not(), y.not() };
+    const r = try s.solveAssumptions(&ass);
+    defer if (r.model) |m| std.testing.allocator.free(m);
+    defer if (r.proof) |*p| {
+        var pp = p.*;
+        pp.deinit();
+    };
+    defer if (r.assumption_core) |core| std.testing.allocator.free(core);
+    try std.testing.expect(r.status == .unsat);
+    try std.testing.expect(r.assumption_core.?.len == 2);
+    try std.testing.expect(r.assumption_core_unique);
 }
 
 test "multi-shot incremental assumptions" {

@@ -1,21 +1,17 @@
-//! k-Liveness: infinite-trace proofs for justice properties.
+//! k-Liveness / fair multi-justice: infinite-trace proofs.
 //!
-//! AIGER/HWMCC justice is **violated** by an infinite path on which each
-//! justice signal is true infinitely often. A **proof** is therefore a
-//! demonstration that no such path exists.
+//! HWMCC justice is **violated** by an infinite path on which each justice
+//! (and each fairness constraint) is true infinitely often.
 //!
-//! k-Liveness (Claessen / Sörensson style) reduces that claim to safety:
+//! ## Single signal
+//! Thermometer: t_i means “≥ i+1 hits”. Bad ≡ t_k. Safety ⇒ only finitely often.
 //!
-//!   - Thermometer counter: bit `t_i` means “justice has held ≥ i+1 times”.
-//!   - Bad ⇔ `t_k` (justice held ≥ k+1 times).
-//!   - If safety PDR proves G(¬bad) for some k, then justice holds at most
-//!     k times on **every** path from the initial states — hence only
-//!     finitely often on every infinite path. That is an **infinite-trace
-//!     proof** that the justice property is not violated.
-//!
-//! For multiple justice signals we prove FG(¬J_i) for each i (sound: if any
-//! signal is only finitely often, no path has *all* signals infinitely often).
-//! Completeness for multi-justice requires stronger fair-CTL methods.
+//! ## Multi justice + fairness (complete reduction)
+//! Round-robin phase over the concatenated signal list S = justice ∥ fairness:
+//! wait for S[p], then p ← (p+1) mod |S|. Each full wrap increments a round
+//! thermometer. If rounds ≤ k is inductive/safe, some S[i] is only finite often
+//! on every path — so no fair multi-justice infinite path exists.
+//! This is complete relative to the underlying safety engine (kind/PDR).
 
 const std = @import("std");
 const netlist_mod = @import("netlist.zig");
@@ -131,7 +127,85 @@ pub fn proveFiniteHits(
     return .{ .status = .unknown, .k = max_k, .conflicts = total_conf };
 }
 
-/// Full justice check: lasso witness first, then k-liveness infinite proof.
+/// Attach round-robin phase + thermometer over `signals` (justice∥fairness).
+/// Returns bad = “completed more than k full cycles”.
+pub fn attachFairRoundRobin(
+    nl: *Netlist,
+    signals: []const NetId,
+    k: u32,
+) !NetId {
+    std.debug.assert(signals.len > 0);
+    const n: u32 = @intCast(signals.len);
+
+    // One-hot phase latches
+    var phase = try nl.allocator.alloc(NetId, n);
+    defer nl.allocator.free(phase);
+    var i: u32 = 0;
+    while (i < n) : (i += 1) {
+        phase[i] = try nl.allocNet();
+    }
+    // next_phase[j]
+    var next = try nl.allocator.alloc(NetId, n);
+    defer nl.allocator.free(next);
+    i = 0;
+    while (i < n) : (i += 1) {
+        // next_i = (phase_i ∧ ¬sig_i) ∨ (phase_prev ∧ sig_prev)
+        // prev = (i + n - 1) % n
+        const prev: u32 = if (i == 0) n - 1 else i - 1;
+        const stay = try nl.allocNet();
+        const nsig = try nl.allocNet();
+        try nl.addGate(.not, &.{signals[i]}, nsig);
+        try nl.addGate(.and_, &.{ phase[i], nsig }, stay);
+        const adv = try nl.allocNet();
+        try nl.addGate(.and_, &.{ phase[prev], signals[prev] }, adv);
+        next[i] = try nl.allocNet();
+        try nl.addGate(.or_, &.{ stay, adv }, next[i]);
+        // init: phase0=1, others=0
+        try nl.addLatch(next[i], phase[i], i == 0);
+    }
+
+    // round_inc = phase_{n-1} ∧ sig_{n-1}
+    const round_inc = try nl.allocNet();
+    try nl.addGate(.and_, &.{ phase[n - 1], signals[n - 1] }, round_inc);
+    return try attachThermometer(nl, round_inc, k);
+}
+
+/// Prove multi-fair justice cannot all hold i.o. (complete k-liveness).
+pub fn proveFairMulti(
+    allocator: std.mem.Allocator,
+    nl: *const Netlist,
+    signals: []const NetId,
+    max_k: u32,
+    pdr_frames: u32,
+) !KLiveResult {
+    if (signals.len == 0) return .{ .status = .proven_infinite, .k = 0 };
+    if (signals.len == 1) return proveFiniteHits(allocator, nl, signals[0], max_k, pdr_frames);
+
+    var k: u32 = 0;
+    var total_conf: u64 = 0;
+    while (k <= max_k) : (k += 1) {
+        var work = try cloneNetlist(allocator, nl);
+        defer work.deinit();
+        const bad = try attachFairRoundRobin(&work, signals, k);
+
+        const kr = try kinduction.search(allocator, &work, bad, @max(k + 3, 4));
+        defer if (kr.base.trace) |t| allocator.free(t);
+        total_conf += kr.conflicts;
+        if (kr.status == .proven) {
+            return .{ .status = .proven_infinite, .k = k, .conflicts = total_conf, .pdr_frames = kr.k };
+        }
+
+        const pr = try pdr.check(allocator, &work, bad, pdr_frames);
+        defer if (pr.cex_latches) |c| allocator.free(c);
+        total_conf += pr.conflicts;
+        if (pr.status == .proven) {
+            return .{ .status = .proven_infinite, .k = k, .conflicts = total_conf, .pdr_frames = pr.frames };
+        }
+    }
+    return .{ .status = .unknown, .k = max_k, .conflicts = total_conf };
+}
+
+/// Full justice check: lasso witness first, then complete fair k-liveness.
 pub fn check(
     allocator: std.mem.Allocator,
     nl: *const Netlist,
@@ -141,11 +215,10 @@ pub fn check(
     lasso_bound: u32,
 ) !KLiveResult {
     if (justices.len == 0) {
-        // Vacuous: no justice to satisfy infinitely often → no violation path.
         return .{ .status = .proven_infinite, .k = 0 };
     }
 
-    // Strong CEX: lasso fair path
+    // Strong CEX: lasso fair path (justice + fairness on loop)
     if (lasso_bound > 0 and nl.latches.items.len > 0) {
         const lr = try justice.checkLasso(allocator, nl, justices, nl.fairness.items, lasso_bound);
         defer if (lr.trace) |t| allocator.free(t);
@@ -158,22 +231,14 @@ pub fn check(
         }
     }
 
-    // Sound multi: prove each FG(¬J_i); any one infinite FG(¬J_i) proves no path has all J i.o.
-    var total: u64 = 0;
-    for (justices, 0..) |jnet, ji| {
-        const r = try proveFiniteHits(allocator, nl, jnet, max_k, pdr_frames);
-        total += r.conflicts;
-        if (r.status == .proven_infinite) {
-            return .{
-                .status = .proven_infinite,
-                .k = r.k,
-                .conflicts = total,
-                .pdr_frames = r.pdr_frames,
-                .justice_index = @intCast(ji),
-            };
-        }
+    // Complete multi: round-robin over justice ∥ fairness
+    const fair = nl.fairness.items;
+    if (justices.len == 1 and fair.len == 0) {
+        return proveFiniteHits(allocator, nl, justices[0], max_k, pdr_frames);
     }
-    return .{ .status = .unknown, .k = max_k, .conflicts = total };
+    const signals = try std.mem.concat(allocator, NetId, &.{ justices, fair });
+    defer allocator.free(signals);
+    return proveFairMulti(allocator, nl, signals, max_k, pdr_frames);
 }
 
 pub fn checkNetlist(
@@ -254,4 +319,37 @@ test "k-liveness toggle not false-proven" {
     try std.testing.expect(r.status != .proven_infinite);
     // Prefer lasso witness when bound allows
     try std.testing.expect(r.status == .lasso_witness or r.status == .unknown or r.status == .violated);
+}
+
+test "fair multi: one stuck-0 proves complete" {
+    // Two justice: q0 stuck 0, q1 toggles. Round-robin cannot complete infinitely.
+    var nl = Netlist.init(std.testing.allocator);
+    defer nl.deinit();
+    const q0 = try nl.allocNetNamed("q0");
+    const q1 = try nl.allocNetNamed("q1");
+    const d0 = try nl.allocNetNamed("d0");
+    const d1 = try nl.allocNetNamed("d1");
+    try nl.addConst(d0, false);
+    try nl.addGate(.not, &.{q1}, d1);
+    try nl.addLatch(d0, q0, false);
+    try nl.addLatch(d1, q1, false);
+    const r = try check(std.testing.allocator, &nl, &.{ q0, q1 }, 4, 16, 0);
+    try std.testing.expect(r.status == .proven_infinite);
+}
+
+test "fair multi: both toggle not false-proven" {
+    // Both latches toggle (xor chain) — may have fair path; must not proven_infinite at small k without lasso.
+    var nl = Netlist.init(std.testing.allocator);
+    defer nl.deinit();
+    const q0 = try nl.allocNetNamed("q0");
+    const q1 = try nl.allocNetNamed("q1");
+    const d0 = try nl.allocNetNamed("d0");
+    const d1 = try nl.allocNetNamed("d1");
+    try nl.addGate(.not, &.{q0}, d0);
+    try nl.addGate(.xor, &.{ q1, q0 }, d1);
+    try nl.addLatch(d0, q0, false);
+    try nl.addLatch(d1, q1, false);
+    // Counter visits all states; both bits true i.o. on the cycle — must not false-prove.
+    const r = try check(std.testing.allocator, &nl, &.{ q0, q1 }, 2, 10, 6);
+    try std.testing.expect(r.status != .proven_infinite);
 }

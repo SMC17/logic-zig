@@ -1,6 +1,6 @@
 .{
     .name = .logic_zig,
-    .version = "0.10.0",
+    .version = "0.11.0",
     .fingerprint = 0x470c230a7846cf04,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{},

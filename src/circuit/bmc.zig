@@ -43,69 +43,10 @@ fn frameLit(num_nets: u32, frame: u32, net: NetId, neg: bool) Lit {
     return Lit.make(frameVar(num_nets, frame, net), neg);
 }
 
+const blast = @import("blast.zig");
+
 fn blastFrame(cnf: *Cnf, nl: *const Netlist, frame: u32) !void {
-    const nn = nl.num_nets;
-    for (nl.gates.items) |g| {
-        const y = Lit.positive(frameVar(nn, frame, g.output));
-        switch (g.kind) {
-            .@"const" => {
-                if (g.const_val) try cnf.addClause(&.{y}) else try cnf.addClause(&.{y.not()});
-            },
-            .buf => {
-                const a = Lit.positive(frameVar(nn, frame, g.inputs[0]));
-                try cnf.addClause(&.{ y.not(), a });
-                try cnf.addClause(&.{ a.not(), y });
-            },
-            .not => {
-                const a = Lit.positive(frameVar(nn, frame, g.inputs[0]));
-                try cnf.addClause(&.{ y.not(), a.not() });
-                try cnf.addClause(&.{ a, y });
-            },
-            .and_, .and_n => {
-                for (g.inputs) |inp| {
-                    const a = Lit.positive(frameVar(nn, frame, inp));
-                    try cnf.addClause(&.{ y.not(), a });
-                }
-                var lits: std.ArrayList(Lit) = .empty;
-                defer lits.deinit(cnf.allocator);
-                for (g.inputs) |inp| {
-                    try lits.append(cnf.allocator, Lit.negative(frameVar(nn, frame, inp)));
-                }
-                try lits.append(cnf.allocator, y);
-                try cnf.addClause(lits.items);
-            },
-            .or_, .or_n => {
-                for (g.inputs) |inp| {
-                    const a = Lit.positive(frameVar(nn, frame, inp));
-                    try cnf.addClause(&.{ a.not(), y });
-                }
-                var lits: std.ArrayList(Lit) = .empty;
-                defer lits.deinit(cnf.allocator);
-                try lits.append(cnf.allocator, y.not());
-                for (g.inputs) |inp| {
-                    try lits.append(cnf.allocator, Lit.positive(frameVar(nn, frame, inp)));
-                }
-                try cnf.addClause(lits.items);
-            },
-            .xor => {
-                const a = Lit.positive(frameVar(nn, frame, g.inputs[0]));
-                const b = Lit.positive(frameVar(nn, frame, g.inputs[1]));
-                try cnf.addClause(&.{ y.not(), a, b });
-                try cnf.addClause(&.{ y.not(), a.not(), b.not() });
-                try cnf.addClause(&.{ y, a.not(), b });
-                try cnf.addClause(&.{ y, a, b.not() });
-            },
-            .mux => {
-                const s = Lit.positive(frameVar(nn, frame, g.inputs[0]));
-                const t = Lit.positive(frameVar(nn, frame, g.inputs[1]));
-                const f = Lit.positive(frameVar(nn, frame, g.inputs[2]));
-                try cnf.addClause(&.{ s.not(), t.not(), y });
-                try cnf.addClause(&.{ s.not(), t, y.not() });
-                try cnf.addClause(&.{ s, f.not(), y });
-                try cnf.addClause(&.{ s, f, y.not() });
-            },
-        }
-    }
+    try blast.blastFrame(cnf, nl, frame);
 }
 
 fn addConstraints(cnf: *Cnf, nl: *const Netlist, frames: u32) !void {
