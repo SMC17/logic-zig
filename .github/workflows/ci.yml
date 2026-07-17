@@ -19,8 +19,10 @@ jobs:
         run: zig build test
       - name: Build umbrella + spin-offs + IPASIR
         run: zig build
-      - name: Doctor smoke
-        run: ./zig-out/bin/logic-zig doctor
+      - name: Doctor + trust report
+        run: |
+          ./zig-out/bin/logic-zig doctor
+          ./zig-out/bin/logic-zig trust-report
       - name: Golden corpus (builtin + AIGER manifest + DRAT)
         run: ./zig-out/bin/logic-hwmcc golden
       - name: DRAT-trim unit + fuzz
@@ -31,19 +33,21 @@ jobs:
         run: ./zig-out/bin/logic-sat hard --dir corpus/bench/sat --limit 12 --conflicts 100000
       - name: Portfolio sat_hard sample
         run: ./zig-out/bin/logic-sat hard --dir corpus/bench/sat_hard --limit 3 --conflicts 150000
+      - name: Agent multishot stress
+        run: |
+          ./zig-out/bin/logic-agent stress --queries 500 --vars 10
+          ./zig-out/bin/logic-agent warm-cold --queries 100 --vars 8
       - name: HWMCC stack + fair-demo
         run: |
           ./zig-out/bin/logic-hwmcc fair-demo
           ./zig-out/bin/logic-hwmcc stack
       - name: Spin-off smoke
         run: |
-          ./zig-out/bin/logic-agent profile
           ./zig-out/bin/logic-agent session-demo
-          ./zig-out/bin/logic-sat profile
           ./zig-out/bin/logic-sat portfolio corpus/bench/sat/simple_unsat.cnf --proof
-          ./zig-out/bin/logic-cert klive-demo
           ./zig-out/bin/logic-cert pdr-demo
           ./zig-out/bin/logic-smt demo-add
           ./zig-out/bin/logic-ctl demo
+          ./zig-out/bin/ipasir-consumer
           ./zig-out/bin/logic-hwmcc track corpus/golden/aiger/stuck0.aag --frames 8
           ./zig-out/bin/logic-hwmcc track corpus/golden/aiger/const1_bad.aag --frames 4

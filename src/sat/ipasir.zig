@@ -177,7 +177,7 @@ pub const IpasirSolver = struct {
     }
 
     pub fn signature() [*:0]const u8 {
-        return "logic-zig-ipasir-0.7";
+        return "logic-zig-ipasir-0.12";
     }
 };
 
