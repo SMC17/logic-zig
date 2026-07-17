@@ -243,6 +243,25 @@ pub fn runBuiltin(allocator: std.mem.Allocator) !GoldenResult {
             pass(&res, r.status == .unsat and try p.verifyRup(allocator, &cnf));
         } else pass(&res, false);
     }
+    // fair multi three-signal
+    {
+        var nl = Netlist.init(allocator);
+        defer nl.deinit();
+        const a = try nl.allocNetNamed("a");
+        const b = try nl.allocNetNamed("b");
+        const c = try nl.allocNetNamed("c");
+        const da = try nl.allocNetNamed("da");
+        const db = try nl.allocNetNamed("db");
+        const dc = try nl.allocNetNamed("dc");
+        try nl.addGate(.not, &.{a}, da);
+        try nl.addGate(.not, &.{b}, db);
+        try nl.addConst(dc, false);
+        try nl.addLatch(da, a, false);
+        try nl.addLatch(db, b, false);
+        try nl.addLatch(dc, c, false);
+        const r = try kliveness.proveFairMulti(allocator, &nl, &.{ a, b, c }, 5, 16);
+        pass(&res, r.status == .proven_infinite);
+    }
 
     return res;
 }

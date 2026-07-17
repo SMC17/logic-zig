@@ -15,6 +15,8 @@ pub fn main(init: std.process.Init) !void {
             \\  logic-sat solve <file.cnf>
             \\  logic-sat portfolio <file.cnf> [--proof]
             \\  logic-sat check-drat <file.cnf>
+            \\  logic-sat drat-fuzz [--iters N] [--vars V]
+            \\  logic-sat hard [--dir DIR] [--limit N] [--conflicts N]
             \\  logic-sat profile
             \\
         , .{});
@@ -29,6 +31,45 @@ pub fn main(init: std.process.Init) !void {
         } else {
             std.debug.print("drat-trim: UNAVAILABLE\n", .{});
         }
+        return;
+    }
+    if (std.mem.eql(u8, cmd, "drat-fuzz")) {
+        var iters: u32 = 30;
+        var nvars: u32 = 6;
+        while (iter.next()) |a| {
+            if (std.mem.eql(u8, a, "--iters")) iters = try std.fmt.parseInt(u32, iter.next() orelse "30", 10);
+            if (std.mem.eql(u8, a, "--vars")) nvars = try std.fmt.parseInt(u32, iter.next() orelse "6", 10);
+        }
+        const r = try logic.drat_external.fuzzExternalDrat(gpa, io, 0xD2A7, iters, nvars);
+        if (r.unavailable) {
+            std.debug.print("DRAT_FUZZ_SKIP unavailable\n", .{});
+            return;
+        }
+        std.debug.print("DRAT_FUZZ ran={d} verified={d} failed={d} skipped={d}\n", .{
+            r.ran,
+            r.verified,
+            r.failed,
+            r.skipped,
+        });
+        if (r.failed != 0) std.process.exit(1);
+        return;
+    }
+    if (std.mem.eql(u8, cmd, "hard")) {
+        var dir: []const u8 = "corpus/bench/sat";
+        var limit: u32 = 12;
+        var conflicts: u64 = 200_000;
+        while (iter.next()) |a| {
+            if (std.mem.eql(u8, a, "--dir")) dir = iter.next() orelse dir;
+            if (std.mem.eql(u8, a, "--limit")) limit = try std.fmt.parseInt(u32, iter.next() orelse "12", 10);
+            if (std.mem.eql(u8, a, "--conflicts")) conflicts = try std.fmt.parseInt(u64, iter.next() orelse "200000", 10);
+        }
+        // Prefer sat_hard if present
+        if (std.mem.eql(u8, dir, "corpus/bench/sat")) {
+            // keep default small suite for speed; user can pass --dir corpus/bench/sat_hard
+        }
+        var suite = try logic.portfolio_bench.runDir(gpa, io, dir, limit, conflicts);
+        logic.portfolio_bench.printSuite(&suite);
+        if (suite.failed != 0) std.process.exit(1);
         return;
     }
     if (std.mem.eql(u8, cmd, "solve") or std.mem.eql(u8, cmd, "portfolio") or std.mem.eql(u8, cmd, "check-drat")) {
