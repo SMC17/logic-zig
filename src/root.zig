@@ -15,6 +15,7 @@ pub const tseitin = @import("pass/tseitin.zig");
 pub const cnf = @import("sat/cnf.zig");
 pub const solver = @import("sat/solver.zig");
 pub const drat = @import("sat/drat.zig");
+pub const drat_external = @import("sat/drat_external.zig");
 pub const fuzz = @import("sat/fuzz.zig");
 pub const external = @import("sat/external.zig");
 pub const ipasir = @import("sat/ipasir.zig");
@@ -42,6 +43,15 @@ pub const multishot_bench = @import("track/multishot_bench.zig");
 pub const correctness_suite = @import("track/correctness_suite.zig");
 pub const hwmcc_bench = @import("track/hwmcc_bench.zig");
 pub const win_report = @import("track/win_report.zig");
+pub const comp_bench = @import("track/comp_bench.zig");
+pub const golden = @import("track/golden.zig");
+pub const profiles = @import("profile/profiles.zig");
+pub const certificate = @import("cert/certificate.zig");
+pub const ctl = @import("ctl/ctl.zig");
+pub const bv = @import("smt/bv.zig");
+pub const portfolio = @import("sat/portfolio.zig");
+pub const abc_interop = @import("bridge/abc_interop.zig");
+pub const btor2 = @import("bridge/btor2.zig");
 
 pub const Lit = lit.Lit;
 pub const Var = lit.Var;
@@ -153,6 +163,7 @@ test {
     _ = cnf;
     _ = solver;
     _ = drat;
+    _ = drat_external;
     _ = fuzz;
     _ = external;
     _ = ipasir;
@@ -180,6 +191,15 @@ test {
     _ = correctness_suite;
     _ = hwmcc_bench;
     _ = win_report;
+    _ = comp_bench;
+    _ = golden;
+    _ = profiles;
+    _ = certificate;
+    _ = ctl;
+    _ = bv;
+    _ = portfolio;
+    _ = abc_interop;
+    _ = btor2;
 }
 
 test "end-to-end tautology a|!a" {

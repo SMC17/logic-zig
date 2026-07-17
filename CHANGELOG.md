@@ -5,6 +5,27 @@ All notable changes to **logic-zig** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/).
 
+## [0.12.0] — 2026-07-16
+
+### Added
+
+- **Core + spin-off product matrix**: `logic` library + six flagship CLIs with named profiles.
+- **Tier A:** GitHub Actions CI, golden suite (`logic-hwmcc golden`), products docs.
+- **Tier B:** `cert/certificate` (k-liveness certs, inductive verify), minimal **BTOR2** reader.
+- **Tier C:** sequential **portfolio** SAT, **bounded CTL** (EF/EG/AF/AG/fair-EG), **BV SMT-lite**, ABC path discovery.
+- Profiles: `core`, `agent`, `sat-race`, `hwmcc`, `cert`, `smt`, `ctl`.
+
+### Spin-offs
+
+| Binary | Profile |
+|--------|---------|
+| `logic-agent` | agent |
+| `logic-sat` | sat-race |
+| `logic-hwmcc` | hwmcc |
+| `logic-cert` | cert |
+| `logic-smt` | smt |
+| `logic-ctl` | ctl |
+
 ## [0.11.0] — 2026-07-16
 
 ### Added

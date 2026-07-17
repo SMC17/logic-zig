@@ -2,10 +2,11 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Zig](https://img.shields.io/badge/Zig-0.16-orange.svg)](https://ziglang.org/)
+[![CI](https://github.com/SMC17/logic-zig/actions/workflows/ci.yml/badge.svg)](https://github.com/SMC17/logic-zig/actions/workflows/ci.yml)
 
-**A Zig-native logic kernel** for SAT solving, sequential model checking, and
-lightweight first-order reasoning — designed for correctness contracts you can
-actually audit.
+**A Zig-native logic kernel** with a shared **core library** and **flagship spin-offs**
+optimized for different targets (agent multishot, SAT throughput, HWMCC, certificates,
+BV-SMT, bounded CTL).
 
 | | |
 |---|---|
@@ -26,14 +27,21 @@ Proof posture is documented in [`STATUS.md`](STATUS.md): features are marked
 git clone https://github.com/SMC17/logic-zig.git
 cd logic-zig
 zig build test
-zig build
+zig build   # umbrella + spin-offs + libipasirlogic.so
 
 ./zig-out/bin/logic-zig doctor
-./zig-out/bin/logic-zig sat 'a & (a -> b)'
-./zig-out/bin/logic-zig sat --file corpus/simple_unsat.cnf --proof
-./zig-out/bin/logic-zig pdr-demo
-./zig-out/bin/logic-zig klive-demo --max-k 4
+./zig-out/bin/logic-hwmcc golden
+
+# Flagship spin-offs (each pins a unique tradeoff profile)
+./zig-out/bin/logic-agent profile
+./zig-out/bin/logic-sat profile
+./zig-out/bin/logic-hwmcc profile
+./zig-out/bin/logic-cert klive-demo
+./zig-out/bin/logic-smt demo-add
+./zig-out/bin/logic-ctl demo
 ```
+
+Product matrix and profiles: **[docs/PRODUCTS.md](docs/PRODUCTS.md)**.
 
 Optional differential oracle ([CaDiCaL](https://github.com/arminbiere/cadical)):
 
