@@ -5,6 +5,7 @@
 const std = @import("std");
 const fuzz = @import("../sat/fuzz.zig");
 const external = @import("../sat/external.zig");
+const drat_external = @import("../sat/drat_external.zig");
 const dimacs = @import("../bridge/dimacs.zig");
 const solver = @import("../sat/solver.zig");
 const cnf_mod = @import("../sat/cnf.zig");
@@ -184,6 +185,34 @@ pub fn runExternalDiffAxis(allocator: std.mem.Allocator, io: std.Io, iters: u32)
     return try axis(allocator, "external_diff", r.mismatches == 0, detail);
 }
 
+/// External DRAT-trim on random unsat + unit conflict.
+pub fn runExternalDratAxis(allocator: std.mem.Allocator, io: std.Io, iters: u32) !AxisResult {
+    // Known unit conflict
+    {
+        var cnf = Cnf.init(allocator);
+        defer cnf.deinit();
+        const a = Lit.positive(Var.fromIndex(0));
+        try cnf.addClause(&.{a});
+        try cnf.addClause(&.{a.not()});
+        const r = try drat_external.solveAndCheckExternal(allocator, io, &cnf);
+        if (r.check == .unavailable) {
+            return try axis(allocator, "external_drat", true, "drat-trim unavailable (skipped)");
+        }
+        if (r.check != .verified) {
+            return try axis(allocator, "external_drat", false, "unit conflict not verified");
+        }
+    }
+    const fr = try drat_external.fuzzExternalDrat(allocator, io, 0xD2A7, iters, 8);
+    if (fr.unavailable) {
+        return try axis(allocator, "external_drat", true, "drat-trim unavailable (skipped)");
+    }
+    var buf: [128]u8 = undefined;
+    const detail = try std.fmt.bufPrint(&buf, "verified={d} failed={d} skipped_sat={d}", .{ fr.verified, fr.failed, fr.skipped });
+    // Pass if no failures and at least one verified (or all sat skipped)
+    const ok = fr.failed == 0 and (fr.verified > 0 or fr.skipped == iters);
+    return try axis(allocator, "external_drat", ok, detail);
+}
+
 pub fn runAll(
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -204,6 +233,7 @@ pub fn runAll(
     try axes.append(allocator, try runAssumptionCoreAxis(allocator));
     try axes.append(allocator, try runDimacsAxis(allocator, io, suite_dir));
     try axes.append(allocator, try runExternalDiffAxis(allocator, io, ext_iters));
+    try axes.append(allocator, try runExternalDratAxis(allocator, io, @min(ext_iters, 15)));
 
     var all = true;
     for (axes.items) |a| {

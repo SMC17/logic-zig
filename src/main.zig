@@ -7,7 +7,7 @@ const usage =
     \\logic-zig — prop / CDCL / PDR / IPASIR / competition tracks / benches
     \\
     \\Usage:
-    \\  logic-zig sat <formula|--file path.cnf> [--proof]
+    \\  logic-zig sat <formula|--file path.cnf> [--proof] [--dump-proof PATH] [--check-drat]
     \\  logic-zig sat-track <file.cnf>         # SAT competition output (s/v)
     \\  logic-zig hwmcc-track <file.aag|aig> [--frames N] [--each] [--justice] [--lasso]
     \\  logic-zig fuzz / miter / unify / eval / cnf / tautology / equiv
@@ -20,9 +20,10 @@ const usage =
     \\  logic-zig doctor                        # self-check smoke suite
     \\  logic-zig diff-external [--iters N]
     \\  logic-zig bench-suite [--dir DIR] [--timeout S] [--max-conflicts N] [--json] [--fair]
+    \\  logic-zig bench-comp [--dir DIR] [--timeout S] [--max-conflicts N] [--no-drat]
     \\  logic-zig bench-multishot [--vars N] [--queries N] [--seed S]
     \\  logic-zig hwmcc-bench [--frames N] [--dir DIR]
-    \\  logic-zig win-report                  # full scoreboard
+    \\  logic-zig win-report [--comp]         # full scoreboard (+ competition slice)
     \\  logic-zig correctness-suite [--dir DIR] [--ext-iters N]
     \\  logic-zig help
     \\
@@ -47,10 +48,18 @@ pub fn main(init: std.process.Init) !void {
 
     if (std.mem.eql(u8, cmd, "sat")) {
         var proof = false;
+        var check_drat = false;
+        var dump_proof: ?[]const u8 = null;
         var file_mode = false;
         var formula_or_path: ?[]const u8 = null;
         while (iter.next()) |a| {
             if (std.mem.eql(u8, a, "--proof")) {
+                proof = true;
+            } else if (std.mem.eql(u8, a, "--check-drat")) {
+                check_drat = true;
+                proof = true;
+            } else if (std.mem.eql(u8, a, "--dump-proof")) {
+                dump_proof = iter.next() orelse return fail("dump-proof path");
                 proof = true;
             } else if (std.mem.eql(u8, a, "--file") or std.mem.eql(u8, a, "-f")) {
                 file_mode = true;
@@ -60,7 +69,7 @@ pub fn main(init: std.process.Init) !void {
         }
         const arg = formula_or_path orelse return fail("missing formula or path");
         if (file_mode) {
-            try cmdSatFile(gpa, io, arg, proof);
+            try cmdSatFile(gpa, io, arg, proof, dump_proof, check_drat);
         } else {
             try cmdSatFormula(gpa, arg, proof);
         }
@@ -277,7 +286,30 @@ pub fn main(init: std.process.Init) !void {
         return;
     }
     if (std.mem.eql(u8, cmd, "win-report")) {
-        try cmdWinReport(gpa, io);
+        var with_comp = false;
+        while (iter.next()) |a| {
+            if (std.mem.eql(u8, a, "--comp")) with_comp = true;
+        }
+        try cmdWinReport(gpa, io, with_comp);
+        return;
+    }
+    if (std.mem.eql(u8, cmd, "bench-comp")) {
+        var dir: []const u8 = "corpus/bench/sat_comp";
+        var timeout_s: f64 = 5.0;
+        var max_conflicts: u64 = 5_000_000;
+        var check_drat = true;
+        while (iter.next()) |a| {
+            if (std.mem.eql(u8, a, "--dir")) {
+                dir = iter.next() orelse return fail("dir");
+            } else if (std.mem.eql(u8, a, "--timeout")) {
+                timeout_s = std.fmt.parseFloat(f64, iter.next() orelse return fail("timeout")) catch return fail("bad timeout");
+            } else if (std.mem.eql(u8, a, "--max-conflicts")) {
+                max_conflicts = std.fmt.parseInt(u64, iter.next() orelse return fail("max-conflicts"), 10) catch return fail("bad max-conflicts");
+            } else if (std.mem.eql(u8, a, "--no-drat")) {
+                check_drat = false;
+            }
+        }
+        try cmdBenchComp(gpa, io, dir, timeout_s, max_conflicts, check_drat);
         return;
     }
     if (std.mem.eql(u8, cmd, "unsat")) {
@@ -353,7 +385,14 @@ fn cmdSatFormula(gpa: std.mem.Allocator, formula: []const u8, proof: bool) !void
     }
 }
 
-fn cmdSatFile(gpa: std.mem.Allocator, io: std.Io, path: []const u8, proof: bool) !void {
+fn cmdSatFile(
+    gpa: std.mem.Allocator,
+    io: std.Io,
+    path: []const u8,
+    proof: bool,
+    dump_proof: ?[]const u8,
+    check_drat: bool,
+) !void {
     const src = std.Io.Dir.cwd().readFileAlloc(io, path, gpa, .limited(64 * 1024 * 1024)) catch return fail("read file failed");
     defer gpa.free(src);
     var cnf = logic.dimacs.parse(gpa, src) catch return fail("dimacs parse error");
@@ -382,6 +421,27 @@ fn cmdSatFile(gpa: std.mem.Allocator, io: std.Io, path: []const u8, proof: bool)
             std.debug.print("UNSAT\n", .{});
             if (r.proof) |p| {
                 std.debug.print("proof_clauses={d} (RUP verified)\n", .{p.numClauses()});
+                if (dump_proof) |dp| {
+                    var aw: std.Io.Writer.Allocating = .init(gpa);
+                    defer aw.deinit();
+                    try p.writeDimacsLike(&aw.writer);
+                    const body = try aw.toOwnedSlice();
+                    defer gpa.free(body);
+                    var path_z: [512]u8 = undefined;
+                    if (dp.len >= path_z.len) return fail("path too long");
+                    @memcpy(path_z[0..dp.len], dp);
+                    path_z[dp.len] = 0;
+                    const fd = std.os.linux.open(@ptrCast(&path_z), .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, 0o644);
+                    if (@as(isize, @bitCast(fd)) < 0) return fail("open proof failed");
+                    _ = std.os.linux.write(@intCast(fd), body.ptr, body.len);
+                    _ = std.os.linux.close(@intCast(fd));
+                    std.debug.print("dumped_proof={s} bytes={d}\n", .{ dp, body.len });
+                }
+                if (check_drat) {
+                    const chk = try logic.drat_external.checkProofExternal(gpa, io, &cnf, &p);
+                    std.debug.print("external_drat={s}\n", .{@tagName(chk)});
+                    if (chk == .failed or chk == .internal_error) std.process.exit(1);
+                }
             }
         },
         .unknown => std.debug.print("UNKNOWN\n", .{}),
@@ -838,10 +898,24 @@ fn cmdHwmccBench(gpa: std.mem.Allocator, io: std.Io, frames: u32, dir: []const u
     if (!r.all_ok) std.process.exit(1);
 }
 
-fn cmdWinReport(gpa: std.mem.Allocator, io: std.Io) !void {
-    const r = try logic.win_report.run(gpa, io);
+fn cmdWinReport(gpa: std.mem.Allocator, io: std.Io, with_comp: bool) !void {
+    const r = try logic.win_report.runOpts(gpa, io, with_comp);
     logic.win_report.printScoreboard(&r);
     if (!r.allRequired()) std.process.exit(1);
+}
+
+fn cmdBenchComp(
+    gpa: std.mem.Allocator,
+    io: std.Io,
+    dir: []const u8,
+    timeout_s: f64,
+    max_conflicts: u64,
+    check_drat: bool,
+) !void {
+    var r = try logic.comp_bench.run(gpa, io, dir, timeout_s, max_conflicts, check_drat);
+    defer r.deinit(gpa);
+    logic.comp_bench.printResult(&r);
+    if (!r.correctnessOk()) std.process.exit(1);
 }
 
 fn cmdKindDemo(gpa: std.mem.Allocator, max_k: u32) !void {
