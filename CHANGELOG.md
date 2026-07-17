@@ -5,6 +5,26 @@ All notable changes to **logic-zig** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/).
 
+## [0.18.0] — 2026-07-17
+
+### Peircean triad: abduction and induction as first-class engines
+
+- **`reason/abduction.zig`**: propositional abduction — B ∧ H ⊨ O with H ⊆ abducibles,
+  **subset-minimal** (deletion-minimal MUS via `solveAssumptions`) and **background-consistent**;
+  MARCO-style enumeration (UNSAT seeds shrink to MUS, SAT seeds grow to MSS, map solver prunes);
+  `verifyExplanation` re-certifies any answer with fresh solvers
+- **`reason/induction.zig`**: inductive synthesis — exact SAT encoding of k-term DNF
+  consistency over labeled boolean examples; iterative deepening gives **minimal k**
+  (Occam), hypotheses deductively re-verified on every example; distinct from
+  `circuit/kinduction.zig` (which is deductive invariant checking)
+- Deduction is the shared oracle for both — the triad is now engines, not taxonomy labels
+- **api/v1 → 1.1.0**: `abduce` / `induceDnf` re-exports; capability bits
+  `reason_abduce` / `reason_induce`
+- Taxonomy: `inductive` and `abductive` rows advance `documented` → `fragment`
+- CLI: `abduce-demo` (diagnosis: minimal causes, verified), `induce-demo` (learns xor at k=2)
+- Pre-registered: `exp-1784298692-629536463` (abduction minimality/consistency),
+  `exp-1784298694-561301438` (induction consistency/minimal-k)
+
 ## [0.17.0] — 2026-07-17
 
 ### Universal logic platform (destination, not finished completeness)

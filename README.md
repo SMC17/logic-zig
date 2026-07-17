@@ -14,6 +14,7 @@ BV-SMT, bounded CTL).
 | **Hardware / sequential** | Netlists, AIGER (extended B/C/J/F), Yosys JSON, BMC, k-induction, PDR |
 | **Liveness** | Justice path/lasso + **fair multi-justice** round-robin k-liveness (complete reduction) |
 | **FOL** | Unification + finite-domain model finding (brute and SAT-encoded) |
+| **Reasoning modes** | Deduction (SAT/SMT/FOL oracle) · **abduction** (subset-minimal consistent explanations) · **induction** (minimal-k DNF synthesis from examples) — the Peircean triad as engines |
 
 Proof posture is documented in [`STATUS.md`](STATUS.md): features are marked
 `unit-tested` or residual — no silent overclaims.

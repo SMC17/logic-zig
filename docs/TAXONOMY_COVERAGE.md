@@ -44,8 +44,8 @@ Proof level: **audited map** against the codebase at v0.16+ (update with each ma
 | Mode | Status |
 |------|--------|
 | Deductive (classical computational) | **S** |
-| Inductive / Bayesian / statistical | **—** |
-| Abductive | **—** |
+| Inductive / Bayesian / statistical | **M** — `reason/induction.zig`: SAT-exact minimal-k DNF synthesis from labeled examples (propositional slice; no Bayesian/statistical induction) |
+| Abductive | **M** — `reason/abduction.zig`: subset-minimal consistent explanations over CNF, MARCO-style enumeration, deductive certificates |
 | Analogical | **—** |
 | Defeasible / nonmonotonic | **—** |
 | Probabilistic logics | **—** |
