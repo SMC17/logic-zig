@@ -1,51 +1,47 @@
 # logic-zig status
 
-Last green: 2026-07-16 (`zig build test`; `zig build -Doptimize=ReleaseFast`;
-`correctness-suite`; `bench-comp`; external **drat-trim**)
+**Version:** 0.12.1  
+**Last green:** golden **23/23**, external **DRAT verified**, `zig build test`
 
-## Win scoreboard (v0.10)
+## Architecture
 
-| Axis | Result |
-|---|---|
-| correctness (fuzz/dimacs/RUP/cores/Δ-CaDiCaL) | **PASS** |
-| **external DRAT-trim** | **PASS** (unit + fuzz + up to 40 comp UNSATs) |
-| par2 smoke (library) | **WIN** |
-| par2 fair (process) | **WIN** |
-| par2 medium | **WIN** |
-| multishot QPS | **WIN** (~1e3–1e5× cold CaDiCaL) |
-| hwmcc micro | **PASS** |
-| embed (IPASIR `.so` + CLI) | **WIN** |
-| competition correctness (94 CNFs, 0 mismatches) | **PASS** |
-| competition DRAT sample | **PASS** (30 verified, 0 failed) |
-| competition PAR-2 speed | **LOSE** (CaDiCaL leads heavy tail; measured) |
-| competition instance majority | **LOSE** (~41 vs 53 faster) |
+| Layer | Artifact |
+|-------|----------|
+| **Core library** | `logic` module |
+| **Umbrella** | `logic-zig` |
+| **Spin-offs** | agent · sat · hwmcc · cert · smt · ctl |
+| **CI** | `.github/workflows/ci.yml` |
 
-```sh
-gcc -O2 -o third_party/drat-trim/drat-trim third_party/cadical/test/cnf/drat-trim.c
-zig build test && zig build -Doptimize=ReleaseFast && zig build lib
-./zig-out/bin/logic-zig win-report --comp
-./zig-out/bin/logic-zig bench-comp
-./zig-out/bin/logic-zig sat --file corpus/simple_unsat.cnf --check-drat
+## Latest gates
+
+```
+./zig-out/bin/logic-hwmcc golden
+# golden: 23/23 passed, 0 failed, 0 skipped
+
+./zig-out/bin/logic-sat check-drat corpus/bench/sat/simple_unsat.cnf
+# s UNSATISFIABLE / c external_drat=verified
+
+./zig-out/bin/logic-sat portfolio file.cnf --proof
+# internal_rup=ok + external_drat=verified when unsat
 ```
 
-## What shipped this wave
+## Component matrix
 
-- `corpus/bench/sat_comp/` (~75 CNFs): CaDiCaL unit tests + generated 3-SAT
-- `corpus/bench/sat_hard/` stretch set (add64, large primes, …)
-- `src/sat/drat_external.zig` — discover + run vendored **drat-trim**
-- `src/track/comp_bench.zig` — competition PAR-2 + DRAT sample
-- CLI: `bench-comp`, `sat --check-drat`, `sat --dump-proof PATH`, `win-report --comp`
-- Solver: watch/trail pre-size, O(trail) `isLocked`, free-var `orig_cnf` fix (prior)
+| Component | Level |
+|-----------|-------|
+| CDCL + portfolio (6 configs, ramp, model validate, RUP) | unit-tested |
+| External DRAT-trim | unit-tested when binary present |
+| PDR + invariant export + cert verify | unit-tested |
+| Fair multi-justice (round-robin + lasso + fairness) | unit-tested |
+| AIGER golden fixtures (safe/unsafe/lasso/klive) | unit-tested |
+| CTL / BV / agent session | unit-tested |
 
-## Residuals (honest)
+## Smoke
 
-| Residual | Status |
-|---|---|
-| Beat CaDiCaL on industrial CDCL heavy tails | Open — `sat_hard` documents the gap |
-| Full DRAT on every competition UNSAT | Sampled (cap 40) for runtime |
-| Strip/size contest | Unstripped ReleaseFast not claimed |
-| SAT Race submission packaging | Not done |
-
-## Corpora
-
-See [`corpus/bench/README.md`](corpus/bench/README.md).
+```sh
+zig build test && zig build
+./zig-out/bin/logic-hwmcc golden
+./zig-out/bin/logic-sat check-drat corpus/bench/sat/simple_unsat.cnf
+./zig-out/bin/logic-agent session-demo
+./zig-out/bin/logic-cert pdr-demo
+```
