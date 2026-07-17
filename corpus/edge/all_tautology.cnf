@@ -1,0 +1,4 @@
+c edge: only tautological clauses — SAT
+p cnf 2 2
+1 -1 0
+2 -2 0

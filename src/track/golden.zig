@@ -469,6 +469,68 @@ pub fn runBuiltin(allocator: std.mem.Allocator) !GoldenResult {
         defer if (r.base.trace) |t| allocator.free(t);
         pass(&res, r.status == .proven);
     }
+    // empty bad → PDR proven
+    {
+        var nl = Netlist.init(allocator);
+        defer nl.deinit();
+        const q = try nl.allocNetNamed("q");
+        const d = try nl.allocNetNamed("d");
+        try nl.addConst(d, false);
+        try nl.addLatch(d, q, false);
+        var r = try pdr.checkMulti(allocator, &nl, &.{}, 4);
+        defer r.deinit(allocator);
+        pass(&res, r.status == .proven);
+    }
+    // multi-bad mixed → violated
+    {
+        var d = try designs.makeMultiBadMixed(allocator);
+        defer d.nl.deinit();
+        const br = try bmc.checkMulti(allocator, &d.nl, d.nl.badProps(), 2);
+        defer if (br.trace) |t| allocator.free(t);
+        pass(&res, br.status == .violated);
+    }
+    // constraint-only safe BMC
+    {
+        var d = try designs.makeConstraintOnlySafe(allocator);
+        defer d.nl.deinit();
+        const r = try bmc.check(allocator, &d.nl, d.bad, 6);
+        defer if (r.trace) |t| allocator.free(t);
+        pass(&res, r.status == .safe_up_to_bound);
+    }
+    // init×constraint conflict vacuous BMC safe
+    {
+        var d = try designs.makeInitConstraintConflict(allocator);
+        defer d.nl.deinit();
+        const r = try bmc.check(allocator, &d.nl, d.bad, 3);
+        defer if (r.trace) |t| allocator.free(t);
+        pass(&res, r.status == .safe_up_to_bound);
+    }
+    // dual-rail bad init violated@0
+    {
+        var d = try designs.makeDualRailBadInit(allocator);
+        defer d.nl.deinit();
+        const r = try bmc.check(allocator, &d.nl, d.bad, 0);
+        defer if (r.trace) |t| allocator.free(t);
+        pass(&res, r.status == .violated);
+    }
+    // counter 1-bit exact bound
+    {
+        var d = try designs.makeCounter(allocator, 1);
+        defer d.nl.deinit();
+        const r0 = try bmc.check(allocator, &d.nl, d.bad, 0);
+        defer if (r0.trace) |t| allocator.free(t);
+        const r1 = try bmc.check(allocator, &d.nl, d.bad, 1);
+        defer if (r1.trace) |t| allocator.free(t);
+        pass(&res, r0.status == .safe_up_to_bound and r1.status == .violated);
+    }
+    // one-hot weight bad not violated under BMC
+    {
+        var d = try designs.makeOneHotWeightBad(allocator, 3);
+        defer d.nl.deinit();
+        const r = try bmc.check(allocator, &d.nl, d.bad, 5);
+        defer if (r.trace) |t| allocator.free(t);
+        pass(&res, r.status == .safe_up_to_bound);
+    }
     // sat-track competition path
     {
         const src =
@@ -539,25 +601,32 @@ pub fn runManifest(allocator: std.mem.Allocator, io: std.Io, manifest_path: []co
                 pass(&res, std.mem.eql(u8, expect, "safe"));
                 continue;
             }
-            var pr = try pdr.check(allocator, &nl, props[0], 16);
+            // Multi-property: OR of all bad nets (HWMCC combined semantics).
+            var pr = try pdr.checkMulti(allocator, &nl, props, 16);
             defer pr.deinit(allocator);
             if (pr.status == .proven) {
                 pass(&res, std.mem.eql(u8, expect, "safe"));
             } else if (pr.status == .violated) {
                 pass(&res, std.mem.eql(u8, expect, "unsafe"));
             } else {
-                const br = try bmc.check(allocator, &nl, props[0], 8);
+                const br = try bmc.checkMulti(allocator, &nl, props, 8);
                 defer if (br.trace) |t| allocator.free(t);
                 if (br.status == .violated) {
                     pass(&res, std.mem.eql(u8, expect, "unsafe"));
                 } else if (std.mem.eql(u8, expect, "unknown")) {
                     pass(&res, true);
                 } else {
-                    // kind fallback for stuck0-style
+                    // kind fallback (single prop) for stuck0-style when multi unknown
                     const kr = try kinduction.search(allocator, &nl, props[0], 6);
                     defer if (kr.base.trace) |t| allocator.free(t);
-                    pass(&res, (kr.status == .proven and std.mem.eql(u8, expect, "safe")) or
-                        (kr.status == .violated and std.mem.eql(u8, expect, "unsafe")));
+                    if (props.len == 1) {
+                        pass(&res, (kr.status == .proven and std.mem.eql(u8, expect, "safe")) or
+                            (kr.status == .violated and std.mem.eql(u8, expect, "unsafe")));
+                    } else if (br.status == .safe_up_to_bound and std.mem.eql(u8, expect, "safe")) {
+                        pass(&res, true);
+                    } else {
+                        pass(&res, false);
+                    }
                 }
             }
         } else if (std.mem.eql(u8, kind, "aiger-lasso")) {

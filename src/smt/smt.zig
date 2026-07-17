@@ -2,11 +2,15 @@
 //!
 //! - **BV**: bit-blast (`bv.zig`)
 //! - **UF**: ground EUF congruence closure (`uf.zig`)
-//! - **array / ufbv**: unsupported until backends land
+//! - **array**: partial read-over-write on UF (`array.zig`) — not full array theory
+//! - **ufbv**: unsupported until combo backend lands
+//!
+//! Not Z3/CVC5 parity.
 
 const std = @import("std");
 const bv_mod = @import("bv.zig");
 const uf_mod = @import("uf.zig");
+const array_mod = @import("array.zig");
 const solver_mod = @import("../sat/solver.zig");
 
 pub const Theory = enum {
@@ -30,6 +34,7 @@ pub const SmtSolver = struct {
     theory: Theory,
     bv: ?bv_mod.BvWorld = null,
     uf: ?uf_mod.UfSolver = null,
+    array: ?array_mod.ArraySolver = null,
     notes: std.ArrayList([]const u8) = .empty,
 
     pub fn init(allocator: std.mem.Allocator, theory: Theory) !SmtSolver {
@@ -40,7 +45,8 @@ pub const SmtSolver = struct {
         switch (theory) {
             .bv => s.bv = bv_mod.BvWorld.init(allocator),
             .uf => s.uf = uf_mod.UfSolver.init(allocator),
-            .array, .ufbv => {},
+            .array => s.array = array_mod.ArraySolver.init(allocator),
+            .ufbv => {},
         }
         return s;
     }
@@ -48,6 +54,7 @@ pub const SmtSolver = struct {
     pub fn deinit(self: *SmtSolver) void {
         if (self.bv) |*w| w.deinit();
         if (self.uf) |*w| w.deinit();
+        if (self.array) |*w| w.deinit();
         for (self.notes.items) |n| self.allocator.free(n);
         self.notes.deinit(self.allocator);
         self.* = undefined;
@@ -63,6 +70,12 @@ pub const SmtSolver = struct {
         if (self.theory != .uf and self.theory != .ufbv) return error.WrongTheory;
         if (self.uf == null) self.uf = uf_mod.UfSolver.init(self.allocator);
         return &self.uf.?;
+    }
+
+    pub fn arraySolver(self: *SmtSolver) !*array_mod.ArraySolver {
+        if (self.theory != .array) return error.WrongTheory;
+        if (self.array == null) self.array = array_mod.ArraySolver.init(self.allocator);
+        return &self.array.?;
     }
 
     pub fn check(self: *SmtSolver) !SmtResult {
@@ -96,7 +109,14 @@ pub const SmtSolver = struct {
                     .theory = .uf,
                 };
             },
-            .array => return .{ .status = .unsupported, .theory = .array, .reason = "array backend later" },
+            .array => {
+                const a = try self.arraySolver();
+                return .{
+                    .status = if (a.check() == .sat) .sat else .unsat,
+                    .theory = .array,
+                    .reason = "partial read-over-write only; not full array theory",
+                };
+            },
             .ufbv => return .{ .status = .unsupported, .theory = .ufbv, .reason = "UF+BV combo later" },
         }
     }
@@ -120,4 +140,32 @@ test "smt facade uf works" {
     try u.assertDiseq(a, b);
     const r = try s.check();
     try std.testing.expect(r.status == .unsat);
+}
+
+test "smt facade array read-over-write unsat" {
+    var s = try SmtSolver.init(std.testing.allocator, .array);
+    defer s.deinit();
+    const a = try s.arraySolver();
+    const arr = try a.mkConst("A");
+    const i = try a.mkConst("i");
+    const v = try a.mkConst("v");
+    const st = try a.mkStore(arr, i, v);
+    const se = try a.mkSelect(st, i);
+    try a.assertDiseq(se, v);
+    const r = try s.check();
+    try std.testing.expect(r.status == .unsat);
+}
+
+test "smt facade ufbv unsupported" {
+    var s = try SmtSolver.init(std.testing.allocator, .ufbv);
+    defer s.deinit();
+    const r = try s.check();
+    try std.testing.expect(r.status == .unsupported);
+}
+
+test "smt wrong theory accessors" {
+    var s = try SmtSolver.init(std.testing.allocator, .bv);
+    defer s.deinit();
+    try std.testing.expectError(error.WrongTheory, s.ufSolver());
+    try std.testing.expectError(error.WrongTheory, s.arraySolver());
 }

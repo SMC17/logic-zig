@@ -1,0 +1,6 @@
+c edge: pigeonhole 2 pigeons 1 hole — UNSAT
+c p1h1=1 p2h1=2
+p cnf 2 3
+1 0
+2 0
+-1 -2 0

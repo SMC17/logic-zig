@@ -147,6 +147,8 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, opts: ScoreOpts) !Scoreboar
                 .total_conflicts = budget,
                 .validate_model = true,
                 .ramp = true,
+                // Industrial: enable inprocess across configs; pure already on one config.
+                .inprocess_interval = if (opts.industrial or opts.inprocess) 1500 else 0,
             });
             defer if (pr.model) |m| allocator.free(m);
             defer if (pr.proof) |*p| {

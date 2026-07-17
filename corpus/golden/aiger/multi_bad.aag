@@ -1,0 +1,6 @@
+aag 2 0 2 0 0 2 0 0 0
+0 0
+1 1
+2
+4
+c two B props: q0 stuck0 (safe), q1 init1 stuck1 (unsafe) → combined UNSAFE

@@ -883,3 +883,67 @@ test "pdr counter not false-proven" {
     defer r.deinit(std.testing.allocator);
     try std.testing.expect(r.status == .violated or r.status == .unknown);
 }
+
+test "pdr empty bads proven" {
+    var nl = Netlist.init(std.testing.allocator);
+    defer nl.deinit();
+    const q = try nl.allocNetNamed("q");
+    const d = try nl.allocNetNamed("d");
+    try nl.addConst(d, false);
+    try nl.addLatch(d, q, false);
+    var r = try checkMulti(std.testing.allocator, &nl, &.{}, 8);
+    defer r.deinit(std.testing.allocator);
+    try std.testing.expect(r.status == .proven);
+}
+
+test "pdr multi-bad or violated when one is init-bad" {
+    var nl = Netlist.init(std.testing.allocator);
+    defer nl.deinit();
+    const q0 = try nl.allocNetNamed("q0");
+    const d0 = try nl.allocNetNamed("d0");
+    try nl.addConst(d0, false);
+    try nl.addLatch(d0, q0, false);
+    const q1 = try nl.allocNetNamed("q1");
+    const d1 = try nl.allocNetNamed("d1");
+    try nl.addConst(d1, true);
+    try nl.addLatch(d1, q1, true);
+    var r = try checkMulti(std.testing.allocator, &nl, &.{ q0, q1 }, 8);
+    defer r.deinit(std.testing.allocator);
+    try std.testing.expect(r.status == .violated);
+}
+
+test "pdr constraint blocks toggle bad" {
+    // Same as BMC: toggle with constraint ~q → never bad=q.
+    var nl = Netlist.init(std.testing.allocator);
+    defer nl.deinit();
+    const q = try nl.allocNetNamed("q");
+    const d = try nl.allocNetNamed("d");
+    const nq = try nl.allocNetNamed("nq");
+    try nl.addGate(.not, &.{q}, d);
+    try nl.addGate(.not, &.{q}, nq);
+    try nl.addLatch(d, q, false);
+    try nl.addConstraint(nq);
+    var r = try check(std.testing.allocator, &nl, q, 16);
+    defer r.deinit(std.testing.allocator);
+    try std.testing.expect(r.status != .violated);
+}
+
+test "pdr combinational const0 proven" {
+    var nl = Netlist.init(std.testing.allocator);
+    defer nl.deinit();
+    const bad = try nl.allocNetNamed("bad");
+    try nl.addConst(bad, false);
+    var r = try check(std.testing.allocator, &nl, bad, 4);
+    defer r.deinit(std.testing.allocator);
+    try std.testing.expect(r.status == .proven);
+}
+
+test "pdr combinational const1 violated" {
+    var nl = Netlist.init(std.testing.allocator);
+    defer nl.deinit();
+    const bad = try nl.allocNetNamed("bad");
+    try nl.addConst(bad, true);
+    var r = try check(std.testing.allocator, &nl, bad, 4);
+    defer r.deinit(std.testing.allocator);
+    try std.testing.expect(r.status == .violated);
+}

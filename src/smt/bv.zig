@@ -1,4 +1,7 @@
 //! Bit-vector SMT-lite: bit-blast simple BV formulas to CNF.
+//!
+//! Width-mismatched binary ops return `error.WidthMismatch` (no silent truncate).
+//! Not a full BV solver (no shifts/extract/sign-ext/div); ground bit-blast only.
 
 const std = @import("std");
 const cnf_mod = @import("../sat/cnf.zig");
@@ -15,6 +18,10 @@ pub const BvId = enum(u32) {
     pub fn index(self: BvId) u32 {
         return @intFromEnum(self);
     }
+};
+
+pub const BvError = error{
+    WidthMismatch,
 };
 
 const BvTerm = struct {
@@ -56,6 +63,16 @@ pub const BvWorld = struct {
         return id;
     }
 
+    fn requireSameWidth(self: *BvWorld, a: BvId, b: BvId) BvError!void {
+        const ta = self.term(a);
+        const tb = self.term(b);
+        if (ta.width != tb.width) return error.WidthMismatch;
+    }
+
+    pub fn widthOf(self: *BvWorld, id: BvId) u8 {
+        return self.term(id).width;
+    }
+
     pub fn mkVar(self: *BvWorld, width: u8) !BvId {
         return try self.pushTerm(width, try self.freshBits(width));
     }
@@ -88,9 +105,9 @@ pub const BvWorld = struct {
     }
 
     pub fn mkAnd(self: *BvWorld, a: BvId, b: BvId) !BvId {
+        try self.requireSameWidth(a, b);
         const ta = self.term(a);
         const tb = self.term(b);
-        std.debug.assert(ta.width == tb.width);
         const bits = try self.freshBits(ta.width);
         var i: u8 = 0;
         while (i < ta.width) : (i += 1) {
@@ -105,9 +122,9 @@ pub const BvWorld = struct {
     }
 
     pub fn mkXor(self: *BvWorld, a: BvId, b: BvId) !BvId {
+        try self.requireSameWidth(a, b);
         const ta = self.term(a);
         const tb = self.term(b);
-        std.debug.assert(ta.width == tb.width);
         const bits = try self.freshBits(ta.width);
         var i: u8 = 0;
         while (i < ta.width) : (i += 1) {
@@ -137,9 +154,9 @@ pub const BvWorld = struct {
 
     /// Ripple-carry add (mod 2^w).
     pub fn mkAdd(self: *BvWorld, a: BvId, b: BvId) !BvId {
+        try self.requireSameWidth(a, b);
         const ta = self.term(a);
         const tb = self.term(b);
-        std.debug.assert(ta.width == tb.width);
         const bits = try self.freshBits(ta.width);
         var cin: ?Lit = null;
         var i: u8 = 0;
@@ -184,9 +201,9 @@ pub const BvWorld = struct {
     }
 
     pub fn assertEq(self: *BvWorld, a: BvId, b: BvId) !void {
+        try self.requireSameWidth(a, b);
         const ta = self.term(a);
         const tb = self.term(b);
-        std.debug.assert(ta.width == tb.width);
         var i: u8 = 0;
         while (i < ta.width) : (i += 1) {
             const xa = Lit.positive(Var.fromIndex(ta.bits[i]));
@@ -194,6 +211,29 @@ pub const BvWorld = struct {
             try self.cnf.addClause(&.{ xa.not(), xb });
             try self.cnf.addClause(&.{ xa, xb.not() });
         }
+    }
+
+    /// Assert a ≠ b by requiring at least one bit differ (same width).
+    pub fn assertNe(self: *BvWorld, a: BvId, b: BvId) !void {
+        try self.requireSameWidth(a, b);
+        const ta = self.term(a);
+        const tb = self.term(b);
+        // ∨_i (a_i XOR b_i)  encoded as a clause over pairwise xor aux, or
+        // simpler: for each bit, (a≠b at i) is (a∨b)∧(¬a∨¬b); big OR of differences.
+        // CNF: introduce d_i ↔ a_i XOR b_i, then (d0 ∨ d1 ∨ …).
+        var diff_lits: std.ArrayList(Lit) = .empty;
+        defer diff_lits.deinit(self.allocator);
+        var i: u8 = 0;
+        while (i < ta.width) : (i += 1) {
+            const xa = Lit.positive(Var.fromIndex(ta.bits[i]));
+            const xb = Lit.positive(Var.fromIndex(tb.bits[i]));
+            const db = try self.freshBits(1);
+            defer self.allocator.free(db);
+            const d = Lit.positive(Var.fromIndex(db[0]));
+            try self.encodeXor(d, xa, xb);
+            try diff_lits.append(self.allocator, d);
+        }
+        try self.cnf.addClause(diff_lits.items);
     }
 
     pub fn checkSat(self: *BvWorld) !solver_mod.SolveStatus {
@@ -206,6 +246,8 @@ pub const BvWorld = struct {
         return r.status;
     }
 };
+
+// ── unit tests ───────────────────────────────────────────────────────
 
 test "bv add 2+2=4" {
     var w = BvWorld.init(std.testing.allocator);
@@ -236,4 +278,141 @@ test "bv and" {
     const expect = try w.mkConst(4, 0b1000);
     try w.assertEq(c, expect);
     try std.testing.expect((try w.checkSat()) == .sat);
+}
+
+test "bv xor" {
+    var w = BvWorld.init(std.testing.allocator);
+    defer w.deinit();
+    const a = try w.mkConst(4, 0b1100);
+    const b = try w.mkConst(4, 0b1010);
+    const c = try w.mkXor(a, b);
+    const expect = try w.mkConst(4, 0b0110);
+    try w.assertEq(c, expect);
+    try std.testing.expect((try w.checkSat()) == .sat);
+}
+
+test "bv not" {
+    var w = BvWorld.init(std.testing.allocator);
+    defer w.deinit();
+    const a = try w.mkConst(4, 0b1010);
+    const n = try w.mkNot(a);
+    const expect = try w.mkConst(4, 0b0101);
+    try w.assertEq(n, expect);
+    try std.testing.expect((try w.checkSat()) == .sat);
+}
+
+test "bv var equality constraint sat" {
+    var w = BvWorld.init(std.testing.allocator);
+    defer w.deinit();
+    const x = try w.mkVar(8);
+    const y = try w.mkVar(8);
+    try w.assertEq(x, y);
+    // x = y free: sat
+    try std.testing.expect((try w.checkSat()) == .sat);
+}
+
+test "bv var equality with const" {
+    var w = BvWorld.init(std.testing.allocator);
+    defer w.deinit();
+    const x = try w.mkVar(4);
+    const c = try w.mkConst(4, 7);
+    try w.assertEq(x, c);
+    try std.testing.expect((try w.checkSat()) == .sat);
+}
+
+test "bv assertNe sat when free" {
+    var w = BvWorld.init(std.testing.allocator);
+    defer w.deinit();
+    const x = try w.mkVar(4);
+    const y = try w.mkVar(4);
+    try w.assertNe(x, y);
+    try std.testing.expect((try w.checkSat()) == .sat);
+}
+
+test "bv assertNe unsat when forced equal" {
+    var w = BvWorld.init(std.testing.allocator);
+    defer w.deinit();
+    const a = try w.mkConst(4, 5);
+    const b = try w.mkConst(4, 5);
+    try w.assertNe(a, b);
+    try std.testing.expect((try w.checkSat()) == .unsat);
+}
+
+test "bv assertEq then Ne unsat" {
+    var w = BvWorld.init(std.testing.allocator);
+    defer w.deinit();
+    const x = try w.mkVar(3);
+    const y = try w.mkVar(3);
+    try w.assertEq(x, y);
+    try w.assertNe(x, y);
+    try std.testing.expect((try w.checkSat()) == .unsat);
+}
+
+test "bv width mismatch assertEq" {
+    var w = BvWorld.init(std.testing.allocator);
+    defer w.deinit();
+    const a = try w.mkConst(4, 1);
+    const b = try w.mkConst(8, 1);
+    try std.testing.expectError(error.WidthMismatch, w.assertEq(a, b));
+}
+
+test "bv width mismatch assertNe" {
+    var w = BvWorld.init(std.testing.allocator);
+    defer w.deinit();
+    const a = try w.mkVar(2);
+    const b = try w.mkVar(3);
+    try std.testing.expectError(error.WidthMismatch, w.assertNe(a, b));
+}
+
+test "bv width mismatch mkAnd" {
+    var w = BvWorld.init(std.testing.allocator);
+    defer w.deinit();
+    const a = try w.mkVar(4);
+    const b = try w.mkVar(8);
+    try std.testing.expectError(error.WidthMismatch, w.mkAnd(a, b));
+}
+
+test "bv width mismatch mkXor" {
+    var w = BvWorld.init(std.testing.allocator);
+    defer w.deinit();
+    const a = try w.mkConst(1, 1);
+    const b = try w.mkConst(2, 1);
+    try std.testing.expectError(error.WidthMismatch, w.mkXor(a, b));
+}
+
+test "bv width mismatch mkAdd" {
+    var w = BvWorld.init(std.testing.allocator);
+    defer w.deinit();
+    const a = try w.mkConst(4, 1);
+    const b = try w.mkConst(8, 1);
+    try std.testing.expectError(error.WidthMismatch, w.mkAdd(a, b));
+}
+
+test "bv add wrap 8-bit 255+1=0" {
+    var w = BvWorld.init(std.testing.allocator);
+    defer w.deinit();
+    const a = try w.mkConst(8, 255);
+    const b = try w.mkConst(8, 1);
+    const s = try w.mkAdd(a, b);
+    const z = try w.mkConst(8, 0);
+    try w.assertEq(s, z);
+    try std.testing.expect((try w.checkSat()) == .sat);
+}
+
+test "bv add wrong sum unsat" {
+    var w = BvWorld.init(std.testing.allocator);
+    defer w.deinit();
+    const a = try w.mkConst(4, 3);
+    const b = try w.mkConst(4, 4);
+    const s = try w.mkAdd(a, b);
+    const wrong = try w.mkConst(4, 0);
+    try w.assertEq(s, wrong);
+    try std.testing.expect((try w.checkSat()) == .unsat);
+}
+
+test "bv widthOf" {
+    var w = BvWorld.init(std.testing.allocator);
+    defer w.deinit();
+    const a = try w.mkVar(13);
+    try std.testing.expect(w.widthOf(a) == 13);
 }
