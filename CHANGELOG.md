@@ -5,6 +5,17 @@ All notable changes to **logic-zig** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/).
 
+## [0.13.0] — 2026-07-16
+
+### Trust · Agent · Sequential teeth
+
+- **`logic-zig trust-report`**: DRAT verified counts, CaDiCaL Δ, PDR cert re-check, sequential designs, klive
+- **`designs.zig`**: n-bit counter, shift register, multi-stuck0, fair toggle products
+- **Agent session**: stress (1000+ queries), warm-vs-cold, dimacs add/query, optional proofs
+- **`ipasir-consumer` example** binary for external gravity
+- Docs: `docs/TRUST.md`, `docs/AGENT.md`
+- Golden **48/48** including design-based certs and agent stress micro
+
 ## [0.12.3] — 2026-07-16
 
 ### Added

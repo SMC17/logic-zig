@@ -18,6 +18,7 @@ const usage =
     \\  logic-zig klive-demo [--max-k K]        # infinite justice proof (k-liveness)
     \\  logic-zig ternary-demo
     \\  logic-zig doctor                        # self-check smoke suite
+    \\  logic-zig trust-report                  # DRAT + CaDiCaL + PDR certs + sequential
     \\  logic-zig diff-external [--iters N]
     \\  logic-zig bench-suite [--dir DIR] [--timeout S] [--max-conflicts N] [--json] [--fair]
     \\  logic-zig bench-comp [--dir DIR] [--timeout S] [--max-conflicts N] [--no-drat]
@@ -179,6 +180,12 @@ pub fn main(init: std.process.Init) !void {
     }
     if (std.mem.eql(u8, cmd, "doctor")) {
         try cmdDoctor(gpa, io);
+        return;
+    }
+    if (std.mem.eql(u8, cmd, "trust-report")) {
+        const rep = try logic.trust_report.run(gpa, io);
+        logic.trust_report.print(&rep);
+        if (!rep.all_pass) std.process.exit(1);
         return;
     }
     if (std.mem.eql(u8, cmd, "sat-track")) {
