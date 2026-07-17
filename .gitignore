@@ -1,0 +1,25 @@
+# Build artifacts
+.zig-cache/
+zig-out/
+*.o
+*.a
+*.so
+*.dylib
+
+# Optional external solvers (clone locally; not required to build/test)
+third_party/
+
+# Editor / OS
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
+*.code-workspace
+
+# Local / private
+.env
+.env.*
+*.log
+tmp/
+.cache/

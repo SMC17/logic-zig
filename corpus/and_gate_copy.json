@@ -1,0 +1,21 @@
+{
+  "modules": {
+    "top": {
+      "ports": {
+        "a": { "direction": "input", "bits": [2] },
+        "b": { "direction": "input", "bits": [3] },
+        "y": { "direction": "output", "bits": [4] }
+      },
+      "cells": {
+        "g1": {
+          "type": "$and",
+          "connections": {
+            "A": [2],
+            "B": [3],
+            "Y": [4]
+          }
+        }
+      }
+    }
+  }
+}
