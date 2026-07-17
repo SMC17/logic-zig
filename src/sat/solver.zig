@@ -178,6 +178,17 @@ pub const Solver = struct {
             try s.heapInsert(vi);
         }
 
+        // Pre-size trail / clause storage for fewer reallocs on medium CNFs.
+        const nc = cnf.numClauses();
+        try s.trail.ensureTotalCapacity(allocator, n + 8);
+        try s.lits.ensureTotalCapacity(allocator, nc * 3 + 16);
+        try s.clauses.ensureTotalCapacity(allocator, nc + 16);
+        // Rough watch density: 2 watches per clause → reserve ~2*nc/n per list.
+        const per_watch: usize = @max(4, (nc * 2) / @max(n * 2, 1) + 2);
+        for (s.watches) |*w| {
+            try w.ensureTotalCapacity(allocator, per_watch);
+        }
+
         // Copy original clauses into DB + orig_cnf.
         for (0..cnf.numClauses()) |ci| {
             const cl = cnf.clauseSlice(ClauseId.fromIndex(@intCast(ci)));
@@ -741,10 +752,11 @@ pub const Solver = struct {
     }
 
     fn isLocked(self: *const Solver, id: ClauseId) bool {
-        // Clause is locked if it is the reason for any assigned variable.
-        for (self.reason, 0..) |r, vi| {
-            if (r) |cid| {
-                if (cid == id and self.assign[vi] != .undef) return true;
+        // Locked iff it is the reason for some trail literal (O(trail), not O(vars)).
+        for (self.trail.items) |lit| {
+            const v = lit.variable().index();
+            if (self.reason[v]) |cid| {
+                if (cid == id) return true;
             }
         }
         return false;

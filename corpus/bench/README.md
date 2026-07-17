@@ -2,31 +2,47 @@
 
 ## Layout
 
-| Dir | Contents |
-|---|---|
-| `sat/` | 39 small CNFs (primary correctness + PAR-2) |
-| `sat_medium/` | 15 harder CaDiCaL unit CNFs (add16/32, primes, factors, …) |
-| `hwmcc/` | AIGER micro-instances for sequential engines |
+| Dir | Contents | Role |
+|---|---|---|
+| `sat/` | 39 small CNFs | smoke correctness + PAR-2 |
+| `sat_medium/` | 15 medium CaDiCaL unit CNFs | mid-tier PAR-2 |
+| `sat_comp/` | ~75 competition-slice CNFs | match + external DRAT + speed |
+| `sat_hard/` | stretch (add64, large primes, …) | aspirational; not required to win |
+| `generated/` | random 3-SAT seeds | repro generators |
+| `hwmcc/` | AIGER micro | sequential engines |
 
 ```sh
-./zig-out/bin/logic-zig win-report                 # full scoreboard
-./zig-out/bin/logic-zig bench-suite
-./zig-out/bin/logic-zig bench-suite --fair
-./zig-out/bin/logic-zig bench-suite --dir corpus/bench/sat_medium --timeout 10
-./zig-out/bin/logic-zig hwmcc-bench
-./zig-out/bin/logic-zig correctness-suite
+# full scoreboard including competition slice + external DRAT-trim
+./zig-out/bin/logic-zig win-report --comp
+
+# competition only
+./zig-out/bin/logic-zig bench-comp --timeout 3 --max-conflicts 300000
+
+# dump + external check one proof
+./zig-out/bin/logic-zig sat --file corpus/simple_unsat.cnf --check-drat --dump-proof /tmp/p.drat
+```
+
+## External DRAT-trim
+
+Built from CaDiCaL’s bundled checker:
+
+```sh
+gcc -O2 -o third_party/drat-trim/drat-trim third_party/cadical/test/cnf/drat-trim.c
+# or LOGIC_ZIG_DRAT_TRIM=/path/to/drat-trim
 ```
 
 ## Protocol
 
-| Mode | Internal | External | Claims |
+| Mode | Internal | External | Claim |
 |---|---|---|---|
-| default | in-process CDCL | CaDiCaL subprocess | embeddable library latency |
-| `--fair` | `logic-zig sat-track` subprocess | CaDiCaL subprocess | comparable single-shot wall time |
-| multishot | live assume/solve | cold CaDiCaL per query | incremental IPASIR axis |
-| correctness | models + RUP + Δ-CaDiCaL | CaDiCaL | agreement / validation |
-| hwmcc-bench | PDR/BMC/kind on demos | (oracle-free status) | sequential smoke + timing |
+| default PAR-2 | in-process CDCL | CaDiCaL subprocess | library latency |
+| `--fair` | `sat-track` subprocess | CaDiCaL subprocess | single-shot wall |
+| multishot | live assume/solve | cold CaDiCaL/query | IPASIR embed |
+| DRAT | our RUP/DRAT log | `drat-trim` | certifying UNSAT |
+| competition | match + PAR-2 + DRAT sample | CaDiCaL + drat-trim | slice scoreboard |
 
-PAR-2: sum of solve times; unknown/timeout counts as `2 * timeout_s`.
+PAR-2: sum of times; unknown/timeout = `2 * timeout_s`.
 
-Do not extend suites silently when claiming a win — freeze the file list with the result.
+**Speed honesty:** on `sat_hard` and heavy industrial CDCL, CaDiCaL still leads.
+Required wins = correctness agreement + external DRAT + multishot + smoke PAR-2.
+Competition **speed** PAR-2 is reported; lose is a valid measured outcome.
