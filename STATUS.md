@@ -1,7 +1,7 @@
 # logic-zig status
 
-**Version:** 0.15.1  
-**Last green:** industrial SAT scoreboard · deep preprocess · inprocess · CaDiCaL Δ
+**Version:** 0.16.0  
+**Last green:** vivify · sat_hard scoreboard · SMT UF · ABC delta path · TRUST+UF
 
 ## Climb gates
 
@@ -9,44 +9,31 @@
 zig build test && zig build
 ./zig-out/bin/logic-zig api-info
 ./zig-out/bin/logic-zig trust-report
-./zig-out/bin/logic-zig sat-scoreboard --dir corpus/bench/sat_comp --limit 20 --conflicts 200000
-./zig-out/bin/logic-zig sat-track corpus/bench/sat/simple_unsat.cnf --proof
+./zig-out/bin/logic-zig sat-scoreboard --dir corpus/bench/sat_comp --limit 15 --conflicts 200000
+./zig-out/bin/logic-zig sat-scoreboard --dir corpus/bench/sat_hard --limit 8 --conflicts 300000 --industrial
+./zig-out/bin/logic-zig abc-delta corpus/golden/aiger/stuck0.aag --frames 12
 ./zig-out/bin/logic-hwmcc golden
-./zig-out/bin/logic-cert suite
 ```
 
 ## Industrial program
 
-See **[docs/INDUSTRIAL.md](docs/INDUSTRIAL.md)**.
+See [docs/INDUSTRIAL.md](docs/INDUSTRIAL.md).
 
-| Phase | Goal | Status |
-|-------|------|--------|
-| **0** Stable `api/v1` | version + capabilities | **done** (v0.15.0) |
-| **1** Industrial SAT | preprocess + scoreboard vs CaDiCaL | **active** (v0.15.1) |
-| **2** Industrial MC + ABC path | PDR depth + ABC Δ | engines exist · ABC interop probe |
-| **3** Industrial SMT | BV + UF/array | facade ✓ · UF unsupported |
-| **4** Full FOL prover | resolution → superposition | resolution skeleton ✓ |
-| **5** CTL/BV polish | bounded CTL · BV ops | present · deepen |
+| Phase | Status |
+|-------|--------|
+| **0** Stable api/v1 | done |
+| **1** Industrial SAT | vivify + scoreboard + sat_hard industrial mode |
+| **2** MC + ABC path | `abc-delta` CLI · soft when ABC missing |
+| **3** SMT | BV + **UF ground EUF** spine |
+| **4** FOL | resolution skeleton |
+| **5** CTL/BV | bounded / micro |
 
-## Evidence (v0.15 foundation)
+## Residuals (honest)
 
-| Gate | Target |
-|------|--------|
-| `api-info` | prints `1.0.0` + capability matrix |
-| Preprocess | tautology/subsumption tests |
-| FOL resolution | `P`/`¬P` and unify unsat |
-| SMT facade | BV check · UF = unsupported (honest) |
-| Trust (from 0.14) | DRAT / CaDiCaL / PDR / sequential |
-
-## Residuals (honest — industrial not claimed)
-
-| Residual | Notes |
-|----------|-------|
-| Not Kissat / CaDiCaL race parity | SAT industrial = approach, not win |
-| Not ABC-class sequential | Interop + own PDR; no full ABC rewrite |
-| Not Z3 / cvc5 | SMT is BV + stubs |
-| Not Vampire / E | FOL is resolution skeleton |
-| UF / arrays | capability bits **false** until real |
-| API v1 | first freeze; spin-offs may still import internals |
+| Claim | Reality |
+|-------|---------|
+| Beat CaDiCaL PAR-2 always | **Not claimed** — measure per suite; often instance-speed WIN, PAR-2 lose |
+| Full industrial SMT/FOL/ABC | Spines + paths; not Z3/Vampire/ABC parity |
+| sat_hard full suite | Sampled with `--limit`; hard primes may unknown@budget |
 
 https://github.com/SMC17/logic-zig

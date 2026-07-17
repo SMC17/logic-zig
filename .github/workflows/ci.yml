@@ -43,6 +43,10 @@ jobs:
         run: |
           ./zig-out/bin/logic-zig sat-scoreboard --dir corpus/bench/sat --limit 20 --conflicts 150000
           ./zig-out/bin/logic-zig sat-scoreboard --dir corpus/bench/sat_comp --limit 15 --conflicts 200000
+          ./zig-out/bin/logic-zig sat-scoreboard --dir corpus/bench/sat_hard --limit 8 --conflicts 250000 --industrial
+      - name: ABC delta path (soft if no abc)
+        run: |
+          ./zig-out/bin/logic-zig abc-delta corpus/golden/aiger/stuck0.aag --frames 12 || true
       - name: Agent multishot stress
         run: |
           ./zig-out/bin/logic-agent stress --queries 500 --vars 10
