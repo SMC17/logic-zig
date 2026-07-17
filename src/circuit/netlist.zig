@@ -30,8 +30,11 @@ pub const GateKind = enum {
     and_,
     or_,
     xor,
+    xnor,
+    nand,
+    nor,
     mux,
-    /// n-ary and of inputs → output
+    /// n-ary and/or of inputs → output
     and_n,
     or_n,
 };
@@ -206,21 +209,46 @@ pub const Netlist = struct {
                     }
                     try cnf.addClause(lits.items);
                 },
+                .nand => {
+                    for (g.inputs) |inp| {
+                        try cnf.addClause(&.{ y, Lit.positive(Var.fromIndex(inp.index())) });
+                    }
+                    var lits: std.ArrayList(Lit) = .empty;
+                    defer lits.deinit(allocator);
+                    try lits.append(allocator, y.not());
+                    for (g.inputs) |inp| try lits.append(allocator, Lit.negative(Var.fromIndex(inp.index())));
+                    try cnf.addClause(lits.items);
+                },
+                .nor => {
+                    for (g.inputs) |inp| {
+                        try cnf.addClause(&.{ y.not(), Lit.negative(Var.fromIndex(inp.index())) });
+                    }
+                    var lits: std.ArrayList(Lit) = .empty;
+                    defer lits.deinit(allocator);
+                    for (g.inputs) |inp| try lits.append(allocator, Lit.positive(Var.fromIndex(inp.index())));
+                    try lits.append(allocator, y);
+                    try cnf.addClause(lits.items);
+                },
                 .xor => {
                     const a = Lit.positive(Var.fromIndex(g.inputs[0].index()));
                     const b = Lit.positive(Var.fromIndex(g.inputs[1].index()));
-                    // y <-> a xor b
                     try cnf.addClause(&.{ y.not(), a, b });
                     try cnf.addClause(&.{ y.not(), a.not(), b.not() });
                     try cnf.addClause(&.{ y, a.not(), b });
                     try cnf.addClause(&.{ y, a, b.not() });
                 },
+                .xnor => {
+                    const a = Lit.positive(Var.fromIndex(g.inputs[0].index()));
+                    const b = Lit.positive(Var.fromIndex(g.inputs[1].index()));
+                    try cnf.addClause(&.{ y, a, b });
+                    try cnf.addClause(&.{ y, a.not(), b.not() });
+                    try cnf.addClause(&.{ y.not(), a.not(), b });
+                    try cnf.addClause(&.{ y.not(), a, b.not() });
+                },
                 .mux => {
-                    // y = s ? t : f  inputs: [s, t, f]
                     const s = Lit.positive(Var.fromIndex(g.inputs[0].index()));
                     const t = Lit.positive(Var.fromIndex(g.inputs[1].index()));
                     const f = Lit.positive(Var.fromIndex(g.inputs[2].index()));
-                    // (~s | ~t | y) (~s | t | ~y) (s | ~f | y) (s | f | ~y)
                     try cnf.addClause(&.{ s.not(), t.not(), y });
                     try cnf.addClause(&.{ s.not(), t, y.not() });
                     try cnf.addClause(&.{ s, f.not(), y });
@@ -371,6 +399,22 @@ fn blastWithOffset(allocator: std.mem.Allocator, cnf: *Cnf, nl: *const Netlist, 
                 }
                 try cnf.addClause(lits.items);
             },
+            .nand => {
+                for (g.inputs) |inp| try cnf.addClause(&.{ y, Lit.positive(Var.fromIndex(off + inp.index())) });
+                var lits: std.ArrayList(Lit) = .empty;
+                defer lits.deinit(cnf.allocator);
+                try lits.append(cnf.allocator, y.not());
+                for (g.inputs) |inp| try lits.append(cnf.allocator, Lit.negative(Var.fromIndex(off + inp.index())));
+                try cnf.addClause(lits.items);
+            },
+            .nor => {
+                for (g.inputs) |inp| try cnf.addClause(&.{ y.not(), Lit.negative(Var.fromIndex(off + inp.index())) });
+                var lits: std.ArrayList(Lit) = .empty;
+                defer lits.deinit(cnf.allocator);
+                for (g.inputs) |inp| try lits.append(cnf.allocator, Lit.positive(Var.fromIndex(off + inp.index())));
+                try lits.append(cnf.allocator, y);
+                try cnf.addClause(lits.items);
+            },
             .xor => {
                 const a = Lit.positive(Var.fromIndex(off + g.inputs[0].index()));
                 const b = Lit.positive(Var.fromIndex(off + g.inputs[1].index()));
@@ -378,6 +422,14 @@ fn blastWithOffset(allocator: std.mem.Allocator, cnf: *Cnf, nl: *const Netlist, 
                 try cnf.addClause(&.{ y.not(), a.not(), b.not() });
                 try cnf.addClause(&.{ y, a.not(), b });
                 try cnf.addClause(&.{ y, a, b.not() });
+            },
+            .xnor => {
+                const a = Lit.positive(Var.fromIndex(off + g.inputs[0].index()));
+                const b = Lit.positive(Var.fromIndex(off + g.inputs[1].index()));
+                try cnf.addClause(&.{ y, a, b });
+                try cnf.addClause(&.{ y, a.not(), b.not() });
+                try cnf.addClause(&.{ y.not(), a.not(), b });
+                try cnf.addClause(&.{ y.not(), a, b.not() });
             },
             .mux => {
                 const s = Lit.positive(Var.fromIndex(off + g.inputs[0].index()));

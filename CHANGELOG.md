@@ -5,6 +5,21 @@ All notable changes to **logic-zig** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/).
 
+## [0.11.0] — 2026-07-16
+
+### Added
+
+- **Fair multi-justice completeness** via round-robin k-liveness over justice ∥ fairness.
+- **Unique MUS** flag on assumption cores (`assumption_core_unique` / `extractAssumptionMus`).
+- Gate kinds **nand / nor / xnor** end-to-end (CNF blast, ternary, Yosys, AIGER lower).
+- Shared `circuit/blast.zig` for consistent sequential encodings.
+- IC3a-oriented PDR stats: obligations, ternary drops; expanded engine docs.
+
+### Changed
+
+- Multi-justice proofs no longer rely only on single FG(¬J_i); use complete fair cycle measure.
+- AIGER writer lowers the full gate set with structural hashing.
+
 ## [0.10.0] — 2026-07-16
 
 ### Added

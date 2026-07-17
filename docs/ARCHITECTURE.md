@@ -57,7 +57,15 @@ t_i' = t_i \lor (J \land t_{i-1}),\quad
 
 If \(G(\neg\mathrm{bad})\) is proven, then *J* holds at most *k* times on every
 path from the initial states, hence only finitely often on every infinite path.
-That refutes the existence of an infinite path where *J* is true infinitely often.
+
+### Fair multi-justice (complete reduction)
+
+Let \(S = J_0,\ldots,J_{n-1},F_0,\ldots\) be justice signals concatenated with
+fairness constraints. Maintain a one-hot phase \(p\) that waits for \(S[p]\) then
+advances. Each wrap-around increments a round thermometer. Safety of
+“rounds ≤ *k*” implies some \(S[i]\) is only finitely often on every path —
+so no infinite path has *all* of justice and fairness true i.o. Completeness is
+relative to the underlying safety engine.
 
 ## AIGER
 
