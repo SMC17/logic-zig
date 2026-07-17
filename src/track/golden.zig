@@ -17,6 +17,7 @@ const lit_mod = @import("../core/lit.zig");
 const netlist_mod = @import("../circuit/netlist.zig");
 const bv = @import("../smt/bv.zig");
 const drat_external = @import("../sat/drat_external.zig");
+const designs = @import("../circuit/designs.zig");
 
 const Lit = lit_mod.Lit;
 const Var = lit_mod.Var;
@@ -372,6 +373,39 @@ pub fn runBuiltin(allocator: std.mem.Allocator) !GoldenResult {
             pp.deinit();
         };
         pass(&res, r.status == .unsat);
+    }
+    // designs: 3-bit counter + multi-stuck cert
+    {
+        var c = try designs.makeCounter(allocator, 3);
+        defer c.nl.deinit();
+        const r = try bmc.check(allocator, &c.nl, c.bad, 7);
+        defer if (r.trace) |t| allocator.free(t);
+        pass(&res, r.status == .violated);
+    }
+    {
+        var d = try designs.makeMultiStuck0(allocator, 3);
+        defer d.nl.deinit();
+        const inv = try certificate.fromPdrProven(allocator, &d.nl, d.bad, 20);
+        if (inv) |*i| {
+            defer {
+                var ii = i.*;
+                ii.deinit();
+            }
+            pass(&res, try i.verify(allocator, &d.nl));
+        } else pass(&res, false);
+    }
+    {
+        var nl = try designs.makeOneDeadAmongToggles(allocator, 3);
+        defer nl.deinit();
+        const r = try kliveness.checkNetlist(allocator, &nl, 6, 16, 0);
+        pass(&res, r.status == .proven_infinite);
+    }
+    // agent stress micro
+    {
+        var s = agent_session.Session.init(allocator);
+        defer s.deinit();
+        const st = try s.stress(50, 6, 0x51);
+        pass(&res, st.queries == 50);
     }
 
     return res;

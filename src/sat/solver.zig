@@ -474,20 +474,21 @@ pub const Solver = struct {
                 }
 
                 // --- binary fast path (majority of watches on industrial CNF) ---
-                if (cl.len == 2) {
-                    // Ensure false_lit at [1]
-                    var other = cl[0];
-                    if (cl[0] == false_lit) {
-                        other = cl[1];
-                    } else if (cl[1] != false_lit) {
+                // Invariant for 1-UIP: reason clauses keep asserting lit at [0].
+                if (cr.len == 2) {
+                    const clm = self.clauseSliceMut(cid);
+                    if (clm[0] == false_lit) {
+                        std.mem.swap(Lit, &clm[0], &clm[1]);
+                    } else if (clm[1] != false_lit) {
                         i += 1; // stale
                         continue;
                     }
-                    switch (self.valueLit(other)) {
+                    // Now clm[1] == false_lit, clm[0] is the other lit.
+                    switch (self.valueLit(clm[0])) {
                         .true_ => i += 1,
                         .false_ => return cid,
                         .undef => {
-                            if (!self.enqueue(other, cid)) return cid;
+                            if (!self.enqueue(clm[0], cid)) return cid;
                             i += 1;
                         },
                     }

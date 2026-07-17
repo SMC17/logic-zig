@@ -14,6 +14,8 @@ pub fn main(init: std.process.Init) !void {
             \\logic-agent — multishot SAT + assumptions (profile=agent)
             \\  logic-agent multishot [--queries N] [--vars V]
             \\  logic-agent session-demo
+            \\  logic-agent stress [--queries N] [--vars V]
+            \\  logic-agent warm-cold [--queries N] [--vars V]
             \\  logic-agent assume-demo
             \\  logic-agent profile
             \\
@@ -40,6 +42,40 @@ pub fn main(init: std.process.Init) !void {
         logic.multishot_bench.printResult(&r);
         return;
     }
+    if (std.mem.eql(u8, cmd, "stress")) {
+        var queries: u32 = 1000;
+        var nvars: u32 = 12;
+        while (iter.next()) |a| {
+            if (std.mem.eql(u8, a, "--queries")) queries = try std.fmt.parseInt(u32, iter.next() orelse "1000", 10);
+            if (std.mem.eql(u8, a, "--vars")) nvars = try std.fmt.parseInt(u32, iter.next() orelse "12", 10);
+        }
+        var s = logic.agent_session.Session.init(gpa);
+        defer s.deinit();
+        const st = try s.stress(queries, nvars, 0x5757E55);
+        std.debug.print("AGENT_STRESS queries={d} sat={d} unsat={d} conflicts={d}\n", .{
+            st.queries,
+            st.sat,
+            st.unsat,
+            st.conflicts,
+        });
+        return;
+    }
+    if (std.mem.eql(u8, cmd, "warm-cold")) {
+        var queries: u32 = 200;
+        var nvars: u32 = 10;
+        while (iter.next()) |a| {
+            if (std.mem.eql(u8, a, "--queries")) queries = try std.fmt.parseInt(u32, iter.next() orelse "200", 10);
+            if (std.mem.eql(u8, a, "--vars")) nvars = try std.fmt.parseInt(u32, iter.next() orelse "10", 10);
+        }
+        const c = try logic.agent_session.compareWarmCold(gpa, nvars, queries, 0xC01D);
+        std.debug.print("WARM_COLD queries={d} warm_conflicts={d} cold_conflicts={d} ratio={d:.2}\n", .{
+            c.warm_queries,
+            c.warm_conflicts,
+            c.cold_conflicts,
+            if (c.cold_conflicts == 0) 1.0 else @as(f64, @floatFromInt(c.warm_conflicts)) / @as(f64, @floatFromInt(c.cold_conflicts)),
+        });
+        return;
+    }
     if (std.mem.eql(u8, cmd, "session-demo")) {
         var s = logic.agent_session.Session.init(gpa);
         defer s.deinit();
@@ -49,17 +85,15 @@ pub fn main(init: std.process.Init) !void {
         const c = logic.Lit.positive(logic.Var.fromIndex(2));
         try s.addClause(&.{ a, b });
         try s.addClause(&.{ a, c });
-        const r1 = try s.query(&.{ a.not(), b.not(), c.not() });
-        defer if (r1.model) |m| gpa.free(m);
-        defer if (r1.core) |core| gpa.free(core);
+        var r1 = try s.query(&.{ a.not(), b.not(), c.not() });
+        defer r1.deinit(gpa);
         std.debug.print("q1 unsat unique={} core_len={d} conflicts={d}\n", .{
             r1.core_unique,
             if (r1.core) |core| core.len else 0,
             r1.conflicts,
         });
-        const r2 = try s.query(&.{a.not()});
-        defer if (r2.model) |m| gpa.free(m);
-        defer if (r2.core) |core| gpa.free(core);
+        var r2 = try s.query(&.{a.not()});
+        defer r2.deinit(gpa);
         std.debug.print("q2 sat status={s} queries={d} total_conflicts={d}\n", .{
             @tagName(r2.status),
             s.queries,

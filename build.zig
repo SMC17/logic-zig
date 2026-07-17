@@ -93,4 +93,18 @@ pub fn build(b: *std.Build) void {
 
     const spin_step = b.step("spinoffs", "Build all flagship spin-off CLIs");
     spin_step.dependOn(b.getInstallStep());
+
+    // External gravity: IPASIR consumer example
+    const ipasir_ex = b.addExecutable(.{
+        .name = "ipasir-consumer",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/ipasir_consumer.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "logic", .module = mod },
+            },
+        }),
+    });
+    b.installArtifact(ipasir_ex);
 }
