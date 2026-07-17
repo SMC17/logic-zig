@@ -613,7 +613,7 @@ pub fn check(
         try blastFrame(&cnf, nl, 0, nn);
         try addConstraintsFrame(&cnf, nl, 0, nn);
         try cnf.addClause(&.{Lit.positive(Var.fromIndex(bad.index()))});
-        const r = try solver_mod.solveCnf(allocator, &cnf, .{});
+        const r = try solver_mod.solveCnf(allocator, &cnf, .{ .max_conflicts = 500_000 });
         defer if (r.model) |m| allocator.free(m);
         defer if (r.proof) |*p| {
             var pp = p.*;
@@ -640,7 +640,22 @@ pub fn check(
     while (k <= max_frames) : (k += 1) {
         // Block bad at frame k
         var blocking = true;
+        var block_iters: u32 = 0;
         while (blocking) {
+            block_iters += 1;
+            // Safety: broken CTG/blockCube must not spin forever (resource ≠ unknown frames).
+            if (block_iters > 200) {
+                return .{
+                    .status = .unknown,
+                    .frames = k,
+                    .conflicts = stats.conflicts,
+                    .generalizations = stats.gens,
+                    .pushes = stats.pushes,
+                    .ctg_blocks = stats.ctg_blocks,
+                    .obligations = stats.obligations,
+                    .ternary_drops = stats.ternary_drops,
+                };
+            }
             var cnf = Cnf.init(allocator);
             defer cnf.deinit();
             const nn = nl.num_nets;
@@ -661,7 +676,7 @@ pub fn check(
             }
             try cnf.addClause(&.{Lit.positive(Var.fromIndex(bad.index()))});
 
-            const r = try solver_mod.solveCnf(allocator, &cnf, .{ .max_conflicts = 200_000 });
+            const r = try solver_mod.solveCnf(allocator, &cnf, .{ .max_conflicts = 20_000 });
             stats.conflicts += r.conflicts;
             defer if (r.proof) |*p| {
                 var pp = p.*;

@@ -1,10 +1,11 @@
-//! logic-cert — certificate-first flagship (RUP + k-liveness certs).
+//! logic-cert — certificate-first flagship (RUP + k-liveness + design certs).
 
 const std = @import("std");
 const logic = @import("logic");
 
 pub fn main(init: std.process.Init) !void {
     const gpa = init.gpa;
+    const io = init.io;
     var iter = try std.process.Args.Iterator.initAllocator(init.minimal.args, gpa);
     defer iter.deinit();
     _ = iter.next();
@@ -14,6 +15,9 @@ pub fn main(init: std.process.Init) !void {
             \\  logic-cert unsat-demo
             \\  logic-cert klive-demo
             \\  logic-cert pdr-demo
+            \\  logic-cert designs
+            \\  logic-cert suite          # multi-design cert battery
+            \\  logic-cert check-drat <file.cnf>
             \\  logic-cert profile
             \\
         , .{});
@@ -40,6 +44,10 @@ pub fn main(init: std.process.Init) !void {
             @tagName(r.status),
             if (r.proof) |p| p.numClauses() else 0,
         });
+        if (r.proof) |*p| {
+            const ok = try p.verifyRup(gpa, &cnf);
+            std.debug.print("internal_rup={s}\n", .{if (ok) "ok" else "FAIL"});
+        }
         return;
     }
     if (std.mem.eql(u8, cmd, "klive-demo")) {
@@ -77,6 +85,77 @@ pub fn main(init: std.process.Init) !void {
             std.debug.print("no cert\n", .{});
             std.process.exit(1);
         }
+        return;
+    }
+    if (std.mem.eql(u8, cmd, "designs") or std.mem.eql(u8, cmd, "suite")) {
+        var ok: u32 = 0;
+        var fail: u32 = 0;
+        // multi-stuck
+        {
+            var d = try logic.designs.makeMultiStuck0(gpa, 4);
+            defer d.nl.deinit();
+            const inv = try logic.certificate.fromPdrProven(gpa, &d.nl, d.bad, 24);
+            if (inv) |*i| {
+                defer {
+                    var ii = i.*;
+                    ii.deinit();
+                }
+                if (try i.verify(gpa, &d.nl)) ok += 1 else fail += 1;
+            } else fail += 1;
+        }
+        // kind on stuck
+        {
+            var d = try logic.designs.makeMultiStuck0(gpa, 3);
+            defer d.nl.deinit();
+            const r = try logic.kinduction.search(gpa, &d.nl, d.bad, 5);
+            defer if (r.base.trace) |t| gpa.free(t);
+            if (r.status == .proven) ok += 1 else fail += 1;
+        }
+        // one-hot not violated
+        {
+            var d = try logic.designs.makeOneHotRing(gpa, 4);
+            defer d.nl.deinit();
+            var r = try logic.pdr.check(gpa, &d.nl, d.bad, 20);
+            defer r.deinit(gpa);
+            if (r.status != .violated) ok += 1 else fail += 1;
+        }
+        // klive one-dead
+        {
+            var nl = try logic.designs.makeOneDeadAmongToggles(gpa, 4);
+            defer nl.deinit();
+            const r = try logic.kliveness.checkNetlist(gpa, &nl, 8, 16, 0);
+            if (r.status == .proven_infinite) ok += 1 else fail += 1;
+        }
+        // RUP unit
+        {
+            var cnf = logic.Cnf.init(gpa);
+            defer cnf.deinit();
+            cnf.ensureVars(1);
+            try cnf.addClause(&.{logic.Lit.positive(logic.Var.fromIndex(0))});
+            try cnf.addClause(&.{logic.Lit.negative(logic.Var.fromIndex(0))});
+            const c = try logic.certificate.unsatWithProof(gpa, &cnf);
+            if (c.unsat and c.proof_clauses >= 1) ok += 1 else fail += 1;
+        }
+        std.debug.print("CERT_SUITE ok={d} fail={d}\n", .{ ok, fail });
+        if (fail != 0) std.process.exit(1);
+        return;
+    }
+    if (std.mem.eql(u8, cmd, "check-drat")) {
+        const path = iter.next() orelse {
+            std.debug.print("missing cnf\n", .{});
+            std.process.exit(2);
+        };
+        const src = try std.Io.Dir.cwd().readFileAlloc(io, path, gpa, .limited(32 << 20));
+        defer gpa.free(src);
+        var cnf = try logic.dimacs.parse(gpa, src);
+        defer cnf.deinit();
+        const r = try logic.drat_external.solveAndCheckExternal(gpa, io, &cnf);
+        std.debug.print("status={s} external_drat={s} proof_lines={d}\n", .{
+            @tagName(r.status),
+            @tagName(r.check),
+            r.proof_lines,
+        });
+        if (r.status == .unsat and r.check == .failed) std.process.exit(1);
         return;
     }
     std.debug.print("unknown: {s}\n", .{cmd});

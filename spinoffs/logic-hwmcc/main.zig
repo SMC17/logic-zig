@@ -133,6 +133,37 @@ pub fn main(init: std.process.Init) !void {
             defer if (r.trace) |t| gpa.free(t);
             std.debug.print("mutex+constraint: {s}\n", .{@tagName(r.status)});
         }
+        // one-hot ring
+        {
+            var d = try logic.designs.makeOneHotRing(gpa, 4);
+            defer d.nl.deinit();
+            var r = try logic.pdr.check(gpa, &d.nl, d.bad, 16);
+            defer r.deinit(gpa);
+            std.debug.print("onehot-ring4: {s}\n", .{@tagName(r.status)});
+        }
+        // johnson unsafe
+        {
+            var d = try logic.designs.makeJohnson(gpa, 3);
+            defer d.nl.deinit();
+            const r = try logic.bmc.check(gpa, &d.nl, d.bad, 12);
+            defer if (r.trace) |t| gpa.free(t);
+            std.debug.print("johnson3: {s}\n", .{@tagName(r.status)});
+        }
+        // dual-rail + parity
+        {
+            var d = try logic.designs.makeDualRailSafe(gpa);
+            defer d.nl.deinit();
+            var r = try logic.pdr.check(gpa, &d.nl, d.bad, 12);
+            defer r.deinit(gpa);
+            std.debug.print("dual-rail: {s}\n", .{@tagName(r.status)});
+        }
+        {
+            var d = try logic.designs.makeParityNeverBad(gpa);
+            defer d.nl.deinit();
+            const r = try logic.kinduction.search(gpa, &d.nl, d.bad, 3);
+            defer if (r.base.trace) |t| gpa.free(t);
+            std.debug.print("parity-never: {s}\n", .{@tagName(r.status)});
+        }
         return;
     }
     if (std.mem.eql(u8, cmd, "klive")) {

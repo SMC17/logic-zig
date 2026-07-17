@@ -43,11 +43,11 @@ pub const SolverOptions = struct {
     var_decay: f64 = 0.95,
     clause_decay: f64 = 0.999,
     /// Restart base in conflicts (0 = no restarts).
-    restart_base: u64 = 50,
+    restart_base: u64 = 100,
     /// Reduce learned DB every N conflicts (0 = never).
-    reduce_interval: u64 = 1500,
+    reduce_interval: u64 = 2000,
     /// Keep at least this many learned clauses after reduce.
-    reduce_keep_min: u32 = 100,
+    reduce_keep_min: u32 = 50,
     /// Prefer deleting high-LBD clauses (Glucose-style).
     reduce_by_lbd: bool = true,
     /// Simple local conflict-clause minimization.
@@ -427,7 +427,9 @@ pub const Solver = struct {
         return self.valueLit(l) == .false_;
     }
 
-    fn enqueue(self: *Solver, l: Lit, reason: ?ClauseId) bool {
+    /// Returns false only for logical conflict. Allocation failure is `error.OutOfMemory`
+    /// (must never be reported as UNSAT).
+    fn enqueue(self: *Solver, l: Lit, reason: ?ClauseId) error{OutOfMemory}!bool {
         const raw = @intFromEnum(l);
         const v = raw >> 1;
         const want: Value = if ((raw & 1) == 1) .false_ else .true_;
@@ -437,12 +439,12 @@ pub const Solver = struct {
         self.reason[v] = reason;
         self.level[v] = self.decisionLevel();
         self.phase[v] = (raw & 1) == 0;
-        self.trail.append(self.allocator, l) catch return false;
+        try self.trail.append(self.allocator, l);
         self.prop_count += 1;
         return true;
     }
 
-    fn propagate(self: *Solver) ?ClauseId {
+    fn propagate(self: *Solver) error{OutOfMemory}!?ClauseId {
         while (self.qhead < self.trail.items.len) {
             const p = self.trail.items[self.qhead];
             self.qhead += 1;
@@ -451,74 +453,57 @@ pub const Solver = struct {
             var i: usize = 0;
             while (i < ws.items.len) {
                 const cid = ws.items[i];
-                const cr = self.clauses.items[cid.index()];
-                if (cr.deleted) {
+                if (self.isDeleted(cid)) {
                     _ = ws.swapRemove(i);
                     continue;
                 }
-                const cl = self.lits.items[cr.start .. cr.start + cr.len];
+                const cl = self.clauseSliceMut(cid);
 
                 if (cl.len == 0) return cid;
 
-                // --- unit ---
                 if (cl.len == 1) {
                     switch (self.valueLit(cl[0])) {
                         .true_ => i += 1,
                         .false_ => return cid,
                         .undef => {
-                            if (!self.enqueue(cl[0], cid)) return cid;
+                            if (!(try self.enqueue(cl[0], cid))) return cid;
                             i += 1;
                         },
                     }
                     continue;
                 }
 
-                // --- binary fast path (majority of watches on industrial CNF) ---
-                // Invariant for 1-UIP: reason clauses keep asserting lit at [0].
-                if (cr.len == 2) {
-                    const clm = self.clauseSliceMut(cid);
-                    if (clm[0] == false_lit) {
-                        std.mem.swap(Lit, &clm[0], &clm[1]);
-                    } else if (clm[1] != false_lit) {
-                        i += 1; // stale
-                        continue;
-                    }
-                    // Now clm[1] == false_lit, clm[0] is the other lit.
-                    switch (self.valueLit(clm[0])) {
-                        .true_ => i += 1,
-                        .false_ => return cid,
-                        .undef => {
-                            if (!self.enqueue(clm[0], cid)) return cid;
-                            i += 1;
-                        },
-                    }
+                // Ensure false_lit is at index 1; asserting candidate at 0 (1-UIP invariant).
+                if (cl[0] == false_lit) {
+                    std.mem.swap(Lit, &cl[0], &cl[1]);
+                }
+                if (cl[1] != false_lit) {
+                    i += 1; // stale watch
                     continue;
                 }
 
-                // --- long clause ---
-                const clm = self.clauseSliceMut(cid);
-                if (clm[0] == false_lit) {
-                    std.mem.swap(Lit, &clm[0], &clm[1]);
-                }
-                if (clm[1] != false_lit) {
+                const first = cl[0];
+                if (self.isTrueLit(first)) {
                     i += 1;
                     continue;
                 }
 
-                const first = clm[0];
-                if (self.isTrueLit(first)) {
+                // Binary: no further lits to re-watch; unit or conflict on first.
+                if (cl.len == 2) {
+                    if (self.isFalseLit(first)) return cid;
+                    if (!(try self.enqueue(first, cid))) return cid;
                     i += 1;
                     continue;
                 }
 
                 var found = false;
                 var k: usize = 2;
-                while (k < clm.len) : (k += 1) {
-                    if (!self.isFalseLit(clm[k])) {
-                        clm[1] = clm[k];
-                        clm[k] = false_lit;
+                while (k < cl.len) : (k += 1) {
+                    if (!self.isFalseLit(cl[k])) {
+                        cl[1] = cl[k];
+                        cl[k] = false_lit;
                         _ = ws.swapRemove(i);
-                        self.watches[@intFromEnum(clm[1])].append(self.allocator, cid) catch return cid;
+                        try self.watches[@intFromEnum(cl[1])].append(self.allocator, cid);
                         found = true;
                         break;
                     }
@@ -526,7 +511,7 @@ pub const Solver = struct {
                 if (found) continue;
 
                 if (self.isFalseLit(first)) return cid;
-                if (!self.enqueue(first, cid)) return cid;
+                if (!(try self.enqueue(first, cid))) return cid;
                 i += 1;
             }
         }
@@ -766,7 +751,9 @@ pub const Solver = struct {
     fn decide(self: *Solver, l: Lit) !void {
         try self.trail_lim.append(self.allocator, @intCast(self.trail.items.len));
         self.decision_count += 1;
-        _ = self.enqueue(l, null);
+        // Decision var must be undef (pickBranch guarantees).
+        const ok = try self.enqueue(l, null);
+        std.debug.assert(ok);
     }
 
     /// MiniSat Luby unit at 0-based restart index `x`, scaled by restart_base.
@@ -897,17 +884,17 @@ pub const Solver = struct {
         while (vi < self.num_vars) : (vi += 1) {
             if (self.assign[vi] != .undef) continue;
             if (pos[vi] > 0 and neg[vi] == 0) {
-                if (!self.enqueue(Lit.positive(Var.fromIndex(vi)), null)) return false;
+                if (!(try self.enqueue(Lit.positive(Var.fromIndex(vi)), null))) return false;
                 self.pure_assign_count += 1;
                 progress = true;
             } else if (neg[vi] > 0 and pos[vi] == 0) {
-                if (!self.enqueue(Lit.negative(Var.fromIndex(vi)), null)) return false;
+                if (!(try self.enqueue(Lit.negative(Var.fromIndex(vi)), null))) return false;
                 self.pure_assign_count += 1;
                 progress = true;
             }
         }
         if (progress) {
-            if (self.propagate()) |_| return false;
+            if (try self.propagate()) |_| return false;
         }
         return true;
     }
@@ -1106,10 +1093,10 @@ pub const Solver = struct {
             const cl = self.clauseSlice(id);
             if (cl.len == 0) return self.finishUnsat();
             if (cl.len == 1) {
-                if (!self.enqueue(cl[0], id)) return self.finishUnsat();
+                if (!(try self.enqueue(cl[0], id))) return self.finishUnsat();
             }
         }
-        if (self.propagate()) |_| return self.finishUnsat();
+        if (try self.propagate()) |_| return self.finishUnsat();
 
         for (assumptions) |a| {
             switch (self.valueLit(a)) {
@@ -1117,7 +1104,7 @@ pub const Solver = struct {
                 .false_ => return self.finishUnsat(),
                 .undef => {
                     try self.decide(a);
-                    if (self.propagate()) |_| {
+                    if (try self.propagate()) |_| {
                         if (self.decisionLevel() <= self.assumption_level + 1) {
                             // will set assumption_level below; for first assump level is 1
                         }
@@ -1194,10 +1181,10 @@ pub const Solver = struct {
             if (self.isDeleted(id)) continue;
             const cl = self.clauseSlice(id);
             if (cl.len == 1) {
-                if (!self.enqueue(cl[0], id)) return self.finishUnsat();
+                if (!(try self.enqueue(cl[0], id))) return self.finishUnsat();
             }
         }
-        if (self.propagate()) |_| return self.finishUnsat();
+        if (try self.propagate()) |_| return self.finishUnsat();
         if (!try self.eliminatePureLiterals()) return self.finishUnsat();
         return try self.searchLoop();
     }
@@ -1222,7 +1209,7 @@ pub const Solver = struct {
                 };
             }
 
-            if (self.propagate()) |confl| {
+            if (try self.propagate()) |confl| {
                 self.conflict_count += 1;
                 if (self.decisionLevel() <= self.assumption_level) {
                     // Conflict at/below assumptions → unsat under assumptions (or global).
@@ -1248,7 +1235,11 @@ pub const Solver = struct {
                 }
 
                 // Asserting clause: learnt[0] is unit under current assign.
-                _ = self.enqueue(learnt_copy[0], cid);
+                // Asserting literal must be unit after backjump; failure is a kernel bug
+                // or OOM (OOM already errors). Logical false → unsat under assumptions/global.
+                if (!(try self.enqueue(learnt_copy[0], cid))) {
+                    return self.finishUnsat();
+                }
                 self.varDecay();
                 self.claDecay();
 

@@ -11,9 +11,11 @@ const certificate = @import("../cert/certificate.zig");
 const designs = @import("../circuit/designs.zig");
 const pdr = @import("../circuit/pdr.zig");
 const bmc = @import("../circuit/bmc.zig");
+const kinduction = @import("../circuit/kinduction.zig");
 const kliveness = @import("../circuit/kliveness.zig");
 const aiger = @import("../bridge/aiger.zig");
 const lit_mod = @import("../core/lit.zig");
+const agent_session = @import("../agent/session.zig");
 
 pub const TrustReport = struct {
     drat_available: bool = false,
@@ -29,6 +31,8 @@ pub const TrustReport = struct {
     sequential_fail: u32 = 0,
     klive_ok: u32 = 0,
     klive_fail: u32 = 0,
+    agent_ok: u32 = 0,
+    agent_fail: u32 = 0,
     all_pass: bool = false,
 };
 
@@ -184,6 +188,35 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io) !TrustReport {
         const r = try kliveness.checkNetlist(allocator, &nl, 2, 10, 8);
         if (r.status != .proven_infinite) rep.klive_ok += 1 else rep.klive_fail += 1;
     }
+    // (heavier one-dead sizes live in designs-demo / unit tests — keep trust fast+stable)
+
+    // --- Kind induction cert path ---
+    {
+        var d = try designs.makeMultiStuck0(allocator, 3);
+        defer d.nl.deinit();
+        const r = try kinduction.search(allocator, &d.nl, d.bad, 5);
+        defer if (r.base.trace) |t| allocator.free(t);
+        if (r.status == .proven) rep.pdr_certs_ok += 1 else rep.pdr_certs_fail += 1;
+    }
+    // one-hot ring not violated
+    {
+        var d = try designs.makeOneHotRing(allocator, 4);
+        defer d.nl.deinit();
+        var r = try pdr.check(allocator, &d.nl, d.bad, 20);
+        defer r.deinit(allocator);
+        if (r.status != .violated) rep.sequential_ok += 1 else rep.sequential_fail += 1;
+    }
+
+    // --- Agent structured multishot ---
+    {
+        const c = try agent_session.compareWarmColdStructured(allocator, 10, 50);
+        if (c.warm_queries >= 50) rep.agent_ok += 1 else rep.agent_fail += 1;
+        // Stress micro
+        var s = agent_session.Session.init(allocator);
+        defer s.deinit();
+        const st = try s.stress(100, 8, 0xC11B);
+        if (st.queries == 100) rep.agent_ok += 1 else rep.agent_fail += 1;
+    }
 
     // --- Fixture AIGER cert path ---
     {
@@ -212,7 +245,8 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io) !TrustReport {
 
     rep.all_pass = rep.drat_failed == 0 and rep.cadical_mismatches == 0 and
         rep.pdr_certs_fail == 0 and rep.sequential_fail == 0 and rep.klive_fail == 0 and
-        (rep.pdr_certs_ok + rep.sequential_ok + rep.klive_ok) > 0;
+        rep.agent_fail == 0 and
+        (rep.pdr_certs_ok + rep.sequential_ok + rep.klive_ok + rep.agent_ok) > 0;
 
     return rep;
 }
@@ -233,6 +267,7 @@ pub fn print(r: *const TrustReport) void {
     std.debug.print("pdr_certs: ok={d} fail={d}\n", .{ r.pdr_certs_ok, r.pdr_certs_fail });
     std.debug.print("sequential: ok={d} fail={d}\n", .{ r.sequential_ok, r.sequential_fail });
     std.debug.print("klive: ok={d} fail={d}\n", .{ r.klive_ok, r.klive_fail });
+    std.debug.print("agent: ok={d} fail={d}\n", .{ r.agent_ok, r.agent_fail });
     std.debug.print("TRUST_{s}\n", .{if (r.all_pass) "OK" else "FAIL"});
 }
 

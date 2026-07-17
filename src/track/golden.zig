@@ -18,6 +18,7 @@ const netlist_mod = @import("../circuit/netlist.zig");
 const bv = @import("../smt/bv.zig");
 const drat_external = @import("../sat/drat_external.zig");
 const designs = @import("../circuit/designs.zig");
+const sat_track = @import("sat_track.zig");
 
 const Lit = lit_mod.Lit;
 const Var = lit_mod.Var;
@@ -407,10 +408,11 @@ pub fn runBuiltin(allocator: std.mem.Allocator) !GoldenResult {
         const st = try s.stress(50, 6, 0x51);
         pass(&res, st.queries == 50);
     }
-    // structured warm-cold
+    // structured warm-cold (primary + re-asks)
     {
-        const c = try agent_session.compareWarmColdStructured(allocator, 10, 40);
-        pass(&res, c.warm_queries == 40 and std.mem.eql(u8, c.mode, "structured"));
+        const nq: u32 = 40;
+        const c = try agent_session.compareWarmColdStructured(allocator, 10, nq);
+        pass(&res, c.warm_queries == agent_session.structuredQueryCount(nq) and std.mem.eql(u8, c.mode, "structured"));
     }
     // mutex designs
     {
@@ -426,6 +428,56 @@ pub fn runBuiltin(allocator: std.mem.Allocator) !GoldenResult {
         const r = try bmc.check(allocator, &d.nl, d.bad, 31);
         defer if (r.trace) |t| allocator.free(t);
         pass(&res, r.status == .violated);
+    }
+    // one-hot ring not violated
+    {
+        var d = try designs.makeOneHotRing(allocator, 3);
+        defer d.nl.deinit();
+        var r = try pdr.check(allocator, &d.nl, d.bad, 16);
+        defer r.deinit(allocator);
+        pass(&res, r.status != .violated);
+    }
+    // kind multi-stuck
+    {
+        var d = try designs.makeMultiStuck0(allocator, 2);
+        defer d.nl.deinit();
+        const r = try kinduction.search(allocator, &d.nl, d.bad, 4);
+        defer if (r.base.trace) |t| allocator.free(t);
+        pass(&res, r.status == .proven);
+    }
+    // johnson reaches all-1s
+    {
+        var d = try designs.makeJohnson(allocator, 3);
+        defer d.nl.deinit();
+        const r = try bmc.check(allocator, &d.nl, d.bad, 12);
+        defer if (r.trace) |t| allocator.free(t);
+        pass(&res, r.status == .violated);
+    }
+    // dual-rail illegal coding not violated
+    {
+        var d = try designs.makeDualRailSafe(allocator);
+        defer d.nl.deinit();
+        var r = try pdr.check(allocator, &d.nl, d.bad, 12);
+        defer r.deinit(allocator);
+        pass(&res, r.status != .violated);
+    }
+    // parity never-bad kind
+    {
+        var d = try designs.makeParityNeverBad(allocator);
+        defer d.nl.deinit();
+        const r = try kinduction.search(allocator, &d.nl, d.bad, 3);
+        defer if (r.base.trace) |t| allocator.free(t);
+        pass(&res, r.status == .proven);
+    }
+    // sat-track competition path
+    {
+        const src =
+            \\p cnf 1 2
+            \\1 0
+            \\-1 0
+        ;
+        const code = try sat_track.runBytesOpts(allocator, src, .{ .verbose = false, .proof = true });
+        pass(&res, code == 20);
     }
 
     return res;

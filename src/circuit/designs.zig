@@ -8,7 +8,7 @@ const NetId = netlist_mod.NetId;
 
 /// n-bit binary counter; bad = all-1s (reaches at step 2^n - 1 from 0).
 pub fn makeCounter(allocator: std.mem.Allocator, n: u32) !struct { nl: Netlist, bad: NetId } {
-    std.debug.assert(n >= 1 and n <= 8);
+    std.debug.assert(n >= 1 and n <= 10);
     var nl = Netlist.init(allocator);
     errdefer nl.deinit();
 
@@ -213,4 +213,150 @@ test "counter 5bit bound" {
     defer if (r31.trace) |t| std.testing.allocator.free(t);
     try std.testing.expect(r30.status == .safe_up_to_bound);
     try std.testing.expect(r31.status == .violated);
+}
+
+/// One-hot ring: q0→q1→…→q0; bad = weight≠1 is not checked — bad = all zero (unreachable from one-hot init).
+pub fn makeOneHotRing(allocator: std.mem.Allocator, n: u32) !struct { nl: Netlist, bad: NetId } {
+    std.debug.assert(n >= 2 and n <= 8);
+    var nl = Netlist.init(allocator);
+    errdefer nl.deinit();
+    const q = try allocator.alloc(NetId, n);
+    defer allocator.free(q);
+    var i: u32 = 0;
+    while (i < n) : (i += 1) q[i] = try nl.allocNet();
+    // d_i = q_{i-1}
+    i = 0;
+    while (i < n) : (i += 1) {
+        const prev = if (i == 0) q[n - 1] else q[i - 1];
+        try nl.addLatch(prev, q[i], i == 0); // one-hot init: only q0=1
+    }
+    // bad = all zero (AND of ~qi)
+    var acc: ?NetId = null;
+    i = 0;
+    while (i < n) : (i += 1) {
+        const nq = try nl.allocNet();
+        try nl.addGate(.not, &.{q[i]}, nq);
+        if (acc) |a| {
+            const y = try nl.allocNet();
+            try nl.addGate(.and_, &.{ a, nq }, y);
+            acc = y;
+        } else acc = nq;
+    }
+    const bad = acc.?;
+    try nl.addBad(bad);
+    return .{ .nl = nl, .bad = bad };
+}
+
+test "one-hot ring safe under pdr" {
+    const pdr = @import("pdr.zig");
+    var d = try makeOneHotRing(std.testing.allocator, 4);
+    defer d.nl.deinit();
+    var r = try pdr.check(std.testing.allocator, &d.nl, d.bad, 20);
+    defer r.deinit(std.testing.allocator);
+    try std.testing.expect(r.status == .proven or r.status == .unknown);
+    // Should not be violated — all-zero unreachable from one-hot
+    try std.testing.expect(r.status != .violated);
+}
+
+test "multi stuck kind proven" {
+    const kinduction = @import("kinduction.zig");
+    var d = try makeMultiStuck0(std.testing.allocator, 3);
+    defer d.nl.deinit();
+    const r = try kinduction.search(std.testing.allocator, &d.nl, d.bad, 4);
+    defer if (r.base.trace) |t| std.testing.allocator.free(t);
+    try std.testing.expect(r.status == .proven);
+}
+
+// counter 6bit BMC to bound 63 is intentionally not a unit test (too heavy in Debug).
+// Exercise via designs-demo / golden at smaller widths.
+
+/// Johnson (twisted ring) counter: d0 = ~q_{n-1}, d_i = q_{i-1}.
+/// Bad = all-1s (reachable after enough steps from 0…0) — unsafe.
+pub fn makeJohnson(allocator: std.mem.Allocator, n: u32) !struct { nl: Netlist, bad: NetId } {
+    std.debug.assert(n >= 2 and n <= 12);
+    var nl = Netlist.init(allocator);
+    errdefer nl.deinit();
+    const q = try allocator.alloc(NetId, n);
+    defer allocator.free(q);
+    var i: u32 = 0;
+    while (i < n) : (i += 1) q[i] = try nl.allocNet();
+    const nq_last = try nl.allocNet();
+    try nl.addGate(.not, &.{q[n - 1]}, nq_last);
+    try nl.addLatch(nq_last, q[0], false);
+    i = 1;
+    while (i < n) : (i += 1) try nl.addLatch(q[i - 1], q[i], false);
+    // bad = AND all q (all-1s)
+    var acc = q[0];
+    i = 1;
+    while (i < n) : (i += 1) {
+        const y = try nl.allocNet();
+        try nl.addGate(.and_, &.{ acc, q[i] }, y);
+        acc = y;
+    }
+    try nl.addBad(acc);
+    return .{ .nl = nl, .bad = acc };
+}
+
+/// Dual-rail latch pair: q and nq with d_nq = ~d; bad = q ∧ nq (illegal coding).
+/// From consistent init, illegal state is unreachable if next-state preserves dual-rail.
+pub fn makeDualRailSafe(allocator: std.mem.Allocator) !struct { nl: Netlist, bad: NetId } {
+    var nl = Netlist.init(allocator);
+    errdefer nl.deinit();
+    const q = try nl.allocNetNamed("q");
+    const nq = try nl.allocNetNamed("nq");
+    const inp = try nl.allocNetNamed("in");
+    try nl.addInput(inp);
+    const ninp = try nl.allocNetNamed("nin");
+    try nl.addGate(.not, &.{inp}, ninp);
+    // dual-rail init: q=0, nq=1
+    try nl.addLatch(inp, q, false);
+    try nl.addLatch(ninp, nq, true);
+    const both = try nl.allocNetNamed("illegal");
+    try nl.addGate(.and_, &.{ q, nq }, both);
+    try nl.addBad(both);
+    return .{ .nl = nl, .bad = both };
+}
+
+/// Parity latch: accumulate XOR of free input; bad = false (never) — always safe.
+pub fn makeParityNeverBad(allocator: std.mem.Allocator) !struct { nl: Netlist, bad: NetId } {
+    var nl = Netlist.init(allocator);
+    errdefer nl.deinit();
+    const q = try nl.allocNetNamed("par");
+    const inp = try nl.allocNetNamed("bit");
+    try nl.addInput(inp);
+    const d = try nl.allocNetNamed("d");
+    try nl.addGate(.xor, &.{ q, inp }, d);
+    try nl.addLatch(d, q, false);
+    const bad = try nl.allocNetNamed("never");
+    try nl.addConst(bad, false);
+    try nl.addBad(bad);
+    return .{ .nl = nl, .bad = bad };
+}
+
+test "johnson 3bit eventually violates" {
+    const bmc = @import("bmc.zig");
+    var d = try makeJohnson(std.testing.allocator, 3);
+    defer d.nl.deinit();
+    // Johnson of width 3 visits 6 states; all-1s is one of them
+    const r = try bmc.check(std.testing.allocator, &d.nl, d.bad, 12);
+    defer if (r.trace) |t| std.testing.allocator.free(t);
+    try std.testing.expect(r.status == .violated);
+}
+
+test "dual rail safe under pdr" {
+    const pdr = @import("pdr.zig");
+    var d = try makeDualRailSafe(std.testing.allocator);
+    defer d.nl.deinit();
+    var r = try pdr.check(std.testing.allocator, &d.nl, d.bad, 16);
+    defer r.deinit(std.testing.allocator);
+    try std.testing.expect(r.status != .violated);
+}
+
+test "parity never-bad proven kind" {
+    const kinduction = @import("kinduction.zig");
+    var d = try makeParityNeverBad(std.testing.allocator);
+    defer d.nl.deinit();
+    const r = try kinduction.search(std.testing.allocator, &d.nl, d.bad, 3);
+    defer if (r.base.trace) |t| std.testing.allocator.free(t);
+    try std.testing.expect(r.status == .proven);
 }

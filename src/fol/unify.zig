@@ -125,8 +125,7 @@ test "occurs check" {
     var pool = TermPool.init(std.testing.allocator);
     defer pool.deinit();
     const x = try pool.mkVar("x");
-    const x2 = try pool.mkVar("x"); // same id
-    try std.testing.expect(x == x2);
+    // Free vars are unique TermIds; reuse the same x in f(x).
     const fx = try pool.mkFunc("f", &.{x});
     var subst = Subst.init(std.testing.allocator);
     defer subst.deinit();
