@@ -18,6 +18,7 @@ const usage =
     \\  logic-zig klive-demo [--max-k K]        # infinite justice proof (k-liveness)
     \\  logic-zig ternary-demo
     \\  logic-zig doctor                        # self-check smoke suite
+    \\  logic-zig api-info                      # stable api/v1 version + capabilities
     \\  logic-zig trust-report                  # DRAT + CaDiCaL + PDR certs + sequential
     \\  logic-zig diff-external [--iters N]
     \\  logic-zig bench-suite [--dir DIR] [--timeout S] [--max-conflicts N] [--json] [--fair]
@@ -180,6 +181,28 @@ pub fn main(init: std.process.Init) !void {
     }
     if (std.mem.eql(u8, cmd, "doctor")) {
         try cmdDoctor(gpa, io);
+        return;
+    }
+    if (std.mem.eql(u8, cmd, "api-info")) {
+        const line = try logic.api.versionLine(gpa);
+        defer gpa.free(line);
+        std.debug.print("{s}\n", .{line});
+        const caps = logic.api.Capability.current();
+        std.debug.print("capabilities:\n", .{});
+        std.debug.print("  sat_cdcl={} sat_portfolio={} sat_preprocess={} sat_proof_rup={}\n", .{
+            caps.sat_cdcl, caps.sat_portfolio, caps.sat_preprocess, caps.sat_proof_rup,
+        });
+        std.debug.print("  mc_bmc={} mc_kind={} mc_pdr={} mc_klive={}\n", .{
+            caps.mc_bmc, caps.mc_kind, caps.mc_pdr, caps.mc_klive,
+        });
+        std.debug.print("  smt_bv={} smt_uf={} smt_array={}\n", .{ caps.smt_bv, caps.smt_uf, caps.smt_array });
+        std.debug.print("  fol_unify={} fol_finite_model={} fol_resolution={}\n", .{
+            caps.fol_unify, caps.fol_finite_model, caps.fol_resolution,
+        });
+        std.debug.print("  ctl_bounded={} agent_session={} abc_interop={}\n", .{
+            caps.ctl_bounded, caps.agent_session, caps.abc_interop,
+        });
+        std.debug.print("program: docs/INDUSTRIAL.md\n", .{});
         return;
     }
     if (std.mem.eql(u8, cmd, "trust-report")) {

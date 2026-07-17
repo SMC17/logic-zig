@@ -56,6 +56,10 @@ pub const agent_session = @import("agent/session.zig");
 pub const portfolio_bench = @import("track/portfolio_bench.zig");
 pub const designs = @import("circuit/designs.zig");
 pub const trust_report = @import("trust/report.zig");
+pub const api = @import("api/v1.zig");
+pub const preprocess = @import("sat/preprocess.zig");
+pub const smt = @import("smt/smt.zig");
+pub const fol_resolution = @import("fol/resolution.zig");
 
 pub const Lit = lit.Lit;
 pub const Var = lit.Var;
@@ -208,6 +212,10 @@ test {
     _ = portfolio_bench;
     _ = designs;
     _ = trust_report;
+    _ = api;
+    _ = preprocess;
+    _ = smt;
+    _ = fol_resolution;
 }
 
 test "end-to-end tautology a|!a" {
