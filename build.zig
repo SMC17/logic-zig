@@ -10,6 +10,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    // Main umbrella CLI
     const exe = b.addExecutable(.{
         .name = "logic-zig",
         .root_module = b.createModule(.{
@@ -23,7 +24,31 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(exe);
 
-    // IPASIR shared library (C ABI) — root at src/ so relative imports resolve
+    // Flagship spin-offs — each pins a profile with unique tradeoffs
+    const spinoffs = [_]struct { name: []const u8, path: []const u8 }{
+        .{ .name = "logic-agent", .path = "spinoffs/logic-agent/main.zig" },
+        .{ .name = "logic-sat", .path = "spinoffs/logic-sat/main.zig" },
+        .{ .name = "logic-hwmcc", .path = "spinoffs/logic-hwmcc/main.zig" },
+        .{ .name = "logic-cert", .path = "spinoffs/logic-cert/main.zig" },
+        .{ .name = "logic-smt", .path = "spinoffs/logic-smt/main.zig" },
+        .{ .name = "logic-ctl", .path = "spinoffs/logic-ctl/main.zig" },
+    };
+    for (spinoffs) |sp| {
+        const sp_exe = b.addExecutable(.{
+            .name = sp.name,
+            .root_module = b.createModule(.{
+                .root_source_file = b.path(sp.path),
+                .target = target,
+                .optimize = optimize,
+                .imports = &.{
+                    .{ .name = "logic", .module = mod },
+                },
+            }),
+        });
+        b.installArtifact(sp_exe);
+    }
+
+    // IPASIR shared library
     const ipasir_lib = b.addLibrary(.{
         .name = "ipasirlogic",
         .root_module = b.createModule(.{
@@ -62,9 +87,10 @@ pub fn build(b: *std.Build) void {
     });
     const run_integration = b.addRunArtifact(integration_tests);
     test_step.dependOn(&run_integration.step);
-    const integration_step = b.step("integration", "Run integration tests");
-    integration_step.dependOn(&run_integration.step);
 
     const lib_step = b.step("lib", "Build IPASIR shared library");
     lib_step.dependOn(&b.addInstallArtifact(ipasir_lib, .{}).step);
+
+    const spin_step = b.step("spinoffs", "Build all flagship spin-off CLIs");
+    spin_step.dependOn(b.getInstallStep());
 }

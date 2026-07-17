@@ -1,0 +1,32 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Zig 0.16
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+      - name: Unit + integration tests
+        run: zig build test
+      - name: Build umbrella + spin-offs + IPASIR
+        run: zig build
+      - name: Doctor smoke
+        run: ./zig-out/bin/logic-zig doctor
+      - name: Golden corpus
+        run: ./zig-out/bin/logic-hwmcc golden
+      - name: Spin-off smoke
+        run: |
+          ./zig-out/bin/logic-agent profile
+          ./zig-out/bin/logic-sat profile
+          ./zig-out/bin/logic-cert klive-demo
+          ./zig-out/bin/logic-smt demo-add
+          ./zig-out/bin/logic-ctl demo
