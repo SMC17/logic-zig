@@ -424,3 +424,65 @@ test "fair multi: three signals one dead proves" {
     const r = try proveFairMulti(std.testing.allocator, &nl, &.{ a, b, c }, 5, 16);
     try std.testing.expect(r.status == .proven_infinite);
 }
+
+test "fair multi: two fair two justice one stuck proves" {
+    var nl = Netlist.init(std.testing.allocator);
+    defer nl.deinit();
+    const j0 = try nl.allocNetNamed("j0");
+    const j1 = try nl.allocNetNamed("j1");
+    const f0 = try nl.allocNetNamed("f0");
+    const f1 = try nl.allocNetNamed("f1");
+    const d0 = try nl.allocNetNamed("d0");
+    const d1 = try nl.allocNetNamed("d1");
+    const e0 = try nl.allocNetNamed("e0");
+    const e1 = try nl.allocNetNamed("e1");
+    try nl.addConst(d0, false); // j0 dead
+    try nl.addGate(.not, &.{j1}, d1);
+    try nl.addGate(.not, &.{f0}, e0);
+    try nl.addGate(.not, &.{f1}, e1);
+    try nl.addLatch(d0, j0, false);
+    try nl.addLatch(d1, j1, false);
+    try nl.addLatch(e0, f0, false);
+    try nl.addLatch(e1, f1, true);
+    try nl.addJustice(j0);
+    try nl.addJustice(j1);
+    try nl.addFairness(f0);
+    try nl.addFairness(f1);
+    const r = try checkNetlist(std.testing.allocator, &nl, 6, 16, 0);
+    try std.testing.expect(r.status == .proven_infinite);
+}
+
+test "fair multi: single justice with fairness both toggle no false prove" {
+    var nl = Netlist.init(std.testing.allocator);
+    defer nl.deinit();
+    const j = try nl.allocNetNamed("j");
+    const f = try nl.allocNetNamed("f");
+    const dj = try nl.allocNetNamed("dj");
+    const df = try nl.allocNetNamed("df");
+    try nl.addGate(.not, &.{j}, dj);
+    try nl.addGate(.not, &.{f}, df);
+    try nl.addLatch(dj, j, false);
+    try nl.addLatch(df, f, true);
+    try nl.addJustice(j);
+    try nl.addFairness(f);
+    // Without lasso may be unknown; with lasso should witness; never false infinite proof at small k alone without engines proving
+    const r = try checkNetlist(std.testing.allocator, &nl, 3, 12, 8);
+    try std.testing.expect(r.status != .proven_infinite or r.status == .lasso_witness);
+    try std.testing.expect(r.status == .lasso_witness or r.status == .unknown);
+}
+
+test "round-robin attach builds thermometer bad" {
+    var nl = Netlist.init(std.testing.allocator);
+    defer nl.deinit();
+    const a = try nl.allocNetNamed("a");
+    const b = try nl.allocNetNamed("b");
+    const da = try nl.allocNetNamed("da");
+    const db = try nl.allocNetNamed("db");
+    try nl.addConst(da, false);
+    try nl.addConst(db, false);
+    try nl.addLatch(da, a, false);
+    try nl.addLatch(db, b, false);
+    const bad = try attachFairRoundRobin(&nl, &.{ a, b }, 0);
+    try std.testing.expect(bad.index() < nl.num_nets);
+    try std.testing.expect(nl.latches.items.len >= 4); // 2 orig + 2 phase
+}

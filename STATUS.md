@@ -1,47 +1,28 @@
 # logic-zig status
 
-**Version:** 0.12.1  
-**Last green:** golden **23/23**, external **DRAT verified**, `zig build test`
+**Version:** 0.12.2  
+**Last green:** golden **30/30** · DRAT fuzz **verified=9 failed=0** · portfolio hard **0 failed**
 
-## Architecture
-
-| Layer | Artifact |
-|-------|----------|
-| **Core library** | `logic` module |
-| **Umbrella** | `logic-zig` |
-| **Spin-offs** | agent · sat · hwmcc · cert · smt · ctl |
-| **CI** | `.github/workflows/ci.yml` |
-
-## Latest gates
-
-```
-./zig-out/bin/logic-hwmcc golden
-# golden: 23/23 passed, 0 failed, 0 skipped
-
-./zig-out/bin/logic-sat check-drat corpus/bench/sat/simple_unsat.cnf
-# s UNSATISFIABLE / c external_drat=verified
-
-./zig-out/bin/logic-sat portfolio file.cnf --proof
-# internal_rup=ok + external_drat=verified when unsat
-```
-
-## Component matrix
-
-| Component | Level |
-|-----------|-------|
-| CDCL + portfolio (6 configs, ramp, model validate, RUP) | unit-tested |
-| External DRAT-trim | unit-tested when binary present |
-| PDR + invariant export + cert verify | unit-tested |
-| Fair multi-justice (round-robin + lasso + fairness) | unit-tested |
-| AIGER golden fixtures (safe/unsafe/lasso/klive) | unit-tested |
-| CTL / BV / agent session | unit-tested |
-
-## Smoke
+## Gates
 
 ```sh
 zig build test && zig build
 ./zig-out/bin/logic-hwmcc golden
 ./zig-out/bin/logic-sat check-drat corpus/bench/sat/simple_unsat.cnf
-./zig-out/bin/logic-agent session-demo
-./zig-out/bin/logic-cert pdr-demo
+./zig-out/bin/logic-sat drat-fuzz --iters 15 --vars 5
+./zig-out/bin/logic-sat hard --dir corpus/bench/sat --limit 8 --conflicts 80000
+# optional: --dir corpus/bench/sat_hard --limit 5 --conflicts 500000
 ```
+
+## Spin-offs
+
+| Binary | Commands |
+|--------|----------|
+| `logic-sat` | solve, portfolio, check-drat, **drat-fuzz**, **hard** |
+| `logic-hwmcc` | track, klive, **golden** |
+| `logic-agent` | multishot, session-demo |
+| `logic-cert` | unsat-demo, klive-demo, pdr-demo |
+
+## Stack
+
+Core library + 6 flagships · CI · DRAT-trim · portfolio · fair multi-justice · AIGER goldens · certs · CTL · BV
