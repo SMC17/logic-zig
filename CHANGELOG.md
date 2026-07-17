@@ -1,0 +1,39 @@
+# Changelog
+
+All notable changes to **logic-zig** are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project aims to follow [Semantic Versioning](https://semver.org/).
+
+## [0.10.0] — 2026-07-16
+
+### Added
+
+- **k-Liveness** (`circuit/kliveness.zig`): infinite-trace proofs that a justice
+  signal can hold only finitely often, via thermometer counters + k-induction/PDR.
+- **Competition-style PDR**: recursive cube blocking, multi-round push to
+  quiescence, clause-set fixed-point detection, lemma lift toward F[0].
+- **Deletion-minimal assumption cores** with hard trail reset between probes;
+  `isDeletionMinimalCore` verifier.
+- **Structural hash-consing** in the AIGER writer (AND sharing + constant folding).
+- CLI: `klive-demo`, `doctor`, HWMCC `--justice` / `--lasso` / extended flags.
+
+### Changed
+
+- BMC honors invariant constraints and multi-bad OR queries.
+- HWMCC track uses `badProps()` (extended AIGER B section).
+- Documentation rewritten for public release.
+
+### Residual (honest)
+
+- Multi-justice k-liveness is sound but incomplete (proves via any FG(¬J_i)).
+- Unique MUS is undecidable in general; we guarantee **deletion-minimality**.
+- AIGER is AND-Inverter only; OR/XOR/MUX still lower, with sharing to limit blow-up.
+
+## [0.9.0] — 2026-07-16
+
+Extended AIGER B/C/J/F, justice lasso encoding, ternary sim, AIGER writer.
+
+## [0.1.0] — 2026-07-16
+
+Initial public substrate: CDCL, Tseitin, BMC, k-induction, PDR, FOL, IPASIR.

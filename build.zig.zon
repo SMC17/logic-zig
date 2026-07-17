@@ -1,0 +1,22 @@
+.{
+    .name = .logic_zig,
+    .version = "0.10.0",
+    .fingerprint = 0x470c230a7846cf04,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "tests",
+        "corpus",
+        "include",
+        "docs",
+        "README.md",
+        "STATUS.md",
+        "CHANGELOG.md",
+        "CONTRIBUTING.md",
+        "LICENSE",
+        "AGENTS.md",
+    },
+}
