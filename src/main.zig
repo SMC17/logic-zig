@@ -760,6 +760,55 @@ fn cmdDoctor(gpa: std.mem.Allocator, io: std.Io) !void {
             fails += 1;
         }
     }
+    // Fair multi-justice
+    {
+        var nl = logic.Netlist.init(gpa);
+        defer nl.deinit();
+        const q0 = try nl.allocNetNamed("q0");
+        const q1 = try nl.allocNetNamed("q1");
+        const d0 = try nl.allocNetNamed("d0");
+        const d1 = try nl.allocNetNamed("d1");
+        try nl.addConst(d0, false);
+        try nl.addGate(.not, &.{q1}, d1);
+        try nl.addLatch(d0, q0, false);
+        try nl.addLatch(d1, q1, false);
+        const r = try logic.kliveness.check(gpa, &nl, &.{ q0, q1 }, 4, 16, 0);
+        if (r.status == .proven_infinite) {
+            std.debug.print("ok  fair multi proven\n", .{});
+        } else {
+            std.debug.print("FAIL fair multi {s}\n", .{@tagName(r.status)});
+            fails += 1;
+        }
+    }
+    // Portfolio + RUP
+    {
+        var cnf = logic.Cnf.init(gpa);
+        defer cnf.deinit();
+        cnf.ensureVars(1);
+        try cnf.addClause(&.{logic.Lit.positive(logic.Var.fromIndex(0))});
+        try cnf.addClause(&.{logic.Lit.negative(logic.Var.fromIndex(0))});
+        var r = try logic.portfolio.solvePortfolioOpts(gpa, &cnf, .{ .proof_on_unsat = true, .total_conflicts = 50_000 });
+        defer if (r.model) |m| gpa.free(m);
+        defer if (r.proof) |*p| {
+            var pp = p.*;
+            pp.deinit();
+        };
+        if (r.status == .unsat) {
+            std.debug.print("ok  portfolio unsat\n", .{});
+        } else {
+            std.debug.print("FAIL portfolio\n", .{});
+            fails += 1;
+        }
+    }
+    // DRAT-trim availability (soft)
+    {
+        if (try logic.drat_external.findDratTrim(gpa)) |p| {
+            defer gpa.free(p);
+            std.debug.print("ok  drat-trim {s}\n", .{p});
+        } else {
+            std.debug.print("ok  drat-trim UNAVAILABLE (optional)\n", .{});
+        }
+    }
     // AIGER write/read
     {
         var nl = logic.Netlist.init(gpa);

@@ -262,6 +262,117 @@ pub fn runBuiltin(allocator: std.mem.Allocator) !GoldenResult {
         const r = try kliveness.proveFairMulti(allocator, &nl, &.{ a, b, c }, 5, 16);
         pass(&res, r.status == .proven_infinite);
     }
+    // 2-bit counter BMC violates at 3
+    {
+        var nl = Netlist.init(allocator);
+        defer nl.deinit();
+        const q0 = try nl.allocNetNamed("q0");
+        const q1 = try nl.allocNetNamed("q1");
+        const d0 = try nl.allocNetNamed("d0");
+        const d1 = try nl.allocNetNamed("d1");
+        const bad = try nl.allocNetNamed("bad");
+        try nl.addGate(.not, &.{q0}, d0);
+        try nl.addGate(.xor, &.{ q1, q0 }, d1);
+        try nl.addGate(.and_, &.{ q1, q0 }, bad);
+        try nl.addLatch(d0, q0, false);
+        try nl.addLatch(d1, q1, false);
+        const r2 = try bmc.check(allocator, &nl, bad, 2);
+        defer if (r2.trace) |t| allocator.free(t);
+        const r3 = try bmc.check(allocator, &nl, bad, 3);
+        defer if (r3.trace) |t| allocator.free(t);
+        pass(&res, r2.status == .safe_up_to_bound and r3.status == .violated);
+    }
+    // aiger write/read roundtrip
+    {
+        const aiger_write = @import("../bridge/aiger_write.zig");
+        var nl = Netlist.init(allocator);
+        defer nl.deinit();
+        const a = try nl.allocNetNamed("a");
+        const b = try nl.allocNetNamed("b");
+        const y = try nl.allocNetNamed("y");
+        try nl.addInput(a);
+        try nl.addInput(b);
+        try nl.addGate(.xor, &.{ a, b }, y);
+        try nl.addOutput(y);
+        const bytes = try aiger_write.writeAsciiSimple(allocator, &nl);
+        defer allocator.free(bytes);
+        var nl2 = try aiger.parse(allocator, bytes);
+        defer nl2.deinit();
+        pass(&res, nl2.inputs.items.len == 2 and nl2.outputs.items.len == 1);
+    }
+    // binary aiger roundtrip
+    {
+        const aiger_write = @import("../bridge/aiger_write.zig");
+        var nl = Netlist.init(allocator);
+        defer nl.deinit();
+        const a = try nl.allocNetNamed("a");
+        const b = try nl.allocNetNamed("b");
+        const y = try nl.allocNetNamed("y");
+        try nl.addInput(a);
+        try nl.addInput(b);
+        try nl.addGate(.and_, &.{ a, b }, y);
+        try nl.addOutput(y);
+        const bytes = try aiger_write.writeBinary(allocator, &nl);
+        defer allocator.free(bytes);
+        pass(&res, std.mem.startsWith(u8, bytes, "aig "));
+        var nl2 = try aiger.parse(allocator, bytes);
+        defer nl2.deinit();
+        pass(&res, nl2.inputs.items.len == 2);
+    }
+    // fair multi + fairness stuck justice proves
+    {
+        var nl = Netlist.init(allocator);
+        defer nl.deinit();
+        const j = try nl.allocNetNamed("j");
+        const f = try nl.allocNetNamed("f");
+        const dj = try nl.allocNetNamed("dj");
+        const df = try nl.allocNetNamed("df");
+        try nl.addConst(dj, false);
+        try nl.addGate(.not, &.{f}, df);
+        try nl.addLatch(dj, j, false);
+        try nl.addLatch(df, f, false);
+        try nl.addJustice(j);
+        try nl.addFairness(f);
+        const r = try kliveness.checkNetlist(allocator, &nl, 4, 16, 0);
+        pass(&res, r.status == .proven_infinite);
+    }
+    // portfolio multi-config sat
+    {
+        var cnf = try dimacs.parse(allocator, "p cnf 3 2\n1 2 0\n-1 3 0\n");
+        defer cnf.deinit();
+        const r = try portfolio.solvePortfolioOpts(allocator, &cnf, .{ .total_conflicts = 50_000, .validate_model = true });
+        defer if (r.model) |m| allocator.free(m);
+        defer if (r.proof) |*p| {
+            var pp = p.*;
+            pp.deinit();
+        };
+        pass(&res, r.status == .sat and r.model_valid and r.configs_tried >= 1);
+    }
+    // nand/nor/xnor blast via netlist cnf
+    {
+        var nl = Netlist.init(allocator);
+        defer nl.deinit();
+        const a = try nl.allocNetNamed("a");
+        const b = try nl.allocNetNamed("b");
+        const y = try nl.allocNetNamed("y");
+        try nl.addInput(a);
+        try nl.addInput(b);
+        try nl.addGate(.nand, &.{ a, b }, y);
+        try nl.addOutput(y);
+        var cnf = try nl.toCnf(allocator);
+        defer cnf.deinit();
+        // force a=1 b=1 y=1 → unsat for nand
+        try cnf.addClause(&.{Lit.positive(Var.fromIndex(a.index()))});
+        try cnf.addClause(&.{Lit.positive(Var.fromIndex(b.index()))});
+        try cnf.addClause(&.{Lit.positive(Var.fromIndex(y.index()))});
+        const r = try solver_mod.solveCnf(allocator, &cnf, .{});
+        defer if (r.model) |m| allocator.free(m);
+        defer if (r.proof) |*p| {
+            var pp = p.*;
+            pp.deinit();
+        };
+        pass(&res, r.status == .unsat);
+    }
 
     return res;
 }
@@ -430,5 +541,5 @@ test "golden builtin all pass" {
     const r = try runBuiltin(std.testing.allocator);
     try std.testing.expect(r.failed == 0);
     try std.testing.expect(r.passed == r.total);
-    try std.testing.expect(r.total >= 14);
+    try std.testing.expect(r.total >= 20);
 }

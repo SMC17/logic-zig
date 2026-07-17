@@ -14,7 +14,9 @@ pub fn main(init: std.process.Init) !void {
             \\logic-hwmcc — AIGER safety/liveness (profile=hwmcc)
             \\  logic-hwmcc track <file.aag|aig> [--frames N]
             \\  logic-hwmcc klive <file.aag> [--max-k K]
+            \\  logic-hwmcc fair-demo
             \\  logic-hwmcc golden
+            \\  logic-hwmcc stack
             \\  logic-hwmcc profile
             \\
         , .{});
@@ -29,6 +31,51 @@ pub fn main(init: std.process.Init) !void {
         const r = try logic.golden.runAll(gpa, io);
         logic.golden.printResult(&r);
         if (r.failed != 0) std.process.exit(1);
+        return;
+    }
+    if (std.mem.eql(u8, cmd, "fair-demo")) {
+        // dual justice: one stuck, one toggle → proven_infinite
+        {
+            var nl = logic.Netlist.init(gpa);
+            defer nl.deinit();
+            const q0 = try nl.allocNetNamed("q0");
+            const q1 = try nl.allocNetNamed("q1");
+            const d0 = try nl.allocNetNamed("d0");
+            const d1 = try nl.allocNetNamed("d1");
+            try nl.addConst(d0, false);
+            try nl.addGate(.not, &.{q1}, d1);
+            try nl.addLatch(d0, q0, false);
+            try nl.addLatch(d1, q1, false);
+            const r = try logic.kliveness.check(gpa, &nl, &.{ q0, q1 }, 4, 16, 0);
+            std.debug.print("fair dead+toggle: {s} k={d}\n", .{ @tagName(r.status), r.k });
+        }
+        // dual toggle lasso
+        {
+            var nl = logic.Netlist.init(gpa);
+            defer nl.deinit();
+            const q0 = try nl.allocNetNamed("q0");
+            const q1 = try nl.allocNetNamed("q1");
+            const d0 = try nl.allocNetNamed("d0");
+            const d1 = try nl.allocNetNamed("d1");
+            try nl.addGate(.not, &.{q0}, d0);
+            try nl.addGate(.xor, &.{ q1, q0 }, d1);
+            try nl.addLatch(d0, q0, false);
+            try nl.addLatch(d1, q1, false);
+            const r = try logic.kliveness.check(gpa, &nl, &.{ q0, q1 }, 1, 8, 8);
+            std.debug.print("fair dual-toggle: {s}\n", .{@tagName(r.status)});
+        }
+        return;
+    }
+    if (std.mem.eql(u8, cmd, "stack")) {
+        // Full stack smoke for this flagship
+        const g = try logic.golden.runAll(gpa, io);
+        logic.golden.printResult(&g);
+        if (g.failed != 0) std.process.exit(1);
+        // track stuck0 fixture
+        const code = try logic.hwmcc_track.runFileOpts(gpa, "corpus/golden/aiger/stuck0.aag", io, .{ .max_frames = 12 });
+        std.debug.print("c track stuck0 exit={d}\n", .{code});
+        if (code == 1) std.process.exit(1); // unsafe would be wrong
+        std.debug.print("STACK_OK\n", .{});
         return;
     }
     if (std.mem.eql(u8, cmd, "track")) {
