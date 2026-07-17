@@ -60,6 +60,7 @@ pub const api = @import("api/v1.zig");
 pub const preprocess = @import("sat/preprocess.zig");
 pub const smt = @import("smt/smt.zig");
 pub const fol_resolution = @import("fol/resolution.zig");
+pub const sat_scoreboard = @import("track/sat_scoreboard.zig");
 
 pub const Lit = lit.Lit;
 pub const Var = lit.Var;
@@ -216,6 +217,7 @@ test {
     _ = preprocess;
     _ = smt;
     _ = fol_resolution;
+    _ = sat_scoreboard;
 }
 
 test "end-to-end tautology a|!a" {

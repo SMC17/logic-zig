@@ -5,6 +5,16 @@ All notable changes to **logic-zig** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/).
 
+## [0.15.1] — 2026-07-16
+
+### Industrial SAT Phase 1
+
+- **Preprocess deep:** BCP fixpoint, pure-literal elim, unit self-subsuming resolution, subsumption
+- **Inprocessing:** `SolverOptions.inprocess_interval` drops satisfied learned clauses
+- **`solveCnf` preprocess flag** for one-shot industrial path
+- **`logic-zig sat-scoreboard`**: frozen suite vs CaDiCaL — mismatches, PAR-2, instance speed
+- CI: scoreboard on `sat` + `sat_comp` samples
+
 ## [0.15.0] — 2026-07-16
 
 ### Industrial program foundation

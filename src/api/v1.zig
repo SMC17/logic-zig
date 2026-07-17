@@ -109,6 +109,9 @@ pub fn satCnf(
         .max_conflicts = opts.max_conflicts,
         .proof = opts.proof,
         .complete_model = true,
+        .preprocess = false, // already applied above when opts.preprocess
+        .inprocess_interval = 2000,
+        .pure_literal = true,
     });
 }
 
