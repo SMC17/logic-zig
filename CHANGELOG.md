@@ -5,6 +5,16 @@ All notable changes to **logic-zig** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/).
 
+## [0.13.1] — 2026-07-16
+
+### Climb
+
+- Structured agent warm-cold (`--structured`) for related assumption refinements
+- Designs: mutex + constraint, 5-bit counter teeth, multi-stuck5 certs
+- HWMCC `--cert`: emit verified inductive invariant on proven
+- `logic-hwmcc designs-demo`
+- Trust report: sequential ok=6; golden **51/51**
+
 ## [0.13.0] — 2026-07-16
 
 ### Trust · Agent · Sequential teeth

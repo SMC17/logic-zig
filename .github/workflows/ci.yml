@@ -37,10 +37,13 @@ jobs:
         run: |
           ./zig-out/bin/logic-agent stress --queries 500 --vars 10
           ./zig-out/bin/logic-agent warm-cold --queries 100 --vars 8
-      - name: HWMCC stack + fair-demo
+          ./zig-out/bin/logic-agent warm-cold --structured --queries 120 --vars 12
+      - name: HWMCC stack + fair-demo + designs + cert
         run: |
           ./zig-out/bin/logic-hwmcc fair-demo
+          ./zig-out/bin/logic-hwmcc designs-demo
           ./zig-out/bin/logic-hwmcc stack
+          ./zig-out/bin/logic-hwmcc track corpus/golden/aiger/stuck0.aag --frames 12 --cert
       - name: Spin-off smoke
         run: |
           ./zig-out/bin/logic-agent session-demo

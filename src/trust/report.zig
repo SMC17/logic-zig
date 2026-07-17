@@ -123,7 +123,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io) !TrustReport {
         } else rep.pdr_certs_fail += 1;
     }
 
-    // --- Sequential teeth: counter BMC + multi-stuck PDR ---
+    // --- Sequential teeth: counter BMC + multi-stuck PDR + mutex ---
     {
         var c = try designs.makeCounter(allocator, 3);
         defer c.nl.deinit();
@@ -136,16 +136,37 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io) !TrustReport {
         defer c.nl.deinit();
         const r = try bmc.check(allocator, &c.nl, c.bad, 14);
         defer if (r.trace) |t| allocator.free(t);
-        // 4-bit all-1 at 15
         const r15 = try bmc.check(allocator, &c.nl, c.bad, 15);
         defer if (r15.trace) |t| allocator.free(t);
         if (r.status == .safe_up_to_bound and r15.status == .violated) rep.sequential_ok += 1 else rep.sequential_fail += 1;
     }
     {
+        var c = try designs.makeCounter(allocator, 5);
+        defer c.nl.deinit();
+        const r30 = try bmc.check(allocator, &c.nl, c.bad, 30);
+        defer if (r30.trace) |t| allocator.free(t);
+        const r31 = try bmc.check(allocator, &c.nl, c.bad, 31);
+        defer if (r31.trace) |t| allocator.free(t);
+        if (r30.status == .safe_up_to_bound and r31.status == .violated) rep.sequential_ok += 1 else rep.sequential_fail += 1;
+    }
+    {
         var s = try designs.makeShift(allocator, 4);
         defer s.nl.deinit();
-        // can reach bad in 4 steps with input 1s
         const r = try bmc.check(allocator, &s.nl, s.bad, 4);
+        defer if (r.trace) |t| allocator.free(t);
+        if (r.status == .violated) rep.sequential_ok += 1 else rep.sequential_fail += 1;
+    }
+    {
+        var m = try designs.makeMutex(allocator, true);
+        defer m.nl.deinit();
+        const r = try bmc.check(allocator, &m.nl, m.bad, 8);
+        defer if (r.trace) |t| allocator.free(t);
+        if (r.status == .safe_up_to_bound) rep.sequential_ok += 1 else rep.sequential_fail += 1;
+    }
+    {
+        var m = try designs.makeMutex(allocator, false);
+        defer m.nl.deinit();
+        const r = try bmc.check(allocator, &m.nl, m.bad, 2);
         defer if (r.trace) |t| allocator.free(t);
         if (r.status == .violated) rep.sequential_ok += 1 else rep.sequential_fail += 1;
     }

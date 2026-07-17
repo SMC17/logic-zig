@@ -15,7 +15,7 @@ pub fn main(init: std.process.Init) !void {
             \\  logic-agent multishot [--queries N] [--vars V]
             \\  logic-agent session-demo
             \\  logic-agent stress [--queries N] [--vars V]
-            \\  logic-agent warm-cold [--queries N] [--vars V]
+            \\  logic-agent warm-cold [--queries N] [--vars V] [--structured]
             \\  logic-agent assume-demo
             \\  logic-agent profile
             \\
@@ -63,16 +63,23 @@ pub fn main(init: std.process.Init) !void {
     if (std.mem.eql(u8, cmd, "warm-cold")) {
         var queries: u32 = 200;
         var nvars: u32 = 10;
+        var structured = false;
         while (iter.next()) |a| {
             if (std.mem.eql(u8, a, "--queries")) queries = try std.fmt.parseInt(u32, iter.next() orelse "200", 10);
             if (std.mem.eql(u8, a, "--vars")) nvars = try std.fmt.parseInt(u32, iter.next() orelse "10", 10);
+            if (std.mem.eql(u8, a, "--structured")) structured = true;
         }
-        const c = try logic.agent_session.compareWarmCold(gpa, nvars, queries, 0xC01D);
-        std.debug.print("WARM_COLD queries={d} warm_conflicts={d} cold_conflicts={d} ratio={d:.2}\n", .{
+        const c = if (structured)
+            try logic.agent_session.compareWarmColdStructured(gpa, @max(nvars, 8), queries)
+        else
+            try logic.agent_session.compareWarmCold(gpa, nvars, queries, 0xC01D);
+        const ratio = if (c.cold_conflicts == 0) 1.0 else @as(f64, @floatFromInt(c.warm_conflicts)) / @as(f64, @floatFromInt(c.cold_conflicts));
+        std.debug.print("WARM_COLD mode={s} queries={d} warm_conflicts={d} cold_conflicts={d} ratio={d:.2}\n", .{
+            c.mode,
             c.warm_queries,
             c.warm_conflicts,
             c.cold_conflicts,
-            if (c.cold_conflicts == 0) 1.0 else @as(f64, @floatFromInt(c.warm_conflicts)) / @as(f64, @floatFromInt(c.cold_conflicts)),
+            ratio,
         });
         return;
     }

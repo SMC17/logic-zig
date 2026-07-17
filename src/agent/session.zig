@@ -175,17 +175,62 @@ pub const Session = struct {
     }
 };
 
-/// Cold vs warm multishot: same query sequence, report conflict totals.
+const WarmCold = struct {
+    warm_conflicts: u64,
+    cold_conflicts: u64,
+    warm_queries: u32,
+    mode: []const u8 = "random",
+};
+
+fn runWarmColdSequences(
+    allocator: std.mem.Allocator,
+    formula: *const Cnf,
+    sequences: []const []Lit,
+    mode: []const u8,
+) !WarmCold {
+    var warm = Session.init(allocator);
+    defer warm.deinit();
+    warm.ensureVars(formula.num_vars);
+    var ci: u32 = 0;
+    while (ci < formula.numClauses()) : (ci += 1) {
+        try warm.addClause(formula.clauseSlice(cnf_mod.ClauseId.fromIndex(ci)));
+    }
+    for (sequences) |ass| {
+        var r = try warm.query(ass);
+        r.deinit(allocator);
+    }
+
+    var cold_conf: u64 = 0;
+    for (sequences) |ass| {
+        var eng = try Solver.init(allocator, &formula.*, profiles.get(.agent).solver);
+        defer eng.deinit();
+        const r = try eng.solveAssumptions(ass);
+        cold_conf += r.conflicts;
+        if (r.model) |m| allocator.free(m);
+        if (r.assumption_core) |core| allocator.free(core);
+        if (r.proof) |*p| {
+            var pp = p.*;
+            pp.deinit();
+        }
+    }
+    return .{
+        .warm_conflicts = warm.total_conflicts,
+        .cold_conflicts = cold_conf,
+        .warm_queries = warm.queries,
+        .mode = mode,
+    };
+}
+
+/// Cold vs warm: **random** assumptions (can thrash warm with junk lemmas).
 pub fn compareWarmCold(
     allocator: std.mem.Allocator,
     n_vars: u32,
     n_queries: u32,
     seed: u64,
-) !struct { warm_conflicts: u64, cold_conflicts: u64, warm_queries: u32 } {
+) !WarmCold {
     var prng = std.Random.DefaultPrng.init(seed);
     const rng = prng.random();
 
-    // Fixed formula
     var formula = Cnf.init(allocator);
     defer formula.deinit();
     formula.ensureVars(n_vars);
@@ -199,7 +244,6 @@ pub fn compareWarmCold(
         try formula.addClause(&cl);
     }
 
-    // Pre-generate assumption sequences
     var sequences: std.ArrayList([]Lit) = .empty;
     defer {
         for (sequences.items) |s| allocator.free(s);
@@ -215,40 +259,61 @@ pub fn compareWarmCold(
         }
         try sequences.append(allocator, ass);
     }
+    return runWarmColdSequences(allocator, &formula, sequences.items, "random");
+}
 
-    // Warm session
-    var warm = Session.init(allocator);
-    defer warm.deinit();
-    warm.ensureVars(n_vars);
-    var ci: u32 = 0;
-    while (ci < formula.numClauses()) : (ci += 1) {
-        try warm.addClause(formula.clauseSlice(cnf_mod.ClauseId.fromIndex(ci)));
+/// Structured agent workload: base (x0 ∨ x1 ∨ …) clauses + assumptions that
+/// **grow a unit trail** on the same vars (related queries). Warm should win.
+pub fn compareWarmColdStructured(
+    allocator: std.mem.Allocator,
+    n_vars: u32,
+    n_queries: u32,
+) !WarmCold {
+    std.debug.assert(n_vars >= 4);
+    var formula = Cnf.init(allocator);
+    defer formula.deinit();
+    formula.ensureVars(n_vars);
+    // Horn-ish: (~xi ∨ x{i+1}) chain + (x0 ∨ x1 ∨ x2)
+    try formula.addClause(&.{
+        Lit.positive(Var.fromIndex(0)),
+        Lit.positive(Var.fromIndex(1)),
+        Lit.positive(Var.fromIndex(2)),
+    });
+    var i: u32 = 0;
+    while (i + 1 < n_vars) : (i += 1) {
+        try formula.addClause(&.{
+            Lit.negative(Var.fromIndex(i)),
+            Lit.positive(Var.fromIndex(i + 1)),
+        });
     }
-    for (sequences.items) |ass| {
-        var r = try warm.query(ass);
-        r.deinit(allocator);
+    // Extra redundant clauses to give learning room
+    i = 0;
+    while (i + 2 < n_vars) : (i += 1) {
+        try formula.addClause(&.{
+            Lit.negative(Var.fromIndex(i)),
+            Lit.negative(Var.fromIndex(i + 1)),
+            Lit.positive(Var.fromIndex(i + 2)),
+        });
     }
 
-    // Cold: fresh solver each query
-    var cold_conf: u64 = 0;
-    for (sequences.items) |ass| {
-        var eng = try Solver.init(allocator, &formula, profiles.get(.agent).solver);
-        defer eng.deinit();
-        const r = try eng.solveAssumptions(ass);
-        cold_conf += r.conflicts;
-        if (r.model) |m| allocator.free(m);
-        if (r.assumption_core) |core| allocator.free(core);
-        if (r.proof) |*p| {
-            var pp = p.*;
-            pp.deinit();
+    var sequences: std.ArrayList([]Lit) = .empty;
+    defer {
+        for (sequences.items) |s| allocator.free(s);
+        sequences.deinit(allocator);
+    }
+    // Query k: assume ~x0, ~x1, ... for first (k % n_vars) then force conflict variants
+    i = 0;
+    while (i < n_queries) : (i += 1) {
+        const depth = 1 + (i % (n_vars / 2));
+        const ass = try allocator.alloc(Lit, depth);
+        var j: u32 = 0;
+        while (j < depth) : (j += 1) {
+            // Growing prefix of negative assumptions — related refinements
+            ass[j] = Lit.negative(Var.fromIndex(j));
         }
+        try sequences.append(allocator, ass);
     }
-
-    return .{
-        .warm_conflicts = warm.total_conflicts,
-        .cold_conflicts = cold_conf,
-        .warm_queries = warm.queries,
-    };
+    return runWarmColdSequences(allocator, &formula, sequences.items, "structured");
 }
 
 test "agent session multishot cores" {
@@ -281,6 +346,15 @@ test "agent stress 200 queries" {
 test "warm vs cold multishot runs" {
     const c = try compareWarmCold(std.testing.allocator, 6, 40, 0xC01D);
     try std.testing.expect(c.warm_queries == 40);
-    // Warm should not explode; both should finish
     try std.testing.expect(c.warm_conflicts < 10_000_000);
+}
+
+test "structured warm not worse than cold by huge margin" {
+    const c = try compareWarmColdStructured(std.testing.allocator, 12, 60);
+    try std.testing.expect(c.warm_queries == 60);
+    try std.testing.expectEqualStrings("structured", c.mode);
+    // Structured related assumptions: warm should be competitive (≤ 3× cold)
+    if (c.cold_conflicts > 0) {
+        try std.testing.expect(c.warm_conflicts <= c.cold_conflicts * 3 + 100);
+    }
 }
