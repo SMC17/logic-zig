@@ -20,6 +20,7 @@
 const std = @import("std");
 const cnf_mod = @import("../sat/cnf.zig");
 const solver_mod = @import("../sat/solver.zig");
+const maxsat = @import("../sat/maxsat.zig");
 const lit_mod = @import("../core/lit.zig");
 
 const Cnf = cnf_mod.Cnf;
@@ -244,6 +245,190 @@ fn litLess(_: void, a: Lit, b: Lit) bool {
     return ad < bd;
 }
 
+// ── Cost-ranked abduction ────────────────────────────────────────────
+
+pub const CostOptions = struct {
+    /// Per-abducible weights (parallel to `abducibles`); empty → all 1,
+    /// i.e. cardinality-minimal. Zero weights are allowed but mean the
+    /// optimum may include cost-free abducibles.
+    weights: []const u32 = &.{},
+    /// Hitting-set refinement rounds before giving up.
+    max_rounds: u32 = 1024,
+};
+
+pub const MinCostResult = struct {
+    allocator: std.mem.Allocator,
+    status: Status = .ok,
+    /// Cost-optimal valid explanation (entails O, consistent with B), or null
+    /// when none exists / not found within rounds. Owned, sorted by DIMACS.
+    explanation: ?[]Lit = null,
+    cost: u64 = 0,
+    /// Optimum proven: every hitting-set probe solved to MaxSAT optimality
+    /// and the returned candidate closed the duality gap.
+    optimal: bool = false,
+    entailed_without_hypothesis: bool = false,
+
+    pub fn deinit(self: *MinCostResult) void {
+        if (self.explanation) |e| self.allocator.free(e);
+        self.* = undefined;
+    }
+};
+
+/// Minimum-cost abduction via the implicit hitting-set duality:
+/// H entails O iff H hits every MCS (complement of a maximal non-entailing
+/// subset). Iterate: min-cost hitting set of known MCSes (MaxSAT) → if the
+/// candidate entails and is consistent it is cost-optimal (the hitting-set
+/// optimum lower-bounds every valid explanation); if it fails entailment,
+/// grow it to an MSS and record the new MCS; if it entails but is
+/// inconsistent with B, block that exact set and continue.
+pub fn abduceMinCost(
+    allocator: std.mem.Allocator,
+    background: *const Cnf,
+    observation: []const Lit,
+    abducibles: []const Lit,
+    opts: CostOptions,
+) !MinCostResult {
+    std.debug.assert(opts.weights.len == 0 or opts.weights.len == abducibles.len);
+    var result = MinCostResult{ .allocator = allocator };
+    errdefer result.deinit();
+
+    var work = try cloneCnf(allocator, background);
+    defer work.deinit();
+    for (observation) |l| work.ensureVars(l.variable().index() + 1);
+    for (abducibles) |l| work.ensureVars(l.variable().index() + 1);
+    {
+        var neg_obs: std.ArrayList(Lit) = .empty;
+        defer neg_obs.deinit(allocator);
+        for (observation) |l| try neg_obs.append(allocator, l.not());
+        try work.addClause(neg_obs.items);
+    }
+    var back = try cloneCnf(allocator, background);
+    defer back.deinit();
+    back.ensureVars(work.num_vars);
+
+    var main = try Solver.init(allocator, &work, .{});
+    defer main.deinit();
+    var cons = try Solver.init(allocator, &back, .{});
+    defer cons.deinit();
+
+    {
+        const r = try cons.solveAssumptions(&.{});
+        defer if (r.model) |m| allocator.free(m);
+        if (r.status != .sat) {
+            result.status = .inconsistent_background;
+            return result;
+        }
+    }
+    {
+        const r = try main.solveAssumptions(&.{});
+        defer if (r.model) |m| allocator.free(m);
+        if (r.status == .unsat) {
+            result.entailed_without_hypothesis = true;
+            result.optimal = true;
+            result.explanation = try allocator.alloc(Lit, 0);
+            return result;
+        }
+    }
+    {
+        const r = try main.solveAssumptions(abducibles);
+        defer if (r.model) |m| allocator.free(m);
+        defer if (r.assumption_core) |c| allocator.free(c);
+        if (r.status == .sat) {
+            result.optimal = true; // provably no explanation at any cost
+            return result;
+        }
+    }
+
+    const m: u32 = @intCast(abducibles.len);
+    // Hitting-set side: selector var i ⇔ abducible i chosen.
+    var hs_hard = Cnf.init(allocator);
+    defer hs_hard.deinit();
+    hs_hard.ensureVars(m);
+    var soft = try allocator.alloc(maxsat.SoftClause, m);
+    defer allocator.free(soft);
+    var soft_lits = try allocator.alloc([1]Lit, m);
+    defer allocator.free(soft_lits);
+    for (0..m) |i| {
+        soft_lits[i] = .{Lit.negative(Var.fromIndex(@intCast(i)))};
+        soft[i] = .{
+            .lits = &soft_lits[i],
+            .weight = if (opts.weights.len > 0) opts.weights[i] else 1,
+        };
+    }
+
+    var cand_lits: std.ArrayList(Lit) = .empty;
+    defer cand_lits.deinit(allocator);
+    var block: std.ArrayList(Lit) = .empty;
+    defer block.deinit(allocator);
+    var all_probes_optimal = true;
+
+    var round: u32 = 0;
+    while (round < opts.max_rounds) : (round += 1) {
+        var hs = try maxsat.solve(allocator, &hs_hard, soft, .{});
+        defer hs.deinit();
+        if (hs.status == .unsat_hard) return result; // every subset blocked
+        if (hs.status != .optimal) all_probes_optimal = false;
+        const model = hs.model orelse return result;
+
+        cand_lits.clearRetainingCapacity();
+        var in_cand = try allocator.alloc(bool, m);
+        defer allocator.free(in_cand);
+        @memset(in_cand, false);
+        for (0..m) |i| {
+            if (model[i] == .true_) {
+                in_cand[i] = true;
+                try cand_lits.append(allocator, abducibles[i]);
+            }
+        }
+
+        const er = try main.solveAssumptions(cand_lits.items);
+        defer if (er.model) |mm| allocator.free(mm);
+        defer if (er.assumption_core) |c| allocator.free(c);
+
+        if (er.status == .unsat) {
+            const cr = try cons.solveAssumptions(cand_lits.items);
+            defer if (cr.model) |mm| allocator.free(mm);
+            defer if (cr.assumption_core) |c| allocator.free(c);
+            if (cr.status == .sat) {
+                const owned = try allocator.dupe(Lit, cand_lits.items);
+                std.mem.sort(Lit, owned, {}, litLess);
+                result.explanation = owned;
+                result.cost = hs.cost;
+                result.optimal = all_probes_optimal;
+                return result;
+            }
+            // Entailing but inconsistent: block exactly this set.
+            block.clearRetainingCapacity();
+            for (0..m) |i| {
+                const v = Var.fromIndex(@intCast(i));
+                try block.append(allocator, if (in_cand[i]) Lit.negative(v) else Lit.positive(v));
+            }
+            try hs_hard.addClause(block.items);
+        } else {
+            // Not entailing: grow to MSS, record its complement as a new MCS.
+            for (0..m) |i| {
+                if (in_cand[i]) continue;
+                try cand_lits.append(allocator, abducibles[i]);
+                const gr = try main.solveAssumptions(cand_lits.items);
+                defer if (gr.model) |mm| allocator.free(mm);
+                defer if (gr.assumption_core) |c| allocator.free(c);
+                if (gr.status == .sat) {
+                    in_cand[i] = true;
+                } else {
+                    _ = cand_lits.pop();
+                }
+            }
+            block.clearRetainingCapacity();
+            for (0..m) |i| {
+                if (!in_cand[i]) try block.append(allocator, Lit.positive(Var.fromIndex(@intCast(i))));
+            }
+            std.debug.assert(block.items.len > 0); // full set entails (pre-checked)
+            try hs_hard.addClause(block.items);
+        }
+    }
+    return result;
+}
+
 /// Deductive certificate for one explanation: B ∧ H ⊨ O and B ∧ H is SAT.
 /// The re-check uses fresh solvers, so it is independent of enumeration state.
 pub fn verifyExplanation(
@@ -404,6 +589,146 @@ test "abduce: inconsistent background reported" {
     var r = try abduce(testing.allocator, &b, &.{lp(1)}, &.{lp(2)}, .{});
     defer r.deinit();
     try testing.expect(r.status == .inconsistent_background);
+}
+
+/// Test oracle: brute-force min-cost valid explanation over the power set.
+fn bruteMinCost(
+    allocator: std.mem.Allocator,
+    background: *const Cnf,
+    observation: []const Lit,
+    abducibles: []const Lit,
+    weights: []const u32,
+) !?u64 {
+    var best: ?u64 = null;
+    const total: u32 = @as(u32, 1) << @intCast(abducibles.len);
+    var subset: std.ArrayList(Lit) = .empty;
+    defer subset.deinit(allocator);
+    var mask: u32 = 0;
+    while (mask < total) : (mask += 1) {
+        subset.clearRetainingCapacity();
+        var cost: u64 = 0;
+        for (abducibles, 0..) |a, i| {
+            if ((mask >> @intCast(i)) & 1 == 1) {
+                try subset.append(allocator, a);
+                cost += if (weights.len > 0) weights[i] else 1;
+            }
+        }
+        if (best != null and cost >= best.?) continue;
+        if (try verifyExplanation(allocator, background, observation, subset.items)) {
+            best = cost;
+        }
+    }
+    return best;
+}
+
+test "abduce min-cost: weighted picks the cheap pair over the pricey singleton" {
+    // a→o and b∧c→o; w(a)=5, w(b)=w(c)=1 → optimum {b,c} cost 2.
+    var b = Cnf.init(testing.allocator);
+    defer b.deinit();
+    try b.addClause(&.{ ln(0), lp(3) });
+    try b.addClause(&.{ ln(1), ln(2), lp(3) });
+    const abds = [_]Lit{ lp(0), lp(1), lp(2) };
+    const w = [_]u32{ 5, 1, 1 };
+    var r = try abduceMinCost(testing.allocator, &b, &.{lp(3)}, &abds, .{ .weights = &w });
+    defer r.deinit();
+    try testing.expect(r.optimal);
+    try testing.expectEqual(@as(u64, 2), r.cost);
+    try testing.expectEqual(@as(usize, 2), r.explanation.?.len);
+    try testing.expect(r.explanation.?[0] == lp(1) and r.explanation.?[1] == lp(2));
+    const brute = try bruteMinCost(testing.allocator, &b, &.{lp(3)}, &abds, &w);
+    try testing.expectEqual(brute.?, r.cost);
+}
+
+test "abduce min-cost: cardinality default picks the singleton" {
+    var b = Cnf.init(testing.allocator);
+    defer b.deinit();
+    try b.addClause(&.{ ln(0), lp(3) });
+    try b.addClause(&.{ ln(1), ln(2), lp(3) });
+    const abds = [_]Lit{ lp(0), lp(1), lp(2) };
+    var r = try abduceMinCost(testing.allocator, &b, &.{lp(3)}, &abds, .{});
+    defer r.deinit();
+    try testing.expect(r.optimal);
+    try testing.expectEqual(@as(u64, 1), r.cost);
+    try testing.expect(r.explanation.?[0] == lp(0));
+}
+
+test "abduce min-cost: inconsistent cheapest is skipped for the next valid" {
+    // a→o but ¬a in B; b→o. w(a)=1, w(b)=3 → {a} entails but inconsistent → {b}.
+    var b = Cnf.init(testing.allocator);
+    defer b.deinit();
+    try b.addClause(&.{ ln(0), lp(2) });
+    try b.addClause(&.{ln(0)});
+    try b.addClause(&.{ ln(1), lp(2) });
+    const abds = [_]Lit{ lp(0), lp(1) };
+    const w = [_]u32{ 1, 3 };
+    var r = try abduceMinCost(testing.allocator, &b, &.{lp(2)}, &abds, .{ .weights = &w });
+    defer r.deinit();
+    try testing.expect(r.optimal);
+    try testing.expectEqual(@as(u64, 3), r.cost);
+    try testing.expect(r.explanation.?[0] == lp(1));
+    const brute = try bruteMinCost(testing.allocator, &b, &.{lp(2)}, &abds, &w);
+    try testing.expectEqual(brute.?, r.cost);
+}
+
+test "abduce min-cost: entailed already → empty at cost 0" {
+    var b = Cnf.init(testing.allocator);
+    defer b.deinit();
+    try b.addClause(&.{lp(1)});
+    var r = try abduceMinCost(testing.allocator, &b, &.{lp(1)}, &.{lp(0)}, .{});
+    defer r.deinit();
+    try testing.expect(r.entailed_without_hypothesis);
+    try testing.expect(r.optimal);
+    try testing.expectEqual(@as(u64, 0), r.cost);
+    try testing.expectEqual(@as(usize, 0), r.explanation.?.len);
+}
+
+test "abduce min-cost: no explanation reachable" {
+    var b = Cnf.init(testing.allocator);
+    defer b.deinit();
+    try b.addClause(&.{ ln(0), lp(2) });
+    b.ensureVars(4);
+    var r = try abduceMinCost(testing.allocator, &b, &.{lp(2)}, &.{lp(3)}, .{});
+    defer r.deinit();
+    try testing.expect(r.optimal);
+    try testing.expect(r.explanation == null);
+}
+
+test "abduce min-cost: random instances match brute force" {
+    var prng = std.Random.DefaultPrng.init(0xABDCE);
+    const rand = prng.random();
+    var instance: u32 = 0;
+    while (instance < 25) : (instance += 1) {
+        // Vars 0..3 abducible, 4..5 intermediate, obs var 5.
+        var b = Cnf.init(testing.allocator);
+        defer b.deinit();
+        b.ensureVars(6);
+        const n_cl = 2 + rand.uintLessThan(u32, 5);
+        var cbuf: [3]Lit = undefined;
+        for (0..n_cl) |_| {
+            const len = 2 + rand.uintLessThan(u32, 2);
+            for (0..len - 1) |i| {
+                const v = rand.uintLessThan(u32, 5);
+                cbuf[i] = if (rand.uintLessThan(u32, 4) == 0) lp(v) else ln(v);
+            }
+            cbuf[len - 1] = if (rand.boolean()) lp(4 + rand.uintLessThan(u32, 2)) else lp(rand.uintLessThan(u32, 6));
+            try b.addClause(cbuf[0..len]);
+        }
+        const abds = [_]Lit{ lp(0), lp(1), lp(2), lp(3) };
+        var w: [4]u32 = undefined;
+        for (0..4) |i| w[i] = 1 + rand.uintLessThan(u32, 5);
+        var r = try abduceMinCost(testing.allocator, &b, &.{lp(5)}, &abds, .{ .weights = &w });
+        defer r.deinit();
+        if (r.status == .inconsistent_background) continue;
+        const brute = try bruteMinCost(testing.allocator, &b, &.{lp(5)}, &abds, &w);
+        if (brute) |opt| {
+            try testing.expect(r.explanation != null);
+            try testing.expect(r.optimal);
+            try testing.expectEqual(opt, r.cost);
+            try testing.expect(try verifyExplanation(testing.allocator, &b, &.{lp(5)}, r.explanation.?));
+        } else {
+            try testing.expect(r.explanation == null);
+        }
+    }
 }
 
 test "abduce: negative abducible literals" {

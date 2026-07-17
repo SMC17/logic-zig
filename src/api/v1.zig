@@ -26,8 +26,8 @@ const agent_session = @import("../agent/session.zig");
 
 /// API major.minor — bump minor for additive; major requires new module path.
 pub const version_major: u32 = 1;
-pub const version_minor: u32 = 1;
-pub const version_string = "1.1.0";
+pub const version_minor: u32 = 2;
+pub const version_string = "1.2.0";
 
 /// Feature bits — consumers can feature-detect without parsing docs.
 pub const Capability = packed struct(u32) {
@@ -53,7 +53,13 @@ pub const Capability = packed struct(u32) {
     abc_interop: bool = true,
     reason_abduce: bool = true, // subset-minimal propositional abduction
     reason_induce: bool = true, // SAT-based k-term DNF inductive synthesis
-    _pad: u10 = 0,
+    sat_maxsat: bool = true, // weighted partial MaxSAT (exact, small-scale)
+    reason_abduce_cost: bool = true, // min-cost abduction (implicit hitting set)
+    reason_alp: bool = true, // first-order abductive logic programming
+    reason_bayes: bool = true, // exact Bayesian induction over conjunctions
+    reason_default: bool = true, // Reiter default-logic extensions
+    reason_klm: bool = true, // KLM rational closure
+    _pad: u4 = 0,
 
     pub fn current() Capability {
         return .{};
@@ -271,6 +277,35 @@ pub const induceDnf = induction_mod.induceDnf;
 pub const InduceResult = induction_mod.Result;
 pub const InduceExample = induction_mod.Example;
 
+const maxsat_mod = @import("../sat/maxsat.zig");
+const alp_mod = @import("../reason/alp.zig");
+const bayes_mod = @import("../reason/bayes.zig");
+const default_mod = @import("../reason/default_logic.zig");
+const klm_mod = @import("../reason/klm.zig");
+
+/// Optimization: weighted partial MaxSAT (exact on small instances).
+pub const maxsatSolve = maxsat_mod.solve;
+pub const MaxsatSoft = maxsat_mod.SoftClause;
+
+/// Cost-ranked abduction: cardinality/weighted-minimal explanations.
+pub const abduceMinCost = abduction_mod.abduceMinCost;
+
+/// First-order abduction: SLD over definite Horn programs with denials.
+pub const alpAbduce = alp_mod.abduce;
+pub const AlpProgram = alp_mod.Program;
+pub const AlpClause = alp_mod.Clause;
+
+/// Statistical induction: exact posterior, MAP, predictive averaging.
+pub const bayesPosterior = bayes_mod.posterior;
+pub const laplaceSuccession = bayes_mod.laplace;
+
+/// Nonmonotonic: Reiter default extensions; KLM rational closure.
+pub const defaultExtensions = default_mod.extensions;
+pub const DefaultRule = default_mod.Default;
+pub const klmRank = klm_mod.rank;
+pub const klmQuery = klm_mod.query;
+pub const KlmConditional = klm_mod.Conditional;
+
 test "api v1 version and caps" {
     const line = try versionLine(std.testing.allocator);
     defer std.testing.allocator.free(line);
@@ -281,6 +316,10 @@ test "api v1 version and caps" {
     try std.testing.expect(caps.smt_uf);
     try std.testing.expect(caps.reason_abduce);
     try std.testing.expect(caps.reason_induce);
+    try std.testing.expect(caps.sat_maxsat);
+    try std.testing.expect(caps.reason_alp);
+    try std.testing.expect(caps.reason_default);
+    try std.testing.expect(caps.reason_klm);
 }
 
 test "api v1 sat unsat" {
