@@ -39,6 +39,10 @@ jobs:
           ./zig-out/bin/logic-zig sat-track corpus/bench/sat/simple_sat.cnf --max-conflicts 100000
           ./zig-out/bin/logic-zig sat-track corpus/bench/sat_comp/false.cnf --portfolio --budget 100000 --proof
           ./zig-out/bin/logic-zig sat-track corpus/bench/sat_comp/ph3.cnf --portfolio --budget 200000
+      - name: Industrial SAT scoreboard vs CaDiCaL
+        run: |
+          ./zig-out/bin/logic-zig sat-scoreboard --dir corpus/bench/sat --limit 20 --conflicts 150000
+          ./zig-out/bin/logic-zig sat-scoreboard --dir corpus/bench/sat_comp --limit 15 --conflicts 200000
       - name: Agent multishot stress
         run: |
           ./zig-out/bin/logic-agent stress --queries 500 --vars 10
