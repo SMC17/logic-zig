@@ -5,6 +5,17 @@ All notable changes to **logic-zig** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/).
 
+## [0.12.3] — 2026-07-16
+
+### Added
+
+- AIGER goldens: `hold_true`/`hold_false`, `dual_stuck`, `and2_bad_ext`
+- Golden **44/44** (builtin expansion + fuller manifest)
+- `logic-hwmcc fair-demo` + **`stack`** (golden + track stuck0)
+- Doctor: fair multi, portfolio, drat-trim
+- CI: sat_hard sample, hwmcc stack, track fixtures
+- Builtin: counter BMC bounds, aag/aig write roundtrip, nand unsat
+
 ## [0.12.2] — 2026-07-16
 
 ### Added
