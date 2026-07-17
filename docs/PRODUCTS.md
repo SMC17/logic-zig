@@ -33,6 +33,18 @@ that each pin a named optimization **profile** and a coherent tradeoff surface.
 | **A** CI, golden, doctor, differential hooks | ✓ CI workflow, `golden`, ABC probe | Need ABC installed for baseline |
 | **B** certificates, PDR stack, BTOR2/Yosys | ✓ cert module, btor2 micro, PDR | Invariant export still kind-backed |
 | **C** portfolio, CTL, BV-SMT, ABC interop | ✓ modules + spin-offs | Not Kissat/ABC/nuXmv parity |
+| **Industrial program** | `api/v1` · preprocess · SMT facade · FOL resolution | See [INDUSTRIAL.md](INDUSTRIAL.md) |
+
+## Stable API
+
+Prefer `@import("logic").api` (`src/api/v1.zig`) for long-lived integrations:
+
+```zig
+const api = @import("logic").api;
+// api.version_string, api.Capability.current()
+// api.satDimacs(allocator, src, .{ .preprocess = true })
+// api.mcAiger(allocator, aig_src, .{ .cert = true })
+```
 
 ## Build
 
