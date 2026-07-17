@@ -26,7 +26,7 @@ pub fn main(init: std.process.Init) !void {
         return;
     }
     if (std.mem.eql(u8, cmd, "golden")) {
-        const r = try logic.golden.runBuiltin(gpa);
+        const r = try logic.golden.runAll(gpa, io);
         logic.golden.printResult(&r);
         if (r.failed != 0) std.process.exit(1);
         return;
