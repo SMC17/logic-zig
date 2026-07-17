@@ -153,8 +153,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/ENGINES.md](docs/ENGI
 
 ```text
 logic-zig sat <formula | --file f.cnf> [--proof]
-logic-zig sat-track <f.cnf>
-logic-zig hwmcc-track <f.aag|aig> [--frames N] [--each] [--justice] [--lasso]
+logic-zig sat-track <f.cnf> [--max-conflicts N] [--portfolio] [--proof] [--quiet]
+logic-zig hwmcc-track <f.aag|aig> [--frames N] [--each] [--justice] [--lasso] [--cert] [--no-kind]
 logic-zig fuzz · miter · unify · eval · cnf · tautology · equiv
 logic-zig bmc-demo · kind-demo · pdr-demo · justice-demo · klive-demo
 logic-zig aiger · aiger-write [--binary] [--extended]

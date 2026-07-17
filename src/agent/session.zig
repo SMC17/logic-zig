@@ -262,58 +262,70 @@ pub fn compareWarmCold(
     return runWarmColdSequences(allocator, &formula, sequences.items, "random");
 }
 
-/// Structured agent workload: base (x0 ∨ x1 ∨ …) clauses + assumptions that
-/// **grow a unit trail** on the same vars (related queries). Warm should win.
+/// Structured agent workload: pigeon-style + related assumption refinements.
+/// Warm reuses lemmas across similar queries; cold rebuilds every time.
 pub fn compareWarmColdStructured(
     allocator: std.mem.Allocator,
     n_vars: u32,
     n_queries: u32,
 ) !WarmCold {
-    std.debug.assert(n_vars >= 4);
+    std.debug.assert(n_vars >= 6);
     var formula = Cnf.init(allocator);
     defer formula.deinit();
     formula.ensureVars(n_vars);
-    // Horn-ish: (~xi ∨ x{i+1}) chain + (x0 ∨ x1 ∨ x2)
+    // Dense-ish related structure so learning helps subsequent similar assumes
+    var i: u32 = 0;
+    while (i < n_vars) : (i += 1) {
+        var j = i + 1;
+        while (j < n_vars and j < i + 4) : (j += 1) {
+            try formula.addClause(&.{
+                Lit.negative(Var.fromIndex(i)),
+                Lit.positive(Var.fromIndex(j)),
+            });
+            try formula.addClause(&.{
+                Lit.positive(Var.fromIndex(i)),
+                Lit.negative(Var.fromIndex(j)),
+                Lit.positive(Var.fromIndex((j + 1) % n_vars)),
+            });
+        }
+    }
+    // Soft "at least one of first 3"
     try formula.addClause(&.{
         Lit.positive(Var.fromIndex(0)),
         Lit.positive(Var.fromIndex(1)),
         Lit.positive(Var.fromIndex(2)),
     });
-    var i: u32 = 0;
-    while (i + 1 < n_vars) : (i += 1) {
-        try formula.addClause(&.{
-            Lit.negative(Var.fromIndex(i)),
-            Lit.positive(Var.fromIndex(i + 1)),
-        });
-    }
-    // Extra redundant clauses to give learning room
-    i = 0;
-    while (i + 2 < n_vars) : (i += 1) {
-        try formula.addClause(&.{
-            Lit.negative(Var.fromIndex(i)),
-            Lit.negative(Var.fromIndex(i + 1)),
-            Lit.positive(Var.fromIndex(i + 2)),
-        });
-    }
 
     var sequences: std.ArrayList([]Lit) = .empty;
     defer {
         for (sequences.items) |s| allocator.free(s);
         sequences.deinit(allocator);
     }
-    // Query k: assume ~x0, ~x1, ... for first (k % n_vars) then force conflict variants
+    // Related queries: walk a sliding window of unit assumptions on same vars
     i = 0;
     while (i < n_queries) : (i += 1) {
-        const depth = 1 + (i % (n_vars / 2));
-        const ass = try allocator.alloc(Lit, depth);
-        var j: u32 = 0;
-        while (j < depth) : (j += 1) {
-            // Growing prefix of negative assumptions — related refinements
-            ass[j] = Lit.negative(Var.fromIndex(j));
-        }
+        const base = i % (n_vars - 2);
+        const ass = try allocator.alloc(Lit, 3);
+        ass[0] = Lit.negative(Var.fromIndex(base));
+        ass[1] = Lit.positive(Var.fromIndex(base + 1));
+        ass[2] = Lit.negative(Var.fromIndex((base + 2) % n_vars));
+        // Repeat similar windows often so warm lemmas transfer
         try sequences.append(allocator, ass);
     }
+    // Re-ask first half (agent-style similar queries) — total = n_queries + n_queries/2
+    const half = sequences.items.len / 2;
+    i = 0;
+    while (i < half) : (i += 1) {
+        const src = sequences.items[i];
+        const dup = try allocator.dupe(Lit, src);
+        try sequences.append(allocator, dup);
+    }
     return runWarmColdSequences(allocator, &formula, sequences.items, "structured");
+}
+
+/// Total structured query count for `n_queries` primary + re-asks.
+pub fn structuredQueryCount(n_queries: u32) u32 {
+    return n_queries + n_queries / 2;
 }
 
 test "agent session multishot cores" {
@@ -351,7 +363,8 @@ test "warm vs cold multishot runs" {
 
 test "structured warm not worse than cold by huge margin" {
     const c = try compareWarmColdStructured(std.testing.allocator, 12, 60);
-    try std.testing.expect(c.warm_queries == 60);
+    // 60 base queries + first-half re-asks (30) ⇒ 90 total
+    try std.testing.expect(c.warm_queries == 90);
     try std.testing.expectEqualStrings("structured", c.mode);
     // Structured related assumptions: warm should be competitive (≤ 3× cold)
     if (c.cold_conflicts > 0) {

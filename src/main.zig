@@ -8,8 +8,8 @@ const usage =
     \\
     \\Usage:
     \\  logic-zig sat <formula|--file path.cnf> [--proof] [--dump-proof PATH] [--check-drat]
-    \\  logic-zig sat-track <file.cnf>         # SAT competition output (s/v)
-    \\  logic-zig hwmcc-track <file.aag|aig> [--frames N] [--each] [--justice] [--lasso]
+    \\  logic-zig sat-track <file.cnf> [--max-conflicts N] [--portfolio] [--proof] [--quiet]
+    \\  logic-zig hwmcc-track <file.aag|aig> [--frames N] [--each] [--justice] [--lasso] [--cert] [--no-kind]
     \\  logic-zig fuzz / miter / unify / eval / cnf / tautology / equiv
     \\  logic-zig bmc-demo / kind-demo / ic3-demo / pdr-demo
     \\  logic-zig aiger <file.aag|aig>
@@ -189,8 +189,24 @@ pub fn main(init: std.process.Init) !void {
         return;
     }
     if (std.mem.eql(u8, cmd, "sat-track")) {
-        const path = iter.next() orelse return fail("missing cnf");
-        const code = try logic.sat_track.runFile(gpa, path, io);
+        var path: ?[]const u8 = null;
+        var opts: logic.sat_track.TrackOpts = .{};
+        while (iter.next()) |a| {
+            if (std.mem.eql(u8, a, "--max-conflicts")) {
+                opts.max_conflicts = std.fmt.parseInt(u64, iter.next() orelse return fail("max-conflicts"), 10) catch return fail("bad max-conflicts");
+            } else if (std.mem.eql(u8, a, "--portfolio")) {
+                opts.portfolio = true;
+            } else if (std.mem.eql(u8, a, "--proof")) {
+                opts.proof = true;
+            } else if (std.mem.eql(u8, a, "--quiet")) {
+                opts.verbose = false;
+            } else if (std.mem.eql(u8, a, "--budget")) {
+                opts.portfolio_budget = std.fmt.parseInt(u64, iter.next() orelse return fail("budget"), 10) catch return fail("bad budget");
+            } else if (path == null) {
+                path = a;
+            }
+        }
+        const code = try logic.sat_track.runFileOpts(gpa, path orelse return fail("missing cnf"), io, opts);
         std.process.exit(code);
     }
     if (std.mem.eql(u8, cmd, "hwmcc-track")) {
@@ -199,6 +215,8 @@ pub fn main(init: std.process.Init) !void {
         var each = false;
         var just = false;
         var lasso = false;
+        var cert = false;
+        var use_kind = true;
         while (iter.next()) |a| {
             if (std.mem.eql(u8, a, "--frames")) {
                 frames = std.fmt.parseInt(u32, iter.next() orelse return fail("frames"), 10) catch return fail("bad frames");
@@ -208,6 +226,10 @@ pub fn main(init: std.process.Init) !void {
                 just = true;
             } else if (std.mem.eql(u8, a, "--lasso")) {
                 lasso = true;
+            } else if (std.mem.eql(u8, a, "--cert")) {
+                cert = true;
+            } else if (std.mem.eql(u8, a, "--no-kind")) {
+                use_kind = false;
             } else if (path == null) path = a;
         }
         const code = try logic.hwmcc_track.runFileOpts(gpa, path orelse return fail("missing aiger"), io, .{
@@ -215,6 +237,8 @@ pub fn main(init: std.process.Init) !void {
             .each = each,
             .justice = just,
             .lasso = lasso,
+            .cert = cert,
+            .kind = use_kind,
         });
         std.process.exit(code);
     }

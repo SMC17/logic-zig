@@ -55,12 +55,14 @@ export fn ipasir_failed(solver: ?*anyopaque, lit: c_int) callconv(.c) c_int {
     return s.failed(lit);
 }
 
+/// Partial IPASIR: termination callback not yet wired (no-op).
 export fn ipasir_set_terminate(solver: ?*anyopaque, state: ?*anyopaque, cb: ?*const fn (?*anyopaque) callconv(.c) c_int) callconv(.c) void {
     _ = solver;
     _ = state;
     _ = cb;
 }
 
+/// Partial IPASIR: learned-clause callback not yet wired (no-op).
 export fn ipasir_set_learn(solver: ?*anyopaque, state: ?*anyopaque, max_len: c_int, cb: ?*const fn (?*anyopaque, [*c]const c_int) callconv(.c) void) callconv(.c) void {
     _ = solver;
     _ = state;

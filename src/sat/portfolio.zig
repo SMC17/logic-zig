@@ -1,5 +1,8 @@
 //! Portfolio SAT: sequential multi-config probes with model validation & stats.
-//! Flagship: `logic-sat portfolio`.
+//! Flagship: `logic-sat portfolio` / `sat-track --portfolio`.
+//!
+//! Configs span restart policies, LBD reduce, pure-literal, phase rephase, and
+//! minimize on/off — deep diversity without threads.
 
 const std = @import("std");
 const cnf_mod = @import("cnf.zig");
@@ -36,7 +39,8 @@ const Config = struct {
     name: []const u8,
 };
 
-fn configs() [6]Config {
+/// Nine diverse CDCL configurations — competition-style sequential portfolio.
+fn configs() [9]Config {
     return .{
         .{ .name = "default", .opts = .{} },
         .{ .name = "fast-restart", .opts = .{ .restart_base = 50, .reduce_interval = 1000, .minimize = true } },
@@ -44,14 +48,17 @@ fn configs() [6]Config {
         .{ .name = "deep-learn", .opts = .{ .restart_base = 200, .reduce_keep_min = 400, .reduce_interval = 4000 } },
         .{ .name = "glue-heavy", .opts = .{ .reduce_by_lbd = true, .reduce_interval = 1200, .minimize = true, .reduce_keep_min = 250 } },
         .{ .name = "patient", .opts = .{ .restart_base = 300, .reduce_interval = 6000, .minimize = true } },
+        // Deep approaches:
+        .{ .name = "pure-first", .opts = .{ .pure_literal = true, .restart_base = 80, .minimize = true } },
+        .{ .name = "no-min-rephase", .opts = .{ .minimize = false, .rephase_interval = 1, .restart_base = 100 } },
+        .{ .name = "glue-keep1", .opts = .{ .reduce_by_lbd = true, .keep_lbd_max = 1, .reduce_interval = 900, .restart_base = 64 } },
     };
 }
 
 fn budgetFor(i: usize, n: usize, total: u64, ramp: bool) u64 {
     if (!ramp) return @max(total / n, 5_000);
-    // Early configs: smaller slices; later: larger residual.
-    // Weights: 1,1,2,2,3,3 roughly
-    const weights = [_]u64{ 1, 1, 2, 2, 3, 3 };
+    // Weights: early configs = probes; later = residual depth
+    const weights = [_]u64{ 1, 1, 1, 2, 2, 2, 3, 3, 4 };
     var sum: u64 = 0;
     var w: u64 = 0;
     var k: usize = 0;
@@ -83,8 +90,6 @@ pub fn solvePortfolioOpts(
     for (cfgs, 0..) |cfg, i| {
         var opts = cfg.opts;
         opts.max_conflicts = budgetFor(i, cfgs.len, popts.total_conflicts, popts.ramp);
-        // Only last config (or proof_on_unsat) enables proof to save time
-        opts.proof = popts.proof_on_unsat and (i + 1 == cfgs.len or true);
         if (popts.proof_on_unsat) opts.proof = true;
 
         const r = try solver_mod.solveCnf(allocator, formula, opts);
@@ -215,4 +220,8 @@ test "portfolio proof on unsat verifies rup" {
     };
     try std.testing.expect(r.status == .unsat);
     try std.testing.expect(r.proof != null);
+}
+
+test "portfolio config count is nine" {
+    try std.testing.expect(configs().len == 9);
 }
