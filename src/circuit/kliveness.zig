@@ -104,8 +104,8 @@ pub fn proveFiniteHits(
         }
 
         // PDR as second engine
-        const pr = try pdr.check(allocator, &work, bad, pdr_frames);
-        defer if (pr.cex_latches) |c| allocator.free(c);
+        var pr = try pdr.check(allocator, &work, bad, pdr_frames);
+        defer pr.deinit(allocator);
         total_conf += pr.conflicts;
         switch (pr.status) {
             .proven => return .{
@@ -195,8 +195,8 @@ pub fn proveFairMulti(
             return .{ .status = .proven_infinite, .k = k, .conflicts = total_conf, .pdr_frames = kr.k };
         }
 
-        const pr = try pdr.check(allocator, &work, bad, pdr_frames);
-        defer if (pr.cex_latches) |c| allocator.free(c);
+        var pr = try pdr.check(allocator, &work, bad, pdr_frames);
+        defer pr.deinit(allocator);
         total_conf += pr.conflicts;
         if (pr.status == .proven) {
             return .{ .status = .proven_infinite, .k = k, .conflicts = total_conf, .pdr_frames = pr.frames };

@@ -1,5 +1,4 @@
-//! logic-agent — multishot / IPASIR / assumption-core flagship.
-//! Profile: agent (incremental, low process overhead).
+//! logic-agent — multishot / assumptions flagship (profile=agent).
 
 const std = @import("std");
 const logic = @import("logic");
@@ -13,7 +12,8 @@ pub fn main(init: std.process.Init) !void {
     const cmd = iter.next() orelse {
         std.debug.print(
             \\logic-agent — multishot SAT + assumptions (profile=agent)
-            \\  logic-agent multishot --queries N --vars V
+            \\  logic-agent multishot [--queries N] [--vars V]
+            \\  logic-agent session-demo
             \\  logic-agent assume-demo
             \\  logic-agent profile
             \\
@@ -22,7 +22,11 @@ pub fn main(init: std.process.Init) !void {
     };
     const prof = logic.profiles.get(.agent);
     if (std.mem.eql(u8, cmd, "profile")) {
-        std.debug.print("profile={s}\n{s}\n", .{ prof.name, prof.blurb });
+        std.debug.print("profile={s}\n{s}\nmax_conflicts={d}\n", .{
+            prof.name,
+            prof.blurb,
+            prof.solver.max_conflicts,
+        });
         return;
     }
     if (std.mem.eql(u8, cmd, "multishot")) {
@@ -34,6 +38,33 @@ pub fn main(init: std.process.Init) !void {
         }
         const r = try logic.multishot_bench.run(gpa, io, nvars, queries, 0xA6E17);
         logic.multishot_bench.printResult(&r);
+        return;
+    }
+    if (std.mem.eql(u8, cmd, "session-demo")) {
+        var s = logic.agent_session.Session.init(gpa);
+        defer s.deinit();
+        s.ensureVars(3);
+        const a = logic.Lit.positive(logic.Var.fromIndex(0));
+        const b = logic.Lit.positive(logic.Var.fromIndex(1));
+        const c = logic.Lit.positive(logic.Var.fromIndex(2));
+        try s.addClause(&.{ a, b });
+        try s.addClause(&.{ a, c });
+        const r1 = try s.query(&.{ a.not(), b.not(), c.not() });
+        defer if (r1.model) |m| gpa.free(m);
+        defer if (r1.core) |core| gpa.free(core);
+        std.debug.print("q1 unsat unique={} core_len={d} conflicts={d}\n", .{
+            r1.core_unique,
+            if (r1.core) |core| core.len else 0,
+            r1.conflicts,
+        });
+        const r2 = try s.query(&.{a.not()});
+        defer if (r2.model) |m| gpa.free(m);
+        defer if (r2.core) |core| gpa.free(core);
+        std.debug.print("q2 sat status={s} queries={d} total_conflicts={d}\n", .{
+            @tagName(r2.status),
+            s.queries,
+            s.total_conflicts,
+        });
         return;
     }
     if (std.mem.eql(u8, cmd, "assume-demo")) {

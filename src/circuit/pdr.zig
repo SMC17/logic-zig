@@ -40,7 +40,39 @@ pub const PdrResult = struct {
     cex_latches: ?[]Value = null,
     nlatches: u32 = 0,
     cex_len: u32 = 0,
+    /// On `proven`: owned inductive clauses (latch-space lits). Free with `freeInvariant`.
+    invariant_clauses: ?[][]Lit = null,
+    invariant_frame: u32 = 0,
+
+    pub fn freeInvariant(self: *PdrResult, allocator: std.mem.Allocator) void {
+        if (self.invariant_clauses) |cls| {
+            for (cls) |c| allocator.free(c);
+            allocator.free(cls);
+            self.invariant_clauses = null;
+        }
+    }
+
+    /// Free cex + invariant ownership.
+    pub fn deinit(self: *PdrResult, allocator: std.mem.Allocator) void {
+        if (self.cex_latches) |c| {
+            allocator.free(c);
+            self.cex_latches = null;
+        }
+        self.freeInvariant(allocator);
+    }
 };
+
+fn cloneFrameClauses(allocator: std.mem.Allocator, frame: []const Clause) ![][]Lit {
+    const out = try allocator.alloc([]Lit, frame.len);
+    errdefer {
+        for (out) |c| allocator.free(c);
+        allocator.free(out);
+    }
+    for (frame, 0..) |cl, i| {
+        out[i] = try allocator.dupe(Lit, cl.lits);
+    }
+    return out;
+}
 
 const Clause = struct {
     lits: []Lit,
@@ -722,6 +754,21 @@ pub fn check(
         stats.pushes += pstats.pushes;
 
         if (fixed and k >= 1) {
+            // Export the first fixed-point frame as inductive invariant candidate.
+            var inv_clauses: ?[][]Lit = null;
+            var inv_frame: u32 = 0;
+            var fi: usize = 0;
+            while (fi + 1 < frames.items.len) : (fi += 1) {
+                if (frames.items[fi].items.len > 0 and framesEqual(frames.items[fi].items, frames.items[fi + 1].items)) {
+                    inv_clauses = try cloneFrameClauses(allocator, frames.items[fi].items);
+                    inv_frame = @intCast(fi);
+                    break;
+                }
+            }
+            // If equal frames were empty, still proven (e.g. trivial safety) — empty invariant.
+            if (inv_clauses == null) {
+                inv_clauses = try allocator.alloc([]Lit, 0);
+            }
             return .{
                 .status = .proven,
                 .frames = k + 1,
@@ -729,8 +776,10 @@ pub fn check(
                 .generalizations = stats.gens,
                 .pushes = stats.pushes,
                 .ctg_blocks = stats.ctg_blocks,
-                    .obligations = stats.obligations,
-                    .ternary_drops = stats.ternary_drops,
+                .obligations = stats.obligations,
+                .ternary_drops = stats.ternary_drops,
+                .invariant_clauses = inv_clauses,
+                .invariant_frame = inv_frame,
             };
         }
     }
@@ -784,8 +833,8 @@ test "pdr stuck-at-zero proven" {
     const d = try nl.allocNetNamed("d");
     try nl.addConst(d, false);
     try nl.addLatch(d, q, false);
-    const r = try check(std.testing.allocator, &nl, q, 16);
-    defer if (r.cex_latches) |c| std.testing.allocator.free(c);
+    var r = try check(std.testing.allocator, &nl, q, 16);
+    defer r.deinit(std.testing.allocator);
     try std.testing.expect(r.status == .proven or r.status == .unknown);
     try std.testing.expect(r.status != .violated);
 }
@@ -797,8 +846,8 @@ test "pdr init bad violated" {
     const d = try nl.allocNetNamed("d");
     try nl.addConst(d, true);
     try nl.addLatch(d, q, true);
-    const r = try check(std.testing.allocator, &nl, q, 8);
-    defer if (r.cex_latches) |c| std.testing.allocator.free(c);
+    var r = try check(std.testing.allocator, &nl, q, 8);
+    defer r.deinit(std.testing.allocator);
     try std.testing.expect(r.status == .violated);
 }
 
@@ -815,7 +864,7 @@ test "pdr counter not false-proven" {
     try nl.addGate(.and_, &.{ q1, q0 }, bad);
     try nl.addLatch(d0, q0, false);
     try nl.addLatch(d1, q1, false);
-    const r = try check(std.testing.allocator, &nl, bad, 20);
-    defer if (r.cex_latches) |c| std.testing.allocator.free(c);
+    var r = try check(std.testing.allocator, &nl, bad, 20);
+    defer r.deinit(std.testing.allocator);
     try std.testing.expect(r.status == .violated or r.status == .unknown);
 }

@@ -525,8 +525,8 @@ fn cmdIc3Demo(gpa: std.mem.Allocator, frames: u32) !void {
         const d = try nl.allocNetNamed("d");
         try nl.addConst(d, false);
         try nl.addLatch(d, q, false);
-        const r = try logic.pdr.check(gpa, &nl, q, frames);
-        defer if (r.cex_latches) |c| gpa.free(c);
+        var r = try logic.pdr.check(gpa, &nl, q, frames);
+        defer r.deinit(gpa);
         std.debug.print("pdr stuck0: {s} frames={d} conflicts={d} gens={d} pushes={d} ctg={d}\n", .{
             @tagName(r.status),
             r.frames,
@@ -549,8 +549,8 @@ fn cmdIc3Demo(gpa: std.mem.Allocator, frames: u32) !void {
         try nl.addGate(.and_, &.{ q1, q0 }, bad);
         try nl.addLatch(d0, q0, false);
         try nl.addLatch(d1, q1, false);
-        const r = try logic.pdr.check(gpa, &nl, bad, frames);
-        defer if (r.cex_latches) |c| gpa.free(c);
+        var r = try logic.pdr.check(gpa, &nl, bad, frames);
+        defer r.deinit(gpa);
         std.debug.print("pdr counter: {s} frames={d} conflicts={d} gens={d} pushes={d} ctg={d}\n", .{
             @tagName(r.status),
             r.frames,
@@ -718,8 +718,8 @@ fn cmdDoctor(gpa: std.mem.Allocator, io: std.Io) !void {
         const d = try nl.allocNetNamed("d");
         try nl.addConst(d, false);
         try nl.addLatch(d, q, false);
-        const r = try logic.pdr.check(gpa, &nl, q, 12);
-        defer if (r.cex_latches) |c| gpa.free(c);
+        var r = try logic.pdr.check(gpa, &nl, q, 12);
+        defer r.deinit(gpa);
         if (r.status != .violated) {
             std.debug.print("ok  pdr stuck0 {s}\n", .{@tagName(r.status)});
         } else {
