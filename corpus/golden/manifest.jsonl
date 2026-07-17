@@ -1,0 +1,7 @@
+{"path":"corpus/golden/aiger/stuck0.aag","kind":"aiger-safe","expect":"safe"}
+{"path":"corpus/golden/aiger/const1_bad.aag","kind":"aiger-safe","expect":"unsafe"}
+{"path":"corpus/golden/aiger/and2.aag","kind":"aiger-parse","expect":"ok"}
+{"path":"corpus/golden/aiger/toggle.aag","kind":"aiger-lasso","expect":"witness"}
+{"path":"corpus/golden/aiger/pulse.aag","kind":"aiger-klive","expect":"proven_infinite"}
+{"path":"corpus/bench/sat/simple_unsat.cnf","kind":"cnf","expect":"unsat"}
+{"path":"corpus/bench/sat/simple_sat.cnf","kind":"cnf","expect":"sat"}

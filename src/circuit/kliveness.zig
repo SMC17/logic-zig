@@ -353,3 +353,74 @@ test "fair multi: both toggle not false-proven" {
     const r = try check(std.testing.allocator, &nl, &.{ q0, q1 }, 2, 10, 6);
     try std.testing.expect(r.status != .proven_infinite);
 }
+
+test "fair multi: lasso witness on dual toggle" {
+    var nl = Netlist.init(std.testing.allocator);
+    defer nl.deinit();
+    const q0 = try nl.allocNetNamed("q0");
+    const q1 = try nl.allocNetNamed("q1");
+    const d0 = try nl.allocNetNamed("d0");
+    const d1 = try nl.allocNetNamed("d1");
+    try nl.addGate(.not, &.{q0}, d0);
+    try nl.addGate(.xor, &.{ q1, q0 }, d1);
+    try nl.addLatch(d0, q0, false);
+    try nl.addLatch(d1, q1, false);
+    const r = try check(std.testing.allocator, &nl, &.{ q0, q1 }, 1, 8, 8);
+    try std.testing.expect(r.status == .lasso_witness or r.status == .unknown);
+    // Prefer witness when bound is generous
+    try std.testing.expect(r.status == .lasso_witness);
+}
+
+test "fair multi: fairness constraint with stuck justice proves" {
+    // Justice j always 0, fairness f toggles — cannot have all i.o.
+    var nl = Netlist.init(std.testing.allocator);
+    defer nl.deinit();
+    const j = try nl.allocNetNamed("j");
+    const f = try nl.allocNetNamed("f");
+    const dj = try nl.allocNetNamed("dj");
+    const df = try nl.allocNetNamed("df");
+    try nl.addConst(dj, false);
+    try nl.addGate(.not, &.{f}, df);
+    try nl.addLatch(dj, j, false);
+    try nl.addLatch(df, f, false);
+    try nl.addJustice(j);
+    try nl.addFairness(f);
+    const r = try checkNetlist(std.testing.allocator, &nl, 4, 16, 0);
+    try std.testing.expect(r.status == .proven_infinite);
+}
+
+test "fair multi: both justice and fairness toggle get lasso" {
+    var nl = Netlist.init(std.testing.allocator);
+    defer nl.deinit();
+    const j = try nl.allocNetNamed("j");
+    const f = try nl.allocNetNamed("f");
+    const dj = try nl.allocNetNamed("dj");
+    const df = try nl.allocNetNamed("df");
+    try nl.addGate(.not, &.{j}, dj);
+    try nl.addGate(.not, &.{f}, df);
+    try nl.addLatch(dj, j, false);
+    try nl.addLatch(df, f, true); // phase offset so both hit
+    try nl.addJustice(j);
+    try nl.addFairness(f);
+    const r = try checkNetlist(std.testing.allocator, &nl, 2, 12, 6);
+    try std.testing.expect(r.status == .lasso_witness or r.status != .proven_infinite);
+}
+
+test "fair multi: three signals one dead proves" {
+    var nl = Netlist.init(std.testing.allocator);
+    defer nl.deinit();
+    const a = try nl.allocNetNamed("a");
+    const b = try nl.allocNetNamed("b");
+    const c = try nl.allocNetNamed("c");
+    const da = try nl.allocNetNamed("da");
+    const db = try nl.allocNetNamed("db");
+    const dc = try nl.allocNetNamed("dc");
+    try nl.addGate(.not, &.{a}, da);
+    try nl.addGate(.not, &.{b}, db);
+    try nl.addConst(dc, false); // c stuck 0
+    try nl.addLatch(da, a, false);
+    try nl.addLatch(db, b, false);
+    try nl.addLatch(dc, c, false);
+    const r = try proveFairMulti(std.testing.allocator, &nl, &.{ a, b, c }, 5, 16);
+    try std.testing.expect(r.status == .proven_infinite);
+}

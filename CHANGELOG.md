@@ -5,6 +5,16 @@ All notable changes to **logic-zig** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/).
 
+## [0.12.1] — 2026-07-16
+
+### Added
+
+- AIGER golden fixtures + `corpus/golden/manifest.jsonl` (safe/unsafe/lasso/klive/parse)
+- `golden.runAll` = builtin + manifest + external DRAT-trim when present
+- Portfolio: 6 configs, ramp budgets, model validation, optional RUP proof on UNSAT
+- Fair multi-justice cases: dual lasso, fairness+stuck, three-signal one-dead
+- `logic-sat check-drat` / `portfolio --proof` with external drat-trim verification
+
 ## [0.12.0] — 2026-07-16
 
 ### Added
