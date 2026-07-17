@@ -12,9 +12,10 @@ pub fn main(init: std.process.Init) !void {
     const cmd = iter.next() orelse {
         std.debug.print(
             \\logic-hwmcc — AIGER safety/liveness (profile=hwmcc)
-            \\  logic-hwmcc track <file.aag|aig> [--frames N]
+            \\  logic-hwmcc track <file.aag|aig> [--frames N] [--cert]
             \\  logic-hwmcc klive <file.aag> [--max-k K]
             \\  logic-hwmcc fair-demo
+            \\  logic-hwmcc designs-demo
             \\  logic-hwmcc golden
             \\  logic-hwmcc stack
             \\  logic-hwmcc profile
@@ -81,9 +82,12 @@ pub fn main(init: std.process.Init) !void {
     if (std.mem.eql(u8, cmd, "track")) {
         var frames = prof.max_frames;
         var path: ?[]const u8 = null;
+        var cert = false;
         while (iter.next()) |a| {
             if (std.mem.eql(u8, a, "--frames")) {
                 frames = try std.fmt.parseInt(u32, iter.next() orelse "16", 10);
+            } else if (std.mem.eql(u8, a, "--cert")) {
+                cert = true;
             } else if (path == null) {
                 path = a;
             }
@@ -91,8 +95,45 @@ pub fn main(init: std.process.Init) !void {
         const code = try logic.hwmcc_track.runFileOpts(gpa, path orelse {
             std.debug.print("missing aiger\n", .{});
             std.process.exit(2);
-        }, io, .{ .max_frames = frames });
+        }, io, .{ .max_frames = frames, .cert = cert });
         std.process.exit(code);
+    }
+    if (std.mem.eql(u8, cmd, "designs-demo")) {
+        // 5-bit counter teeth
+        {
+            var d = try logic.designs.makeCounter(gpa, 5);
+            defer d.nl.deinit();
+            const r30 = try logic.bmc.check(gpa, &d.nl, d.bad, 30);
+            defer if (r30.trace) |t| gpa.free(t);
+            const r31 = try logic.bmc.check(gpa, &d.nl, d.bad, 31);
+            defer if (r31.trace) |t| gpa.free(t);
+            std.debug.print("counter5: bound30={s} bound31={s}\n", .{ @tagName(r30.status), @tagName(r31.status) });
+        }
+        // multi-stuck cert
+        {
+            var d = try logic.designs.makeMultiStuck0(gpa, 5);
+            defer d.nl.deinit();
+            const inv = try logic.certificate.fromPdrProven(gpa, &d.nl, d.bad, 24);
+            if (inv) |*i| {
+                defer {
+                    var ii = i.*;
+                    ii.deinit();
+                }
+                std.debug.print("multi-stuck5: cert verified={} clauses={d}\n", .{
+                    try i.verify(gpa, &d.nl),
+                    i.clauses.len,
+                });
+            }
+        }
+        // mutex
+        {
+            var d = try logic.designs.makeMutex(gpa, true);
+            defer d.nl.deinit();
+            const r = try logic.bmc.check(gpa, &d.nl, d.bad, 8);
+            defer if (r.trace) |t| gpa.free(t);
+            std.debug.print("mutex+constraint: {s}\n", .{@tagName(r.status)});
+        }
+        return;
     }
     if (std.mem.eql(u8, cmd, "klive")) {
         var max_k = prof.max_k_liveness;

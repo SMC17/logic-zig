@@ -407,6 +407,26 @@ pub fn runBuiltin(allocator: std.mem.Allocator) !GoldenResult {
         const st = try s.stress(50, 6, 0x51);
         pass(&res, st.queries == 50);
     }
+    // structured warm-cold
+    {
+        const c = try agent_session.compareWarmColdStructured(allocator, 10, 40);
+        pass(&res, c.warm_queries == 40 and std.mem.eql(u8, c.mode, "structured"));
+    }
+    // mutex designs
+    {
+        var d = try designs.makeMutex(allocator, true);
+        defer d.nl.deinit();
+        const r = try bmc.check(allocator, &d.nl, d.bad, 6);
+        defer if (r.trace) |t| allocator.free(t);
+        pass(&res, r.status == .safe_up_to_bound);
+    }
+    {
+        var d = try designs.makeCounter(allocator, 5);
+        defer d.nl.deinit();
+        const r = try bmc.check(allocator, &d.nl, d.bad, 31);
+        defer if (r.trace) |t| allocator.free(t);
+        pass(&res, r.status == .violated);
+    }
 
     return res;
 }
