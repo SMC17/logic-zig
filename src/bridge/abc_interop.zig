@@ -1,7 +1,18 @@
 //! Optional ABC interop — invoke `abc` if present for differential / baseline.
 //!
-//! Does not vendor ABC. Discovery: `LOGIC_ZIG_ABC` via /proc environ,
-//! `third_party/abc/abc`, `/usr/bin/abc`.
+//! Does not vendor ABC. Discovery order:
+//! 1. `LOGIC_ZIG_ABC` (absolute path, via `/proc/self/environ`)
+//! 2. `third_party/abc/abc` (local build)
+//! 3. `/usr/bin/abc`, `/usr/local/bin/abc`
+//!
+//! Install (optional, not required for unit tests):
+//! - Build from https://github.com/berkeley-abc/abc into `third_party/abc/abc`
+//! - Or set `LOGIC_ZIG_ABC` to a system binary
+//! - Avoid automated large clones in CI; soft-skip when missing
+//!
+//! CLI: `logic-zig abc-delta <file.aag> [--frames N]`
+//! - Internal MC always runs; ABC path soft-fails → `delta=abc_skip`
+//! - `deltaLabel` is fully unit-tested without ABC present
 //!
 //! Industrial MC path: when ABC is present, run a safety-style script on an
 //! AIGER file and parse a coarse status for Δ vs internal engines.
@@ -151,8 +162,33 @@ test "abc find does not crash" {
     if (p) |x| std.testing.allocator.free(x);
 }
 
-test "delta label" {
+test "abc doctor always returns text" {
+    const s = try doctor(std.testing.allocator);
+    defer std.testing.allocator.free(s);
+    try std.testing.expect(s.len > 0);
+    try std.testing.expect(std.mem.indexOf(u8, s, "abc:") != null);
+}
+
+// Full matrix of deltaLabel — runs without ABC installed.
+test "delta label full matrix" {
+    // unavailable / error / unknown
     try std.testing.expectEqualStrings("abc_skip", deltaLabel(true, false, .unavailable));
+    try std.testing.expectEqualStrings("abc_skip", deltaLabel(false, true, .unavailable));
+    try std.testing.expectEqualStrings("abc_skip", deltaLabel(false, false, .unavailable));
+    try std.testing.expectEqualStrings("abc_error", deltaLabel(true, false, .error_));
+    try std.testing.expectEqualStrings("abc_unknown", deltaLabel(false, false, .unknown));
+    // ABC proven
     try std.testing.expectEqualStrings("agree_proven", deltaLabel(true, false, .proven));
+    try std.testing.expectEqualStrings("MISMATCH", deltaLabel(false, true, .proven));
+    try std.testing.expectEqualStrings("abc_only_proven", deltaLabel(false, false, .proven));
+    // ABC violated
+    try std.testing.expectEqualStrings("agree_violated", deltaLabel(false, true, .violated));
     try std.testing.expectEqualStrings("MISMATCH", deltaLabel(true, false, .violated));
+    try std.testing.expectEqualStrings("abc_only_violated", deltaLabel(false, false, .violated));
+}
+
+test "delta label mutually exclusive internal flags" {
+    // When both proven and violated are false (unknown internal), no agree_*
+    try std.testing.expectEqualStrings("abc_only_proven", deltaLabel(false, false, .proven));
+    try std.testing.expectEqualStrings("abc_only_violated", deltaLabel(false, false, .violated));
 }

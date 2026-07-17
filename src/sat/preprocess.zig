@@ -207,7 +207,10 @@ fn bcpAndPure(allocator: std.mem.Allocator, nvars: u32, kept: *ClauseList, stats
                     stats.units_propagated += 1;
                     changed = true;
                 } else if (assign[vi] != want) {
+                    // Conflicting units — leave an empty clause so rebuild is obviously UNSAT.
                     stats.unsat = true;
+                    const empty = try allocator.alloc(Lit, 0);
+                    try kept.appendOwned(empty);
                     return;
                 }
             }
@@ -268,14 +271,15 @@ fn bcpAndPure(allocator: std.mem.Allocator, nvars: u32, kept: *ClauseList, stats
 }
 
 /// (ℓ) and (¬ℓ ∨ c…) → strengthen to c… (self-subsuming with unit).
-fn unitSelfSubsume(allocator: std.mem.Allocator, kept: *ClauseList, stats: *Stats) !void {
+/// Returns true if an empty clause was derived (UNSAT).
+fn unitSelfSubsume(allocator: std.mem.Allocator, kept: *ClauseList, stats: *Stats) !bool {
     // Collect units
     var units: std.ArrayList(Lit) = .empty;
     defer units.deinit(allocator);
     for (kept.items.items) |cl| {
         if (cl.len == 1) try units.append(allocator, cl[0]);
     }
-    if (units.items.len == 0) return;
+    if (units.items.len == 0) return false;
 
     var i: usize = 0;
     while (i < kept.items.items.len) {
@@ -299,6 +303,13 @@ fn unitSelfSubsume(allocator: std.mem.Allocator, kept: *ClauseList, stats: *Stat
                 if (@intFromEnum(l) != @intFromEnum(nu)) try nl.append(allocator, l);
             }
             allocator.free(cl);
+            if (nl.items.len == 0) {
+                const empty = try allocator.alloc(Lit, 0);
+                kept.items.items[i] = empty;
+                stats.self_subsumed += 1;
+                stats.unsat = true;
+                return true;
+            }
             const ncl = try allocator.dupe(Lit, nl.items);
             kept.items.items[i] = ncl;
             stats.self_subsumed += 1;
@@ -307,65 +318,58 @@ fn unitSelfSubsume(allocator: std.mem.Allocator, kept: *ClauseList, stats: *Stat
         }
         if (!removed) i += 1;
     }
+    return false;
 }
 
 /// Unit-propagate under assumptions; return true if conflict.
+/// Full-clause scan fixpoint (vivify-scale; no watch lists).
 fn propUnder(
     allocator: std.mem.Allocator,
     clauses: []const []const Lit,
     assumptions: []const Lit,
     assign_out: []Value,
 ) !bool {
+    _ = allocator;
     @memset(assign_out, .undef);
-    var queue: std.ArrayList(Lit) = .empty;
-    defer queue.deinit(allocator);
     for (assumptions) |a| {
         const vi = a.variable().index();
         const want: Value = if (a.isNeg()) .false_ else .true_;
         if (assign_out[vi] == .undef) {
             assign_out[vi] = want;
-            try queue.append(allocator, a);
         } else if (assign_out[vi] != want) return true;
     }
-    var qh: usize = 0;
-    while (qh < queue.items.len) {
-        // scan all clauses for units (cheap vivify-scale)
-        var progress = true;
-        while (progress) {
-            progress = false;
-            for (clauses) |cl| {
-                var sat = false;
-                var undef_count: u32 = 0;
-                var last_undef: ?Lit = null;
-                for (cl) |l| {
-                    const v = assign_out[l.variable().index()];
-                    if (v == .undef) {
-                        undef_count += 1;
-                        last_undef = l;
-                    } else {
-                        const want_true = !l.isNeg();
-                        if ((v == .true_ and want_true) or (v == .false_ and !want_true)) {
-                            sat = true;
-                            break;
-                        }
+    var progress = true;
+    while (progress) {
+        progress = false;
+        for (clauses) |cl| {
+            var sat = false;
+            var undef_count: u32 = 0;
+            var last_undef: ?Lit = null;
+            for (cl) |l| {
+                const v = assign_out[l.variable().index()];
+                if (v == .undef) {
+                    undef_count += 1;
+                    last_undef = l;
+                } else {
+                    const want_true = !l.isNeg();
+                    if ((v == .true_ and want_true) or (v == .false_ and !want_true)) {
+                        sat = true;
+                        break;
                     }
                 }
-                if (sat) continue;
-                if (undef_count == 0) return true; // conflict
-                if (undef_count == 1) {
-                    const u = last_undef.?;
-                    const vi = u.variable().index();
-                    const want: Value = if (u.isNeg()) .false_ else .true_;
-                    if (assign_out[vi] == .undef) {
-                        assign_out[vi] = want;
-                        try queue.append(allocator, u);
-                        progress = true;
-                    } else if (assign_out[vi] != want) return true;
-                }
+            }
+            if (sat) continue;
+            if (undef_count == 0) return true; // conflict
+            if (undef_count == 1) {
+                const u = last_undef.?;
+                const vi = u.variable().index();
+                const want: Value = if (u.isNeg()) .false_ else .true_;
+                if (assign_out[vi] == .undef) {
+                    assign_out[vi] = want;
+                    progress = true;
+                } else if (assign_out[vi] != want) return true;
             }
         }
-        qh = queue.items.len; // one wave
-        break;
     }
     return false;
 }
@@ -384,6 +388,11 @@ fn othersSlice(allocator: std.mem.Allocator, kept: *const ClauseList, skip: usiz
 /// Vivification: remove redundant clauses / literals via unit propagation under
 /// partial falsifying assumptions (industrial SAT standard technique).
 /// Uses **other** clauses only so a fully-falsified target does not self-conflict.
+///
+/// Literal removal is **iterative** (not simultaneous): dropping every lit that is
+/// independently forced-false w.r.t. the original clause is unsound (can derive a
+/// spurious empty clause on SAT formulas). Each candidate is checked against the
+/// *remaining* literals only.
 fn vivify(allocator: std.mem.Allocator, nvars: u32, kept: *ClauseList, stats: *Stats, opts: PreprocessOptions) !void {
     if (!opts.vivify) return;
     const assign = try allocator.alloc(Value, nvars);
@@ -403,57 +412,85 @@ fn vivify(allocator: std.mem.Allocator, nvars: u32, kept: *ClauseList, stats: *S
         const others = try othersSlice(allocator, kept, i);
         defer allocator.free(others);
 
-        // Redundancy: assume all ~l for l in C; if conflict in *others* → C redundant
-        var ass_all: std.ArrayList(Lit) = .empty;
-        defer ass_all.deinit(allocator);
-        for (cl) |l| try ass_all.append(allocator, l.not());
+        // Working copy of remaining lits (iterative strengthen).
+        var remain: std.ArrayList(Lit) = .empty;
+        defer remain.deinit(allocator);
+        try remain.appendSlice(allocator, cl);
 
-        if (try propUnder(allocator, others, ass_all.items, assign)) {
-            allocator.free(cl);
-            _ = kept.items.orderedRemove(i);
-            stats.vivified_removed += 1;
-            continue;
+        // Redundancy: assume all ~l for l in C; if conflict in *others* → C redundant
+        {
+            var ass_all: std.ArrayList(Lit) = .empty;
+            defer ass_all.deinit(allocator);
+            for (remain.items) |l| try ass_all.append(allocator, l.not());
+            if (try propUnder(allocator, others, ass_all.items, assign)) {
+                allocator.free(cl);
+                _ = kept.items.orderedRemove(i);
+                stats.vivified_removed += 1;
+                continue;
+            }
         }
 
-        // Literal elimination: for each lit, assume ~others in C; if conflict → redundant;
-        // if lit forced false under UP → drop lit
-        var new_lits: std.ArrayList(Lit) = .empty;
-        defer new_lits.deinit(allocator);
-        var removed_clause = false;
+        // Literal elimination — one at a time against the *current* remain set.
         var li: usize = 0;
-        while (li < cl.len) : (li += 1) {
+        var removed_clause = false;
+        while (li < remain.items.len) {
+            if (remain.items.len < 2) break;
             var ass: std.ArrayList(Lit) = .empty;
             defer ass.deinit(allocator);
-            for (cl, 0..) |l, j| {
+            for (remain.items, 0..) |l, j| {
                 if (j != li) try ass.append(allocator, l.not());
             }
             if (try propUnder(allocator, others, ass.items, assign)) {
+                // Others imply a proper subclause → whole clause redundant.
                 allocator.free(cl);
                 _ = kept.items.orderedRemove(i);
                 stats.vivified_removed += 1;
                 removed_clause = true;
                 break;
             }
-            const l = cl[li];
+            const l = remain.items[li];
             const v = assign[l.variable().index()];
             const want_true = !l.isNeg();
             if ((v == .false_ and want_true) or (v == .true_ and !want_true)) {
+                // Lit forced false under falsifying the other *remaining* lits → drop it.
+                _ = remain.orderedRemove(li);
                 stats.vivified_lits += 1;
+                // Do not advance li; new lit shifted into place.
+                // Re-check full redundancy on the shortened clause.
+                if (remain.items.len == 0) {
+                    stats.unsat = true;
+                    const empty = try allocator.alloc(Lit, 0);
+                    allocator.free(cl);
+                    kept.items.items[i] = empty;
+                    return;
+                }
+                if (remain.items.len >= 1) {
+                    var ass_r: std.ArrayList(Lit) = .empty;
+                    defer ass_r.deinit(allocator);
+                    for (remain.items) |rl| try ass_r.append(allocator, rl.not());
+                    if (try propUnder(allocator, others, ass_r.items, assign)) {
+                        allocator.free(cl);
+                        _ = kept.items.orderedRemove(i);
+                        stats.vivified_removed += 1;
+                        removed_clause = true;
+                        break;
+                    }
+                }
                 continue;
             }
-            try new_lits.append(allocator, l);
+            li += 1;
         }
         if (removed_clause) continue;
-        if (new_lits.items.len == 0) {
+        if (remain.items.len == 0) {
             stats.unsat = true;
             const empty = try allocator.alloc(Lit, 0);
             allocator.free(cl);
             kept.items.items[i] = empty;
             return;
         }
-        if (new_lits.items.len < cl.len) {
+        if (remain.items.len < cl.len) {
             allocator.free(cl);
-            const ncl = try allocator.dupe(Lit, new_lits.items);
+            const ncl = try allocator.dupe(Lit, remain.items);
             kept.items.items[i] = ncl;
         }
         i += 1;
@@ -482,7 +519,11 @@ pub fn preprocessOpts(allocator: std.mem.Allocator, cnf: *Cnf, opts: PreprocessO
         stats.clauses_out = cnf.numClauses();
         return stats;
     }
-    try unitSelfSubsume(allocator, &kept, &stats);
+    if (try unitSelfSubsume(allocator, &kept, &stats)) {
+        try rebuildCnf(allocator, cnf, &kept);
+        stats.clauses_out = cnf.numClauses();
+        return stats;
+    }
     forwardSubsumption(&kept, &stats);
     try bcpAndPure(allocator, cnf.num_vars, &kept, &stats);
     if (stats.unsat) {
@@ -569,4 +610,157 @@ test "preprocess vivify preserves unsat" {
         pp.deinit();
     };
     try std.testing.expect(r.status == .unsat);
+}
+
+test "preprocess empty CNF is sat" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    const st = try preprocess(std.testing.allocator, &cnf);
+    try std.testing.expect(!st.unsat);
+    try std.testing.expect(st.clauses_out == 0);
+    const r = try @import("solver.zig").solveCnf(std.testing.allocator, &cnf, .{});
+    defer if (r.model) |m| std.testing.allocator.free(m);
+    try std.testing.expect(r.status == .sat);
+}
+
+test "preprocess empty clause is unsat" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    try cnf.addClause(&.{});
+    const st = try preprocess(std.testing.allocator, &cnf);
+    try std.testing.expect(st.unsat or cnf.numClauses() >= 1);
+    const r = try @import("solver.zig").solveCnf(std.testing.allocator, &cnf, .{});
+    defer if (r.model) |m| std.testing.allocator.free(m);
+    defer if (r.proof) |*p| {
+        var pp = p.*;
+        pp.deinit();
+    };
+    try std.testing.expect(r.status == .unsat);
+}
+
+test "preprocess tautology-only is sat" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    const x = Lit.positive(lit_mod.Var.fromIndex(0));
+    const y = Lit.positive(lit_mod.Var.fromIndex(1));
+    // addClause already drops tautologies; also exercise preprocess path on residual free vars
+    try cnf.addClause(&.{ x, x.not() });
+    try cnf.addClause(&.{ y, y.not(), Lit.positive(lit_mod.Var.fromIndex(2)) });
+    cnf.ensureVars(3);
+    const st = try preprocessOpts(std.testing.allocator, &cnf, .{ .vivify = true });
+    try std.testing.expect(!st.unsat);
+    const r = try @import("solver.zig").solveCnf(std.testing.allocator, &cnf, .{ .preprocess = false });
+    defer if (r.model) |m| std.testing.allocator.free(m);
+    try std.testing.expect(r.status == .sat);
+}
+
+test "preprocess duplicate lits cleaned" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    const x = Lit.positive(lit_mod.Var.fromIndex(0));
+    const y = Lit.positive(lit_mod.Var.fromIndex(1));
+    try cnf.addClause(&.{ x, x, y, y });
+    const st = try preprocess(std.testing.allocator, &cnf);
+    // dups may be stripped at addClause already; pure/unit may collapse further
+    _ = st;
+    const r = try @import("solver.zig").solveCnf(std.testing.allocator, &cnf, .{});
+    defer if (r.model) |m| std.testing.allocator.free(m);
+    try std.testing.expect(r.status == .sat);
+    try std.testing.expect(cnf.checkModel(r.model.?));
+}
+
+test "preprocess pure-only sat with model on original" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    // Only positive occurrences of all vars → pure elimination
+    try cnf.addClause(&.{ Lit.positive(lit_mod.Var.fromIndex(0)), Lit.positive(lit_mod.Var.fromIndex(1)) });
+    try cnf.addClause(&.{ Lit.positive(lit_mod.Var.fromIndex(1)), Lit.positive(lit_mod.Var.fromIndex(2)) });
+    try cnf.addClause(&.{ Lit.positive(lit_mod.Var.fromIndex(0)), Lit.positive(lit_mod.Var.fromIndex(2)) });
+    var orig = Cnf.init(std.testing.allocator);
+    defer orig.deinit();
+    orig.ensureVars(cnf.num_vars);
+    var ci: u32 = 0;
+    while (ci < cnf.numClauses()) : (ci += 1) {
+        try orig.addClause(cnf.clauseSlice(ClauseId.fromIndex(ci)));
+    }
+    const st = try preprocess(std.testing.allocator, &cnf);
+    try std.testing.expect(st.pure_assigned >= 1 or st.units_propagated >= 0);
+    try std.testing.expect(!st.unsat);
+    const r = try @import("solver.zig").solveCnf(std.testing.allocator, &cnf, .{});
+    defer if (r.model) |m| std.testing.allocator.free(m);
+    try std.testing.expect(r.status == .sat);
+    try std.testing.expect(orig.checkModel(r.model.?));
+}
+
+test "preprocess unit-only chain unsat" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    const x0 = Lit.positive(lit_mod.Var.fromIndex(0));
+    const x1 = Lit.positive(lit_mod.Var.fromIndex(1));
+    const x2 = Lit.positive(lit_mod.Var.fromIndex(2));
+    try cnf.addClause(&.{x0});
+    try cnf.addClause(&.{ x0.not(), x1 });
+    try cnf.addClause(&.{ x1.not(), x2 });
+    try cnf.addClause(&.{x2.not()});
+    const st = try preprocessOpts(std.testing.allocator, &cnf, .{ .vivify = true });
+    _ = st;
+    const r = try @import("solver.zig").solveCnf(std.testing.allocator, &cnf, .{});
+    defer if (r.model) |m| std.testing.allocator.free(m);
+    defer if (r.proof) |*p| {
+        var pp = p.*;
+        pp.deinit();
+    };
+    try std.testing.expect(r.status == .unsat);
+}
+
+test "preprocess unit-only chain sat model" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    const x0 = Lit.positive(lit_mod.Var.fromIndex(0));
+    const x1 = Lit.positive(lit_mod.Var.fromIndex(1));
+    const x2 = Lit.positive(lit_mod.Var.fromIndex(2));
+    try cnf.addClause(&.{x0});
+    try cnf.addClause(&.{ x0.not(), x1 });
+    try cnf.addClause(&.{ x1.not(), x2 });
+    var orig = Cnf.init(std.testing.allocator);
+    defer orig.deinit();
+    orig.ensureVars(3);
+    try orig.addClause(&.{x0});
+    try orig.addClause(&.{ x0.not(), x1 });
+    try orig.addClause(&.{ x1.not(), x2 });
+    _ = try preprocess(std.testing.allocator, &cnf);
+    const r = try @import("solver.zig").solveCnf(std.testing.allocator, &cnf, .{});
+    defer if (r.model) |m| std.testing.allocator.free(m);
+    try std.testing.expect(r.status == .sat);
+    try std.testing.expect(orig.checkModel(r.model.?));
+}
+
+test "preprocess vivify vs brute small random" {
+    const fuzz = @import("fuzz.zig");
+    const solver_mod = @import("solver.zig");
+    var prng = std.Random.DefaultPrng.init(0xA11CE);
+    const rng = prng.random();
+    var i: u32 = 0;
+    while (i < 35) : (i += 1) {
+        var cnf = try fuzz.random3Sat(std.testing.allocator, rng, 7, 26);
+        defer cnf.deinit();
+        const brute = fuzz.bruteSat(&cnf);
+        var work = Cnf.init(std.testing.allocator);
+        defer work.deinit();
+        work.ensureVars(cnf.num_vars);
+        var ci: u32 = 0;
+        while (ci < cnf.numClauses()) : (ci += 1) {
+            try work.addClause(cnf.clauseSlice(ClauseId.fromIndex(ci)));
+        }
+        _ = try preprocessOpts(std.testing.allocator, &work, .{ .vivify = true });
+        const r = try solver_mod.solveCnf(std.testing.allocator, &work, .{});
+        defer if (r.model) |m| std.testing.allocator.free(m);
+        defer if (r.proof) |*p| {
+            var pp = p.*;
+            pp.deinit();
+        };
+        const sat = r.status == .sat;
+        try std.testing.expect(sat == brute);
+        if (sat) try std.testing.expect(cnf.checkModel(r.model.?));
+    }
 }

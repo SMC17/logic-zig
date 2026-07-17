@@ -32,6 +32,10 @@ pub const PortfolioOptions = struct {
     ramp: bool = true,
     proof_on_unsat: bool = false,
     validate_model: bool = true,
+    /// When > 0, set `inprocess_interval` on every config (industrial path).
+    inprocess_interval: u32 = 0,
+    /// When set, override pure_literal on every config.
+    force_pure_literal: ?bool = null,
 };
 
 const Config = struct {
@@ -39,8 +43,9 @@ const Config = struct {
     name: []const u8,
 };
 
-/// Nine diverse CDCL configurations — competition-style sequential portfolio.
-fn configs() [9]Config {
+/// Ten diverse CDCL configurations — competition-style sequential portfolio.
+/// Includes an inprocess+pure industrial config for sat_hard-style hardness.
+fn configs() [10]Config {
     return .{
         .{ .name = "default", .opts = .{} },
         .{ .name = "fast-restart", .opts = .{ .restart_base = 50, .reduce_interval = 1000, .minimize = true } },
@@ -52,13 +57,23 @@ fn configs() [9]Config {
         .{ .name = "pure-first", .opts = .{ .pure_literal = true, .restart_base = 80, .minimize = true } },
         .{ .name = "no-min-rephase", .opts = .{ .minimize = false, .rephase_interval = 1, .restart_base = 100 } },
         .{ .name = "glue-keep1", .opts = .{ .reduce_by_lbd = true, .keep_lbd_max = 1, .reduce_interval = 900, .restart_base = 64 } },
+        // Industrial diversity: satisfied-learned deletion + pure + glue.
+        .{ .name = "inproc-pure-glue", .opts = .{
+            .pure_literal = true,
+            .inprocess_interval = 1200,
+            .reduce_by_lbd = true,
+            .minimize = true,
+            .restart_base = 120,
+            .reduce_interval = 1500,
+            .reduce_keep_min = 200,
+        } },
     };
 }
 
 fn budgetFor(i: usize, n: usize, total: u64, ramp: bool) u64 {
     if (!ramp) return @max(total / n, 5_000);
     // Weights: early configs = probes; later = residual depth
-    const weights = [_]u64{ 1, 1, 1, 2, 2, 2, 3, 3, 4 };
+    const weights = [_]u64{ 1, 1, 1, 2, 2, 2, 3, 3, 4, 4 };
     var sum: u64 = 0;
     var w: u64 = 0;
     var k: usize = 0;
@@ -91,6 +106,13 @@ pub fn solvePortfolioOpts(
         var opts = cfg.opts;
         opts.max_conflicts = budgetFor(i, cfgs.len, popts.total_conflicts, popts.ramp);
         if (popts.proof_on_unsat) opts.proof = true;
+        // Outer preprocess is caller's job; never re-preprocess inside portfolio.
+        opts.preprocess = false;
+        if (popts.inprocess_interval > 0) {
+            // Keep per-config inprocess if already set; otherwise apply global.
+            if (opts.inprocess_interval == 0) opts.inprocess_interval = popts.inprocess_interval;
+        }
+        if (popts.force_pure_literal) |pl| opts.pure_literal = pl;
 
         const r = try solver_mod.solveCnf(allocator, formula, opts);
         tried += 1;
@@ -222,6 +244,27 @@ test "portfolio proof on unsat verifies rup" {
     try std.testing.expect(r.proof != null);
 }
 
-test "portfolio config count is nine" {
-    try std.testing.expect(configs().len == 9);
+test "portfolio config count is ten" {
+    try std.testing.expect(configs().len == 10);
+}
+
+test "portfolio edge empty cnf sat" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    const r = try solvePortfolio(std.testing.allocator, &cnf, 10_000);
+    defer if (r.model) |m| std.testing.allocator.free(m);
+    try std.testing.expect(r.status == .sat);
+}
+
+test "portfolio edge empty clause unsat" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    try cnf.addClause(&.{});
+    const r = try solvePortfolio(std.testing.allocator, &cnf, 10_000);
+    defer if (r.model) |m| std.testing.allocator.free(m);
+    defer if (r.proof) |*p| {
+        var pp = p.*;
+        pp.deinit();
+    };
+    try std.testing.expect(r.status == .unsat);
 }

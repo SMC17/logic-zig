@@ -52,7 +52,9 @@ golden hook, (4) STATUS residual if not industrial.
 
 ### Phase 2 — Industrial MC + ABC · *path live*
 - `abc-delta <aig>` internal vs ABC; soft-skip if ABC missing
-- **Falsifier:** `delta=MISMATCH` when both decide
+- `deltaLabel` fully unit-tested without ABC; set `LOGIC_ZIG_ABC` or build `third_party/abc/abc`
+- Edge designs: empty-bad, multi-bad, constraint-only, init×constraint, dual-rail, one-hot, counter bounds
+- **Falsifier:** `delta=MISMATCH` when both decide; golden/design edge tests
 
 ### Phase 2 — Industrial MC + ABC-class *path*
 - PDR/IC3 depth (generalize, clause sharing, better CTG)

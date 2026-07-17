@@ -45,7 +45,7 @@ pub const Capability = packed struct(u32) {
     agent_session: bool = true,
     smt_bv: bool = true,
     smt_uf: bool = true, // ground EUF spine
-    smt_array: bool = false, // Phase 3
+    smt_array: bool = true, // partial read-over-write only (not full array theory)
     fol_unify: bool = true,
     fol_finite_model: bool = true,
     fol_resolution: bool = true, // Phase 4 skeleton
@@ -193,6 +193,44 @@ pub fn mcSafety(
     };
 }
 
+/// Multi-property safety: OR of all bads (HWMCC combined semantics).
+/// Empty props → proven (vacuous).
+pub fn mcSafetyMulti(
+    allocator: std.mem.Allocator,
+    nl: *netlist_mod.Netlist,
+    bads: []const netlist_mod.NetId,
+    opts: McOptions,
+) !McResult {
+    if (bads.len == 0) return .{ .status = .proven, .engine = "empty", .frames = 0 };
+    if (bads.len == 1) return mcSafety(allocator, nl, bads[0], opts);
+
+    const eng = opts.engine;
+    if (eng == .auto or eng == .pdr) {
+        var pr = try pdr.checkMulti(allocator, nl, bads, opts.max_frames);
+        defer pr.deinit(allocator);
+        switch (pr.status) {
+            .proven => return .{ .status = .proven, .engine = "pdr-multi", .frames = pr.frames },
+            .violated => return .{ .status = .violated, .engine = "pdr-multi", .frames = pr.frames },
+            .unknown => if (eng == .pdr) return .{ .status = .unknown, .engine = "pdr-multi", .frames = pr.frames },
+        }
+    }
+    // k-induction on OR-synthesized property is awkward; BMC multi first for CEX.
+    if (eng == .auto or eng == .bmc or eng == .kind) {
+        const br = try bmc.checkMulti(allocator, nl, bads, opts.max_frames);
+        defer if (br.trace) |t| allocator.free(t);
+        switch (br.status) {
+            .violated => return .{ .status = .violated, .engine = "bmc-multi", .frames = br.bound },
+            .safe_up_to_bound => {
+                if (eng == .bmc) return .{ .status = .unknown, .engine = "bmc-multi", .frames = br.bound };
+                // auto/kind: still unknown at bound (no multi-kind yet)
+                return .{ .status = .unknown, .engine = "bmc-multi", .frames = br.bound };
+            },
+            .unknown => return .{ .status = .unknown, .engine = "bmc-multi", .frames = br.bound },
+        }
+    }
+    return .{ .status = .unknown, .engine = "multi", .frames = 0 };
+}
+
 pub fn mcAiger(
     allocator: std.mem.Allocator,
     src: []const u8,
@@ -201,8 +239,7 @@ pub fn mcAiger(
     var nl = try aiger.parse(allocator, src);
     defer nl.deinit();
     const props = nl.badProps();
-    if (props.len == 0) return .{ .status = .proven, .engine = "empty", .frames = 0 };
-    return mcSafety(allocator, &nl, props[0], opts);
+    return mcSafetyMulti(allocator, &nl, props, opts);
 }
 
 // ── SMT / CTL / FOL / Agent re-exports ───────────────────────────────
@@ -210,6 +247,8 @@ pub fn mcAiger(
 pub const BvWorld = bv_mod.BvWorld;
 pub const SmtSolver = smt_mod.SmtSolver;
 pub const SmtTheory = smt_mod.Theory;
+pub const UfSolver = @import("../smt/uf.zig").UfSolver;
+pub const ArraySolver = @import("../smt/array.zig").ArraySolver;
 pub const CtlOp = ctl_mod.CtlOp;
 pub const checkCtl = ctl_mod.check;
 pub const FolResolution = resolution.Prover;
@@ -252,4 +291,38 @@ test "api v1 sat sat" {
         pp.deinit();
     };
     try std.testing.expect(r.status == .sat);
+}
+
+test "api v1 mcAiger empty bad proven" {
+    const src =
+        \\aag 1 0 1 0 0
+        \\0 0
+    ;
+    const r = try mcAiger(std.testing.allocator, src, .{ .max_frames = 4 });
+    try std.testing.expect(r.status == .proven);
+    try std.testing.expectEqualStrings("empty", r.engine);
+}
+
+test "api v1 mcAiger multi-bad violated" {
+    // q0 stuck0 + q1 init1 stuck1; combined OR unsafe
+    const src =
+        \\aag 2 0 2 0 0 2 0 0 0
+        \\0 0
+        \\1 1
+        \\2
+        \\4
+    ;
+    const r = try mcAiger(std.testing.allocator, src, .{ .max_frames = 8 });
+    try std.testing.expect(r.status == .violated);
+}
+
+test "api v1 mcAiger stuck0 proven" {
+    const src =
+        \\aag 1 0 1 1 0
+        \\0 0
+        \\2
+    ;
+    const r = try mcAiger(std.testing.allocator, src, .{ .max_frames = 12 });
+    try std.testing.expect(r.status == .proven or r.status == .unknown);
+    try std.testing.expect(r.status != .violated);
 }

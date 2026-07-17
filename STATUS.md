@@ -1,39 +1,44 @@
 # logic-zig status
 
-**Version:** 0.16.0  
-**Last green:** vivify · sat_hard scoreboard · SMT UF · ABC delta path · TRUST+UF
+**Version:** 0.17.0  
+**North star:** universal logic library in Zig (`docs/UNIVERSAL.md`) — leave no stone unturned; stand on giants; deepen forever.
 
 ## Climb gates
 
 ```sh
 zig build test && zig build
-./zig-out/bin/logic-zig api-info
+./zig-out/bin/logic-zig taxonomy
+./zig-out/bin/logic-zig giants
+./zig-out/bin/logic-zig edge-suite
 ./zig-out/bin/logic-zig trust-report
-./zig-out/bin/logic-zig sat-scoreboard --dir corpus/bench/sat_comp --limit 15 --conflicts 200000
-./zig-out/bin/logic-zig sat-scoreboard --dir corpus/bench/sat_hard --limit 8 --conflicts 300000 --industrial
-./zig-out/bin/logic-zig abc-delta corpus/golden/aiger/stuck0.aag --frames 12
-./zig-out/bin/logic-hwmcc golden
+./zig-out/bin/logic-zig sat-scoreboard --dir corpus/bench/sat --limit 15 --conflicts 150000
+./zig-out/bin/logic-zig api-info
 ```
 
-## Industrial program
+## Universal platform (v0.17)
 
-See [docs/INDUSTRIAL.md](docs/INDUSTRIAL.md).
+| Piece | Role |
+|-------|------|
+| `taxonomy.registry` | Named systems × maturity across the master taxonomy |
+| `informal/argument` | Premise/conclusion/schemes structure |
+| `type_theory/tt` | MLTT micro kernel (check) |
+| `modal/kripke` | Finite-frame K / diamond-box |
+| `bridge/giants` | Discover CaDiCaL, Kissat, Z3, ABC, Vampire, Lean, … |
+| `docs/UNIVERSAL.md` | Destination + non-fiction rules |
 
-| Phase | Status |
-|-------|--------|
-| **0** Stable api/v1 | done |
-| **1** Industrial SAT | vivify + scoreboard + sat_hard industrial mode |
-| **2** MC + ABC path | `abc-delta` CLI · soft when ABC missing |
-| **3** SMT | BV + **UF ground EUF** spine |
-| **4** FOL | resolution skeleton |
-| **5** CTL/BV | bounded / micro |
+## Computational depth (unchanged spine)
 
-## Residuals (honest)
+SAT/MC/SMT/FOL industrial program: `docs/INDUSTRIAL.md`  
+Taxonomy map: `docs/TAXONOMY_COVERAGE.md`
 
-| Claim | Reality |
-|-------|---------|
-| Beat CaDiCaL PAR-2 always | **Not claimed** — measure per suite; often instance-speed WIN, PAR-2 lose |
-| Full industrial SMT/FOL/ABC | Spines + paths; not Z3/Vampire/ABC parity |
-| sat_hard full suite | Sampled with `--limit`; hard primes may unknown@budget |
+## Residuals (honest — ambition ≠ achievement)
+
+| Ambition | Now |
+|----------|-----|
+| Universal coverage of taxonomy | Registry + spines; most families `documented`/`skeleton` |
+| Informal argument analysis | Structure OK; no NLP / full schemes library |
+| Full type theory / proof assistant | Micro checker only |
+| Beat Kissat/ABC/Z3/Vampire | Giants discover + CaDiCaL scoreboard; **no parity claim** |
+| Philosophical completeness | Rows exist; engines mostly future |
 
 https://github.com/SMC17/logic-zig

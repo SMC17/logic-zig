@@ -1,0 +1,4 @@
+c edge: duplicate literals in clause — SAT
+p cnf 2 2
+1 1 2 0
+-1 -1 0

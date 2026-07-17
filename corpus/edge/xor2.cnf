@@ -1,0 +1,4 @@
+c edge: x1 XOR x2 (two clauses) — SAT
+p cnf 2 2
+1 2 0
+-1 -2 0

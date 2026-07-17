@@ -19,10 +19,13 @@ jobs:
         run: zig build test
       - name: Build umbrella + spin-offs + IPASIR
         run: zig build
-      - name: Doctor + trust report
+      - name: Doctor + trust report + universal
         run: |
           ./zig-out/bin/logic-zig doctor
           ./zig-out/bin/logic-zig trust-report
+          ./zig-out/bin/logic-zig taxonomy
+          ./zig-out/bin/logic-zig giants
+          ./zig-out/bin/logic-zig edge-suite
       - name: Golden corpus (builtin + AIGER manifest + DRAT)
         run: ./zig-out/bin/logic-hwmcc golden
       - name: DRAT-trim unit + fuzz

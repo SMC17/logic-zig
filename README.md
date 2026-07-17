@@ -31,6 +31,8 @@ zig build   # umbrella + spin-offs + libipasirlogic.so
 
 ./zig-out/bin/logic-zig doctor
 ./zig-out/bin/logic-zig api-info   # stable api/v1 + industrial capability matrix
+./zig-out/bin/logic-zig taxonomy   # universal named-systems registry
+./zig-out/bin/logic-zig giants     # discover external industrial provers
 ./zig-out/bin/logic-hwmcc golden
 
 # Flagship spin-offs (each pins a unique tradeoff profile)

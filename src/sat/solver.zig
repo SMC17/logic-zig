@@ -1467,10 +1467,38 @@ pub fn solveCnf(allocator: std.mem.Allocator, cnf: *const Cnf, opts: SolverOptio
         while (ci < cnf.numClauses()) : (ci += 1) {
             try work.addClause(cnf.clauseSlice(ClauseId.fromIndex(ci)));
         }
-        _ = try preprocess_mod.preprocess(allocator, &work);
-        var s = try Solver.init(allocator, &work, opts);
+        // Vivify on by default for one-shot preprocess path (industrial).
+        _ = try preprocess_mod.preprocessOpts(allocator, &work, .{ .vivify = true });
+        // Disable nested preprocess flag on the inner solver options.
+        var inner = opts;
+        inner.preprocess = false;
+        var s = try Solver.init(allocator, &work, inner);
         defer s.deinit();
-        return try s.solve();
+        var r = try s.solve();
+        // Model must satisfy the *original* formula (preprocess is equisatisfiable).
+        if (r.status == .sat) {
+            if (r.model) |m| {
+                // Ensure model covers original var count (work may match; pad if needed).
+                if (m.len < cnf.num_vars) {
+                    const extended = try allocator.alloc(Value, cnf.num_vars);
+                    @memcpy(extended[0..m.len], m);
+                    @memset(extended[m.len..], .false_);
+                    allocator.free(m);
+                    r.model = extended;
+                }
+                if (!cnf.checkModel(r.model.?)) {
+                    if (r.model) |mm| allocator.free(mm);
+                    r.model = null;
+                    if (r.proof) |*p| {
+                        var pp = p.*;
+                        pp.deinit();
+                    }
+                    r.proof = null;
+                    return error.ModelInvalid;
+                }
+            } else return error.ModelInvalid;
+        }
+        return r;
     }
     var s = try Solver.init(allocator, cnf, opts);
     defer s.deinit();
@@ -1615,4 +1643,201 @@ test "cdcl heap vsids and reduce path" {
     if (r.status == .sat) {
         try std.testing.expect(cnf.checkModel(r.model.?));
     }
+}
+
+// ---- Hard edge cases (industrial SAT bar) ---------------------------------
+
+test "edge empty CNF is sat" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    const r = try solveCnf(std.testing.allocator, &cnf, .{});
+    defer if (r.model) |m| std.testing.allocator.free(m);
+    try std.testing.expect(r.status == .sat);
+}
+
+test "edge empty CNF with free vars is sat" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    cnf.ensureVars(5);
+    const r = try solveCnf(std.testing.allocator, &cnf, .{ .preprocess = true, .pure_literal = true });
+    defer if (r.model) |m| std.testing.allocator.free(m);
+    try std.testing.expect(r.status == .sat);
+    try std.testing.expect(r.model.?.len == 5);
+    try std.testing.expect(cnf.checkModel(r.model.?));
+}
+
+test "edge empty clause is unsat" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    try cnf.addClause(&.{});
+    const r = try solveCnf(std.testing.allocator, &cnf, .{ .preprocess = true });
+    defer if (r.model) |m| std.testing.allocator.free(m);
+    defer if (r.proof) |*p| {
+        var pp = p.*;
+        pp.deinit();
+    };
+    try std.testing.expect(r.status == .unsat);
+}
+
+test "edge tautology-only is sat" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    const x = Lit.positive(Var.fromIndex(0));
+    const y = Lit.positive(Var.fromIndex(1));
+    try cnf.addClause(&.{ x, x.not() });
+    try cnf.addClause(&.{ y, y.not() });
+    try std.testing.expect(cnf.num_vars == 2);
+    const r = try solveCnf(std.testing.allocator, &cnf, .{ .preprocess = true });
+    defer if (r.model) |m| std.testing.allocator.free(m);
+    try std.testing.expect(r.status == .sat);
+    try std.testing.expect(cnf.checkModel(r.model.?));
+}
+
+test "edge huge clause sat with model" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    const n: u32 = 512;
+    cnf.ensureVars(n);
+    var lits = try std.testing.allocator.alloc(Lit, n);
+    defer std.testing.allocator.free(lits);
+    var i: u32 = 0;
+    while (i < n) : (i += 1) {
+        lits[i] = Lit.positive(Var.fromIndex(i));
+    }
+    try cnf.addClause(lits);
+    // Force all but last false → last must be true via BCP after units
+    i = 0;
+    while (i < n - 1) : (i += 1) {
+        try cnf.addClause(&.{Lit.negative(Var.fromIndex(i))});
+    }
+    const r = try solveCnf(std.testing.allocator, &cnf, .{
+        .preprocess = true,
+        .pure_literal = true,
+        .max_conflicts = 100_000,
+    });
+    defer if (r.model) |m| std.testing.allocator.free(m);
+    try std.testing.expect(r.status == .sat);
+    try std.testing.expect(cnf.checkModel(r.model.?));
+    try std.testing.expect(r.model.?[n - 1] == .true_);
+}
+
+test "edge duplicate lits unit sat" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    const x = Lit.positive(Var.fromIndex(0));
+    try cnf.addClause(&.{ x, x, x, x });
+    const r = try solveCnf(std.testing.allocator, &cnf, .{ .preprocess = true });
+    defer if (r.model) |m| std.testing.allocator.free(m);
+    try std.testing.expect(r.status == .sat);
+    try std.testing.expect(r.model.?[0] == .true_);
+    try std.testing.expect(cnf.checkModel(r.model.?));
+}
+
+test "edge pure-only formula sat" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    try cnf.addClause(&.{ Lit.positive(Var.fromIndex(0)), Lit.positive(Var.fromIndex(1)) });
+    try cnf.addClause(&.{ Lit.positive(Var.fromIndex(1)), Lit.positive(Var.fromIndex(2)) });
+    try cnf.addClause(&.{ Lit.negative(Var.fromIndex(3)), Lit.negative(Var.fromIndex(4)) });
+    const r = try solveCnf(std.testing.allocator, &cnf, .{
+        .preprocess = true,
+        .pure_literal = true,
+    });
+    defer if (r.model) |m| std.testing.allocator.free(m);
+    try std.testing.expect(r.status == .sat);
+    try std.testing.expect(cnf.checkModel(r.model.?));
+}
+
+test "edge unit-only chain sat" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    const x0 = Lit.positive(Var.fromIndex(0));
+    const x1 = Lit.positive(Var.fromIndex(1));
+    const x2 = Lit.positive(Var.fromIndex(2));
+    const x3 = Lit.positive(Var.fromIndex(3));
+    try cnf.addClause(&.{x0});
+    try cnf.addClause(&.{ x0.not(), x1 });
+    try cnf.addClause(&.{ x1.not(), x2 });
+    try cnf.addClause(&.{ x2.not(), x3 });
+    const r = try solveCnf(std.testing.allocator, &cnf, .{ .preprocess = true });
+    defer if (r.model) |m| std.testing.allocator.free(m);
+    try std.testing.expect(r.status == .sat);
+    try std.testing.expect(cnf.checkModel(r.model.?));
+    try std.testing.expect(r.model.?[0] == .true_);
+    try std.testing.expect(r.model.?[3] == .true_);
+}
+
+test "edge unit-only chain unsat" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    const x0 = Lit.positive(Var.fromIndex(0));
+    const x1 = Lit.positive(Var.fromIndex(1));
+    const x2 = Lit.positive(Var.fromIndex(2));
+    try cnf.addClause(&.{x0});
+    try cnf.addClause(&.{ x0.not(), x1 });
+    try cnf.addClause(&.{ x1.not(), x2 });
+    try cnf.addClause(&.{x2.not()});
+    const r = try solveCnf(std.testing.allocator, &cnf, .{ .preprocess = true, .proof = true });
+    defer if (r.model) |m| std.testing.allocator.free(m);
+    defer if (r.proof) |*p| {
+        var pp = p.*;
+        pp.deinit();
+    };
+    try std.testing.expect(r.status == .unsat);
+}
+
+test "edge random 3-SAT differential preprocess+inprocess model check" {
+    const fuzz = @import("fuzz.zig");
+    var prng = std.Random.DefaultPrng.init(0x5A7);
+    const rng = prng.random();
+    var i: u32 = 0;
+    while (i < 40) : (i += 1) {
+        var cnf = try fuzz.random3Sat(std.testing.allocator, rng, 8, 30);
+        defer cnf.deinit();
+        const brute = fuzz.bruteSat(&cnf);
+        const r = try solveCnf(std.testing.allocator, &cnf, .{
+            .preprocess = true,
+            .pure_literal = true,
+            .inprocess_interval = 200,
+            .minimize = true,
+            .reduce_by_lbd = true,
+            .max_conflicts = 200_000,
+        });
+        defer if (r.model) |m| std.testing.allocator.free(m);
+        defer if (r.proof) |*p| {
+            var pp = p.*;
+            pp.deinit();
+        };
+        try std.testing.expect(r.status != .unknown);
+        const sat = r.status == .sat;
+        try std.testing.expect(sat == brute);
+        if (sat) try std.testing.expect(cnf.checkModel(r.model.?));
+    }
+}
+
+test "edge inprocess interval does not break sat" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    const n: u32 = 10;
+    cnf.ensureVars(n);
+    var prng = std.Random.DefaultPrng.init(123);
+    const rng = prng.random();
+    var c: u32 = 0;
+    while (c < 40) : (c += 1) {
+        var cl: [3]Lit = undefined;
+        var k: u32 = 0;
+        while (k < 3) : (k += 1) {
+            cl[k] = Lit.make(Var.fromIndex(rng.intRangeLessThan(u32, 0, n)), rng.boolean());
+        }
+        try cnf.addClause(&cl);
+    }
+    const r = try solveCnf(std.testing.allocator, &cnf, .{
+        .inprocess_interval = 5,
+        .reduce_interval = 8,
+        .max_conflicts = 80_000,
+        .pure_literal = true,
+    });
+    defer if (r.model) |m| std.testing.allocator.free(m);
+    try std.testing.expect(r.status == .sat or r.status == .unsat);
+    if (r.status == .sat) try std.testing.expect(cnf.checkModel(r.model.?));
 }

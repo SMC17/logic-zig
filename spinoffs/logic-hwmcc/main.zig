@@ -164,6 +164,51 @@ pub fn main(init: std.process.Init) !void {
             defer if (r.base.trace) |t| gpa.free(t);
             std.debug.print("parity-never: {s}\n", .{@tagName(r.status)});
         }
+        // edge: multi-bad / empty-bad / constraint / dual-rail-bad-init / counter1
+        {
+            var d = try logic.designs.makeMultiBadMixed(gpa);
+            defer d.nl.deinit();
+            const r = try logic.bmc.checkMulti(gpa, &d.nl, d.nl.badProps(), 2);
+            defer if (r.trace) |t| gpa.free(t);
+            std.debug.print("multi-bad-mixed: {s}\n", .{@tagName(r.status)});
+        }
+        {
+            var d = try logic.designs.makeConstraintOnlySafe(gpa);
+            defer d.nl.deinit();
+            const r = try logic.bmc.check(gpa, &d.nl, d.bad, 6);
+            defer if (r.trace) |t| gpa.free(t);
+            std.debug.print("constraint-only: {s}\n", .{@tagName(r.status)});
+        }
+        {
+            var d = try logic.designs.makeInitConstraintConflict(gpa);
+            defer d.nl.deinit();
+            const r = try logic.bmc.check(gpa, &d.nl, d.bad, 3);
+            defer if (r.trace) |t| gpa.free(t);
+            std.debug.print("init-conflict: {s}\n", .{@tagName(r.status)});
+        }
+        {
+            var d = try logic.designs.makeDualRailBadInit(gpa);
+            defer d.nl.deinit();
+            const r = try logic.bmc.check(gpa, &d.nl, d.bad, 0);
+            defer if (r.trace) |t| gpa.free(t);
+            std.debug.print("dual-rail-bad-init: {s}\n", .{@tagName(r.status)});
+        }
+        {
+            var d = try logic.designs.makeCounter(gpa, 1);
+            defer d.nl.deinit();
+            const r0 = try logic.bmc.check(gpa, &d.nl, d.bad, 0);
+            defer if (r0.trace) |t| gpa.free(t);
+            const r1 = try logic.bmc.check(gpa, &d.nl, d.bad, 1);
+            defer if (r1.trace) |t| gpa.free(t);
+            std.debug.print("counter1: bound0={s} bound1={s}\n", .{ @tagName(r0.status), @tagName(r1.status) });
+        }
+        {
+            var d = try logic.designs.makeOneHotWeightBad(gpa, 3);
+            defer d.nl.deinit();
+            var r = try logic.pdr.check(gpa, &d.nl, d.bad, 12);
+            defer r.deinit(gpa);
+            std.debug.print("onehot-weight3: {s}\n", .{@tagName(r.status)});
+        }
         return;
     }
     if (std.mem.eql(u8, cmd, "klive")) {
