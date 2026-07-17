@@ -13,6 +13,7 @@ pub fn main(init: std.process.Init) !void {
             \\logic-cert — proofs & certificates (profile=cert)
             \\  logic-cert unsat-demo
             \\  logic-cert klive-demo
+            \\  logic-cert pdr-demo
             \\  logic-cert profile
             \\
         , .{});
@@ -53,6 +54,29 @@ pub fn main(init: std.process.Init) !void {
         const text = try logic.certificate.writeKLiveCert(gpa, cert);
         defer gpa.free(text);
         std.debug.print("{s}", .{text});
+        return;
+    }
+    if (std.mem.eql(u8, cmd, "pdr-demo")) {
+        var nl = logic.Netlist.init(gpa);
+        defer nl.deinit();
+        const q = try nl.allocNetNamed("q");
+        const d = try nl.allocNetNamed("d");
+        try nl.addConst(d, false);
+        try nl.addLatch(d, q, false);
+        const inv = try logic.certificate.fromPdrProven(gpa, &nl, q, 16);
+        if (inv) |*i| {
+            defer {
+                var ii = i.*;
+                ii.deinit();
+            }
+            const text = try i.writeText(gpa);
+            defer gpa.free(text);
+            std.debug.print("{s}", .{text});
+            std.debug.print("verified={}\n", .{try i.verify(gpa, &nl)});
+        } else {
+            std.debug.print("no cert\n", .{});
+            std.process.exit(1);
+        }
         return;
     }
     std.debug.print("unknown: {s}\n", .{cmd});

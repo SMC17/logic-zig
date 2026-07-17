@@ -16,7 +16,7 @@ test "ic3 reexport stuck0" {
     const d = try nl.allocNetNamed("d");
     try nl.addConst(d, false);
     try nl.addLatch(d, q, false);
-    const r = try check(std.testing.allocator, &nl, q, 12);
-    defer if (r.cex_latches) |c| std.testing.allocator.free(c);
+    var r = try check(std.testing.allocator, &nl, q, 12);
+    defer r.deinit(std.testing.allocator);
     try std.testing.expect(r.status != .violated);
 }

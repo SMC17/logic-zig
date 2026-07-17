@@ -50,8 +50,8 @@ pub fn runBytesOptsLegacy(allocator: std.mem.Allocator, src: []const u8, max_fra
 }
 
 fn checkOne(allocator: std.mem.Allocator, nl: *netlist_mod.Netlist, bad: netlist_mod.NetId, max_frames: u32) !u8 {
-    const pdr_r = try pdr.check(allocator, nl, bad, max_frames);
-    defer if (pdr_r.cex_latches) |c| allocator.free(c);
+    var pdr_r = try pdr.check(allocator, nl, bad, max_frames);
+    defer pdr_r.deinit(allocator);
     switch (pdr_r.status) {
         .proven => {
             std.debug.print("c pdr proven frames={d} gens={d} ctg={d}\n", .{
@@ -121,8 +121,8 @@ pub fn runBytesOpts(allocator: std.mem.Allocator, src: []const u8, opts: HwmccOp
     }
 
     // Combined multi-property PDR then BMC
-    const pdr_r = try pdr.checkMulti(allocator, &nl, props, opts.max_frames);
-    defer if (pdr_r.cex_latches) |c| allocator.free(c);
+    var pdr_r = try pdr.checkMulti(allocator, &nl, props, opts.max_frames);
+    defer pdr_r.deinit(allocator);
     switch (pdr_r.status) {
         .proven => {
             std.debug.print("c pdr multi proven frames={d} gens={d} ctg={d}\n", .{
