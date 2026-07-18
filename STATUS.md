@@ -1,6 +1,6 @@
 # logic-zig status
 
-**Version:** 0.21.0  
+**Version:** 0.22.0  
 **North star:** universal logic library in Zig (`docs/UNIVERSAL.md`) — leave no stone unturned; stand on giants; deepen forever.
 
 ## Climb gates
@@ -41,6 +41,8 @@ zig build test && zig build
 | `modal/epistemic` | Multi-agent S5, common knowledge, announcements |
 | `logic/syllogistic` | Complete 256-form categorical decision (15/24) |
 | `logic/el` | EL subsumption via completion rules |
+| `modal/deontic` | SDL (KD): D⇔seriality, Ross canon |
+| `logic/linear` | MLL sequent prover: no weakening/contraction, no MIX |
 | `docs/UNIVERSAL.md` | Destination + non-fiction rules |
 
 ## Computational depth (unchanged spine)
