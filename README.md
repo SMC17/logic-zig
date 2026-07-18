@@ -17,6 +17,8 @@ BV-SMT, bounded CTL).
 | **Reasoning modes** | Deduction (SAT/SMT/FOL oracle) · **abduction** (subset-minimal + min-cost via MaxSAT, first-order ALP) · **induction** (minimal-k DNF synthesis, exact Bayesian posterior) — the Peircean triad as engines |
 | **Nonmonotonic** | Reiter defaults · KLM rational closure · ASP stable models · circumscription · Dung argumentation · AGM belief revision |
 | **Analogical** | Boolean analogical proportions (axioms verified), proportion solving, abstaining analogical classifier |
+| **Non-classical** | Intuitionistic (G4ip decision, Glivenko-verified) · many-valued matrices (K3/LP/FDE/Ł3) · multi-agent epistemic S5 with common knowledge & announcements |
+| **Classical roots** | Complete Aristotelian syllogistic decision (15/24 of 256 forms) · description logic EL subsumption |
 | **Optimization** | Weighted partial MaxSAT (exact, brute-force-verified) powering cost-ranked explanations |
 
 Proof posture is documented in [`STATUS.md`](STATUS.md): features are marked
