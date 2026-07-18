@@ -80,6 +80,8 @@ pub const manyvalued = @import("logic/manyvalued.zig");
 pub const epistemic = @import("modal/epistemic.zig");
 pub const syllogistic = @import("logic/syllogistic.zig");
 pub const el = @import("logic/el.zig");
+pub const deontic = @import("modal/deontic.zig");
+pub const linear = @import("logic/linear.zig");
 pub const edge_suite = @import("track/edge_suite.zig");
 pub const taxonomy = @import("taxonomy/registry.zig");
 pub const informal = @import("informal/argument.zig");
@@ -268,6 +270,8 @@ test {
     _ = epistemic;
     _ = syllogistic;
     _ = el;
+    _ = deontic;
+    _ = linear;
 }
 
 test "end-to-end tautology a|!a" {

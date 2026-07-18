@@ -234,6 +234,7 @@ pub fn main(init: std.process.Init) !void {
         std.debug.print("  logic_intuitionistic={} logic_manyvalued={} modal_epistemic={} logic_syllogistic={} kr_el={}\n", .{
             caps.logic_intuitionistic, caps.logic_manyvalued, caps.modal_epistemic, caps.logic_syllogistic, caps.kr_el,
         });
+        std.debug.print("  modal_deontic={} logic_linear_mll={}\n", .{ caps.modal_deontic, caps.logic_linear_mll });
         std.debug.print("program: docs/INDUSTRIAL.md\n", .{});
         return;
     }
