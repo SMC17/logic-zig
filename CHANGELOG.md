@@ -5,6 +5,36 @@ All notable changes to **logic-zig** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/).
 
+## [0.20.0] — 2026-07-17
+
+### Nonmonotonic completion wave: argumentation · answer sets · belief revision · circumscription · analogy
+
+- **`reason/argumentation.zig`**: Dung AFs — grounded via characteristic-function fixpoint;
+  admissible/complete/stable/preferred enumeration; credulous & skeptical acceptance;
+  canon: reinstatement, mutual attack, odd/even cycles, floating acceptance,
+  grounded ⊆ every preferred
+- **`reason/asp.zig`**: stable models of normal programs — Gelfond–Lifschitz reduct
+  least-model check as the certificate; canon: even/odd negative loops, constraints,
+  stratified programs, supported-but-unfounded models rejected
+- **`reason/agm.zig`**: AGM base contraction via remainder sets (maxichoice, full-meet,
+  cardinality partial-meet) + Levi-identity revision; postulate tests: success, inclusion,
+  vacuity, tautology-failure, revision consistency
+- **`reason/circumscription.zig`**: propositional circumscription — P-minimal-model
+  entailment with fixed/varying atoms via signature enumeration over the SAT oracle;
+  bird/ab canon, exception defeat; 30 random instances cross-checked against an
+  independent full-assignment oracle
+- **`reason/analogy.zig`**: Boolean analogical proportions (Miclet–Prade) — axioms
+  verified over 200 random vectors + exhaustive 16-pattern check; unique-solution
+  solving; analogical classifier exact & unanimous on affine concepts, **abstains**
+  when no label-solvable triple exists (minimal-XOR honesty test)
+- **api/v1 → 1.3.0**: Capability widened to u64 (low word unchanged, `toU32` kept);
+  5 new bits; re-exports for all five engines
+- Taxonomy: +5 fragment rows (dung-af, asp-stable, agm-revision, circumscription,
+  analogical); coverage doc: Analogical and Dialogical/argumentation modes now M
+- Pre-registered: exp-1784310435-261237507 (AF), exp-1784310435-294505035 (ASP),
+  exp-1784310435-326080521 (AGM), exp-1784310439-633429721 (circumscription),
+  exp-1784310439-666082653 (analogy)
+
 ## [0.19.0] — 2026-07-17
 
 ### Reasoning-mode wave: MaxSAT · cost-ranked & first-order abduction · Bayesian induction · nonmonotonic family

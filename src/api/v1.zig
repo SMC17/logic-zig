@@ -26,11 +26,13 @@ const agent_session = @import("../agent/session.zig");
 
 /// API major.minor — bump minor for additive; major requires new module path.
 pub const version_major: u32 = 1;
-pub const version_minor: u32 = 2;
-pub const version_string = "1.2.0";
+pub const version_minor: u32 = 3;
+pub const version_string = "1.3.0";
 
 /// Feature bits — consumers can feature-detect without parsing docs.
-pub const Capability = packed struct(u32) {
+/// Widened to u64 in 1.3.0; `toU32` keeps returning the low word for
+/// existing callers (all pre-1.3 bits live there).
+pub const Capability = packed struct(u64) {
     sat_cdcl: bool = true,
     sat_portfolio: bool = true,
     sat_preprocess: bool = true,
@@ -59,21 +61,31 @@ pub const Capability = packed struct(u32) {
     reason_bayes: bool = true, // exact Bayesian induction over conjunctions
     reason_default: bool = true, // Reiter default-logic extensions
     reason_klm: bool = true, // KLM rational closure
-    _pad: u4 = 0,
+    reason_af: bool = true, // Dung abstract argumentation
+    reason_asp: bool = true, // stable models (answer sets)
+    reason_agm: bool = true, // AGM base contraction/revision
+    reason_circ: bool = true, // propositional circumscription
+    reason_analogy: bool = true, // Boolean analogical proportions
+    _pad: u31 = 0,
 
     pub fn current() Capability {
         return .{};
     }
 
-    pub fn toU32(self: Capability) u32 {
+    pub fn toU64(self: Capability) u64 {
         return @bitCast(self);
+    }
+
+    /// Low word — every pre-1.3 capability bit is here.
+    pub fn toU32(self: Capability) u32 {
+        return @truncate(self.toU64());
     }
 };
 
 pub fn versionLine(allocator: std.mem.Allocator) ![]u8 {
     return std.fmt.allocPrint(allocator, "logic-zig api/v1 {s} caps=0x{x}", .{
         version_string,
-        Capability.current().toU32(),
+        Capability.current().toU64(),
     });
 }
 
@@ -306,6 +318,36 @@ pub const klmRank = klm_mod.rank;
 pub const klmQuery = klm_mod.query;
 pub const KlmConditional = klm_mod.Conditional;
 
+const af_mod = @import("../reason/argumentation.zig");
+const asp_mod = @import("../reason/asp.zig");
+const agm_mod = @import("../reason/agm.zig");
+const circ_mod = @import("../reason/circumscription.zig");
+const analogy_mod = @import("../reason/analogy.zig");
+
+/// Argumentation: Dung semantics + acceptance.
+pub const Af = af_mod.Af;
+pub const afGrounded = af_mod.grounded;
+pub const afExtensions = af_mod.extensions;
+pub const afAccepted = af_mod.accepted;
+
+/// Answer sets: stable models of normal programs.
+pub const aspStableModels = asp_mod.stableModels;
+pub const AspRule = asp_mod.Rule;
+
+/// Belief change: AGM base contraction/revision.
+pub const agmContract = agm_mod.contract;
+pub const agmRevise = agm_mod.revise;
+pub const AgmBelief = agm_mod.Belief;
+
+/// Minimal-model reasoning: circumscription.
+pub const circEntails = circ_mod.circEntails;
+pub const CircPartition = circ_mod.Partition;
+
+/// Analogical proportions.
+pub const analogyHolds = analogy_mod.holds;
+pub const analogySolve = analogy_mod.solve;
+pub const analogyClassify = analogy_mod.classify;
+
 test "api v1 version and caps" {
     const line = try versionLine(std.testing.allocator);
     defer std.testing.allocator.free(line);
@@ -320,6 +362,13 @@ test "api v1 version and caps" {
     try std.testing.expect(caps.reason_alp);
     try std.testing.expect(caps.reason_default);
     try std.testing.expect(caps.reason_klm);
+    try std.testing.expect(caps.reason_af);
+    try std.testing.expect(caps.reason_asp);
+    try std.testing.expect(caps.reason_agm);
+    try std.testing.expect(caps.reason_circ);
+    try std.testing.expect(caps.reason_analogy);
+    // Low-word compatibility: pre-1.3 bits unchanged.
+    try std.testing.expect(caps.toU32() == @as(u32, @truncate(caps.toU64())));
 }
 
 test "api v1 sat unsat" {

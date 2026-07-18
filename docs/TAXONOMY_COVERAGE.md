@@ -46,12 +46,12 @@ Proof level: **audited map** against the codebase at v0.16+ (update with each ma
 | Deductive (classical computational) | **S** |
 | Inductive / Bayesian / statistical | **M** — `reason/induction.zig` (SAT-exact minimal-k DNF synthesis) + `reason/bayes.zig` (exact posterior over conjunction class, Occam prior, model-averaged prediction, Laplace succession) |
 | Abductive | **M** — `reason/abduction.zig` (subset-minimal + min-cost via MaxSAT hitting sets) + `reason/alp.zig` (first-order SLD abduction with denials) |
-| Analogical | **—** |
-| Defeasible / nonmonotonic | **M** — `reason/default_logic.zig` (Reiter extensions) + `reason/klm.zig` (rational closure) |
+| Analogical | **M** — `reason/analogy.zig` (Miclet–Prade Boolean proportions, solving, abstaining classifier) |
+| Defeasible / nonmonotonic | **M** — `reason/default_logic.zig` (Reiter) + `reason/klm.zig` (rational closure) + `reason/asp.zig` (stable models) + `reason/circumscription.zig` + `reason/agm.zig` (belief revision) |
 | Probabilistic logics | **M** — `reason/bayes.zig` (finite exact Bayesian; no graphical models / MCMC) |
 | Causal (Pearl, etc.) | **—** |
 | Practical / deontic / decision | **—** |
-| Dialogical / argumentation frameworks | **—** |
+| Dialogical / argumentation frameworks | **M** — `reason/argumentation.zig` (Dung AFs: grounded/complete/stable/preferred, credulous & skeptical acceptance) |
 
 ---
 
