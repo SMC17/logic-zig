@@ -70,6 +70,11 @@ pub const klm = @import("reason/klm.zig");
 pub const default_logic = @import("reason/default_logic.zig");
 pub const bayes = @import("reason/bayes.zig");
 pub const alp = @import("reason/alp.zig");
+pub const argumentation = @import("reason/argumentation.zig");
+pub const asp = @import("reason/asp.zig");
+pub const agm = @import("reason/agm.zig");
+pub const circumscription = @import("reason/circumscription.zig");
+pub const analogy = @import("reason/analogy.zig");
 pub const edge_suite = @import("track/edge_suite.zig");
 pub const taxonomy = @import("taxonomy/registry.zig");
 pub const informal = @import("informal/argument.zig");
@@ -248,6 +253,11 @@ test {
     _ = default_logic;
     _ = bayes;
     _ = alp;
+    _ = argumentation;
+    _ = asp;
+    _ = agm;
+    _ = circumscription;
+    _ = analogy;
 }
 
 test "end-to-end tautology a|!a" {
