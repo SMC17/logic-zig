@@ -26,8 +26,8 @@ const agent_session = @import("../agent/session.zig");
 
 /// API major.minor — bump minor for additive; major requires new module path.
 pub const version_major: u32 = 1;
-pub const version_minor: u32 = 4;
-pub const version_string = "1.4.0";
+pub const version_minor: u32 = 5;
+pub const version_string = "1.5.0";
 
 /// Feature bits — consumers can feature-detect without parsing docs.
 /// Widened to u64 in 1.3.0; `toU32` keeps returning the low word for
@@ -71,7 +71,9 @@ pub const Capability = packed struct(u64) {
     modal_epistemic: bool = true, // multi-agent S5 + common knowledge + announcements
     logic_syllogistic: bool = true, // complete categorical syllogism decision
     kr_el: bool = true, // description logic EL subsumption
-    _pad: u26 = 0,
+    modal_deontic: bool = true, // SDL (KD) on serial finite frames
+    logic_linear_mll: bool = true, // MLL sequent prover (units, exact splitting)
+    _pad: u24 = 0,
 
     pub fn current() Capability {
         return .{};
@@ -386,6 +388,18 @@ pub const elNormalize = el_mod.normalize;
 pub const elClassify = el_mod.classify;
 pub const ElAxiom = el_mod.Axiom;
 
+const deo_mod = @import("../modal/deontic.zig");
+const lin_mod = @import("../logic/linear.zig");
+
+/// Deontic SDL (KD) evaluation on serial frames.
+pub const deonticHolds = deo_mod.holds;
+pub const deonticSerial = deo_mod.serial;
+pub const DeonticFrame = deo_mod.Frame;
+
+/// MLL linear-logic provability.
+pub const mllProvable = lin_mod.provable;
+pub const MllBuilder = lin_mod.Builder;
+
 test "api v1 version and caps" {
     const line = try versionLine(std.testing.allocator);
     defer std.testing.allocator.free(line);
@@ -410,6 +424,8 @@ test "api v1 version and caps" {
     try std.testing.expect(caps.modal_epistemic);
     try std.testing.expect(caps.logic_syllogistic);
     try std.testing.expect(caps.kr_el);
+    try std.testing.expect(caps.modal_deontic);
+    try std.testing.expect(caps.logic_linear_mll);
     // Low-word compatibility: pre-1.3 bits unchanged.
     try std.testing.expect(caps.toU32() == @as(u32, @truncate(caps.toU64())));
 }

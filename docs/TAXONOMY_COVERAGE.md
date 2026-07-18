@@ -50,7 +50,7 @@ Proof level: **audited map** against the codebase at v0.16+ (update with each ma
 | Defeasible / nonmonotonic | **M** — `reason/default_logic.zig` (Reiter) + `reason/klm.zig` (rational closure) + `reason/asp.zig` (stable models) + `reason/circumscription.zig` + `reason/agm.zig` (belief revision) |
 | Probabilistic logics | **M** — `reason/bayes.zig` (finite exact Bayesian; no graphical models / MCMC) |
 | Causal (Pearl, etc.) | **—** |
-| Practical / deontic / decision | **—** |
+| Practical / deontic / decision | **M** — `modal/deontic.zig`: SDL on serial frames |
 | Dialogical / argumentation frameworks | **M** — `reason/argumentation.zig` (Dung AFs: grounded/complete/stable/preferred, credulous & skeptical acceptance) |
 
 ---
@@ -77,7 +77,7 @@ Proof level: **audited map** against the codebase at v0.16+ (update with each ma
 | Family | Status |
 |--------|--------|
 | Intuitionistic / intermediate | **M** — `logic/intuitionistic.zig`: G4ip decision procedure, Glivenko-verified |
-| Linear / relevant / substructural | **—** |
+| Linear / relevant / substructural | **M** — `logic/linear.zig`: MLL+units prover (relevance R still —) |
 | Martin-Löf / HoTT / CoC | **—** |
 | Realizability | **—** |
 
@@ -92,7 +92,7 @@ Proof level: **audited map** against the codebase at v0.16+ (update with each ma
 | LTL / CTL (bounded) | **M** | `ctl/*` bounded SAT unrolling |
 | Infinite-trace fairness | **S/M** | k-liveness, justice |
 | Full LTL/CTL* symbolic | **—** | |
-| Epistemic / deontic / dynamic logic | **M** — `modal/epistemic.zig`: multi-agent S5, common knowledge, public announcements (deontic/dynamic still —) | |
+| Epistemic / deontic / dynamic logic | **M** — `modal/epistemic.zig` (S5, common knowledge, announcements) + `modal/deontic.zig` (SDL/KD; dynamic still —) | |
 | μ-calculus complete | **—** | |
 
 ---

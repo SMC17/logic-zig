@@ -5,6 +5,26 @@ All notable changes to **logic-zig** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/).
 
+## [0.22.0] — 2026-07-17
+
+### Substructural + normative wave: MLL linear logic · deontic SDL
+
+- **`logic/linear.zig`**: multiplicative linear logic (MLL + units) — one-sided sequent
+  prover, invertible ⅋/⊥ then exhaustive ⊗ context splitting (exact on the small-sequent
+  slice); canon: identity/symmetry/currying/composition provable, **weakening and
+  contraction refuted**, MIX not admissible; balanced-atom counting invariant verified on
+  300 random formulas
+- **`modal/deontic.zig`**: standard deontic logic (KD) on finite serial frames — O/P
+  duality, D axiom ⇔ seriality (frame check + failure demo on dead-end worlds), K
+  distribution, no-conflict theorem, Ross's inference valid (SDL bites the bullet),
+  converse-Ross refuted
+- **api/v1 → 1.5.0**: `modal_deontic`, `logic_linear_mll` bits + re-exports
+- Taxonomy: linear-logic and deontic rows `documented` → `fragment`
+  (registry now: 27 fragment / 10 engine / 3 documented — the 3 remaining are
+  relevance R, HOL, categorical: genuinely large lifts, honestly deferred)
+- `build.zig.zon` version unstuck (0.12.0 → 0.22.0)
+- Pre-registered: exp-1784335002-534622769 (deontic), exp-1784335002-580965220 (MLL)
+
 ## [0.21.0] — 2026-07-17
 
 ### Classical-adjacent wave: intuitionistic · many-valued · epistemic · syllogistic · EL
