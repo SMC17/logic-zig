@@ -231,6 +231,9 @@ pub fn main(init: std.process.Init) !void {
         std.debug.print("  reason_af={} reason_asp={} reason_agm={} reason_circ={} reason_analogy={}\n", .{
             caps.reason_af, caps.reason_asp, caps.reason_agm, caps.reason_circ, caps.reason_analogy,
         });
+        std.debug.print("  logic_intuitionistic={} logic_manyvalued={} modal_epistemic={} logic_syllogistic={} kr_el={}\n", .{
+            caps.logic_intuitionistic, caps.logic_manyvalued, caps.modal_epistemic, caps.logic_syllogistic, caps.kr_el,
+        });
         std.debug.print("program: docs/INDUSTRIAL.md\n", .{});
         return;
     }

@@ -75,6 +75,11 @@ pub const asp = @import("reason/asp.zig");
 pub const agm = @import("reason/agm.zig");
 pub const circumscription = @import("reason/circumscription.zig");
 pub const analogy = @import("reason/analogy.zig");
+pub const intuitionistic = @import("logic/intuitionistic.zig");
+pub const manyvalued = @import("logic/manyvalued.zig");
+pub const epistemic = @import("modal/epistemic.zig");
+pub const syllogistic = @import("logic/syllogistic.zig");
+pub const el = @import("logic/el.zig");
 pub const edge_suite = @import("track/edge_suite.zig");
 pub const taxonomy = @import("taxonomy/registry.zig");
 pub const informal = @import("informal/argument.zig");
@@ -258,6 +263,11 @@ test {
     _ = agm;
     _ = circumscription;
     _ = analogy;
+    _ = intuitionistic;
+    _ = manyvalued;
+    _ = epistemic;
+    _ = syllogistic;
+    _ = el;
 }
 
 test "end-to-end tautology a|!a" {

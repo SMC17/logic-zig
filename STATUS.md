@@ -1,6 +1,6 @@
 # logic-zig status
 
-**Version:** 0.20.0  
+**Version:** 0.21.0  
 **North star:** universal logic library in Zig (`docs/UNIVERSAL.md`) — leave no stone unturned; stand on giants; deepen forever.
 
 ## Climb gates
@@ -36,6 +36,11 @@ zig build test && zig build
 | `reason/agm` | AGM base contraction/revision via remainder sets |
 | `reason/circumscription` | P-minimal-model entailment (fixed/varying atoms) |
 | `reason/analogy` | Boolean analogical proportions, solving, abstaining classifier |
+| `logic/intuitionistic` | G4ip decision procedure (Glivenko-verified) |
+| `logic/manyvalued` | K3 / LP / FDE / Ł3 finite-matrix consequence |
+| `modal/epistemic` | Multi-agent S5, common knowledge, announcements |
+| `logic/syllogistic` | Complete 256-form categorical decision (15/24) |
+| `logic/el` | EL subsumption via completion rules |
 | `docs/UNIVERSAL.md` | Destination + non-fiction rules |
 
 ## Computational depth (unchanged spine)
