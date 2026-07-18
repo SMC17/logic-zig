@@ -26,8 +26,8 @@ const agent_session = @import("../agent/session.zig");
 
 /// API major.minor — bump minor for additive; major requires new module path.
 pub const version_major: u32 = 1;
-pub const version_minor: u32 = 3;
-pub const version_string = "1.3.0";
+pub const version_minor: u32 = 4;
+pub const version_string = "1.4.0";
 
 /// Feature bits — consumers can feature-detect without parsing docs.
 /// Widened to u64 in 1.3.0; `toU32` keeps returning the low word for
@@ -66,7 +66,12 @@ pub const Capability = packed struct(u64) {
     reason_agm: bool = true, // AGM base contraction/revision
     reason_circ: bool = true, // propositional circumscription
     reason_analogy: bool = true, // Boolean analogical proportions
-    _pad: u31 = 0,
+    logic_intuitionistic: bool = true, // G4ip decision procedure
+    logic_manyvalued: bool = true, // K3/LP/FDE/Ł3 finite matrices
+    modal_epistemic: bool = true, // multi-agent S5 + common knowledge + announcements
+    logic_syllogistic: bool = true, // complete categorical syllogism decision
+    kr_el: bool = true, // description logic EL subsumption
+    _pad: u26 = 0,
 
     pub fn current() Capability {
         return .{};
@@ -348,6 +353,39 @@ pub const analogyHolds = analogy_mod.holds;
 pub const analogySolve = analogy_mod.solve;
 pub const analogyClassify = analogy_mod.classify;
 
+const int_mod = @import("../logic/intuitionistic.zig");
+const mv_mod = @import("../logic/manyvalued.zig");
+const epi_mod = @import("../modal/epistemic.zig");
+const syl_mod = @import("../logic/syllogistic.zig");
+const el_mod = @import("../logic/el.zig");
+
+/// Intuitionistic propositional validity (G4ip).
+pub const intuitProvable = int_mod.provable;
+pub const IntuitBuilder = int_mod.Builder;
+
+/// Finite-matrix many-valued consequence.
+pub const mvConsequence = mv_mod.consequence;
+pub const mvTautology = mv_mod.tautology;
+pub const mv_classical = mv_mod.classical;
+pub const mv_k3 = mv_mod.k3;
+pub const mv_lp = mv_mod.lp;
+pub const mv_fde = mv_mod.fde;
+pub const mv_l3 = mv_mod.l3;
+
+/// Epistemic model checking (S5, common knowledge, announcements).
+pub const epistemicHolds = epi_mod.holds;
+pub const epistemicAnnounce = epi_mod.announce;
+pub const EpistemicModel = epi_mod.Model;
+
+/// Categorical syllogistic (complete Venn-region decision).
+pub const syllogismValid = syl_mod.valid;
+pub const Syllogism = syl_mod.Syllogism;
+
+/// Description logic EL subsumption.
+pub const elNormalize = el_mod.normalize;
+pub const elClassify = el_mod.classify;
+pub const ElAxiom = el_mod.Axiom;
+
 test "api v1 version and caps" {
     const line = try versionLine(std.testing.allocator);
     defer std.testing.allocator.free(line);
@@ -367,6 +405,11 @@ test "api v1 version and caps" {
     try std.testing.expect(caps.reason_agm);
     try std.testing.expect(caps.reason_circ);
     try std.testing.expect(caps.reason_analogy);
+    try std.testing.expect(caps.logic_intuitionistic);
+    try std.testing.expect(caps.logic_manyvalued);
+    try std.testing.expect(caps.modal_epistemic);
+    try std.testing.expect(caps.logic_syllogistic);
+    try std.testing.expect(caps.kr_el);
     // Low-word compatibility: pre-1.3 bits unchanged.
     try std.testing.expect(caps.toU32() == @as(u32, @truncate(caps.toU64())));
 }

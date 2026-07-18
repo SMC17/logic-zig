@@ -76,7 +76,7 @@ Proof level: **audited map** against the codebase at v0.16+ (update with each ma
 
 | Family | Status |
 |--------|--------|
-| Intuitionistic / intermediate | **—** |
+| Intuitionistic / intermediate | **M** — `logic/intuitionistic.zig`: G4ip decision procedure, Glivenko-verified |
 | Linear / relevant / substructural | **—** |
 | Martin-Löf / HoTT / CoC | **—** |
 | Realizability | **—** |
@@ -92,7 +92,7 @@ Proof level: **audited map** against the codebase at v0.16+ (update with each ma
 | LTL / CTL (bounded) | **M** | `ctl/*` bounded SAT unrolling |
 | Infinite-trace fairness | **S/M** | k-liveness, justice |
 | Full LTL/CTL* symbolic | **—** | |
-| Epistemic / deontic / dynamic logic | **—** | |
+| Epistemic / deontic / dynamic logic | **M** — `modal/epistemic.zig`: multi-agent S5, common knowledge, public announcements (deontic/dynamic still —) | |
 | μ-calculus complete | **—** | |
 
 ---
@@ -109,8 +109,8 @@ Proof level: **audited map** against the codebase at v0.16+ (update with each ma
 | Model checking (liveness) | **S/M** | justice, k-live |
 | ATP (resolution) | **M** | FOL CNF resolution |
 | Superposition / paramodulation | **P** | |
-| Logic programming (Prolog/ASP) | **—** | |
-| Description logics / OWL | **—** | |
+| Logic programming (Prolog/ASP) | **M** | `reason/alp.zig` SLD abduction; `reason/asp.zig` stable models |
+| Description logics / OWL | **M** | `logic/el.zig` EL completion subsumption |
 | Program verification / CHC | **P** | via BMC/PDR path |
 | Proof assistants | **—** | |
 | IPASIR embedding | **S** | |
@@ -123,11 +123,11 @@ Proof level: **audited map** against the codebase at v0.16+ (update with each ma
 
 | Family | Status |
 |--------|--------|
-| Finite-valued / Łukasiewicz / Gödel | **—** |
-| Fuzzy | **—** |
-| Paraconsistent | **—** |
+| Finite-valued / Łukasiewicz / Gödel | **M** — `logic/manyvalued.zig`: K3, LP, FDE, Ł3 matrices |
+| Fuzzy | **—** (continuum-valued; finite matrices only) |
+| Paraconsistent | **M** — LP/FDE designated-value consequence (explosion fails) |
 | Quantum logic | **—** |
-| Probabilistic logic | **—** |
+| Probabilistic logic | **M** — `reason/bayes.zig` finite exact Bayesian |
 
 ---
 
@@ -135,7 +135,7 @@ Proof level: **audited map** against the codebase at v0.16+ (update with each ma
 
 | Family | Status |
 |--------|--------|
-| Aristotelian / syllogistic | **—** |
+| Aristotelian / syllogistic | **M** — `logic/syllogistic.zig`: complete Venn-region decision, 15 Boolean / 24 import-valid of 256 forms |
 | Medieval consequence | **—** |
 | Natural logic / NLI | **—** |
 | Indian / Arabic logical traditions | **—** |

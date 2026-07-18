@@ -5,6 +5,36 @@ All notable changes to **logic-zig** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/).
 
+## [0.21.0] — 2026-07-17
+
+### Classical-adjacent wave: intuitionistic · many-valued · epistemic · syllogistic · EL
+
+- **`logic/intuitionistic.zig`**: G4ip (Dyckhoff contraction-free) decision procedure for
+  intuitionistic propositional validity — immutable contexts, no loop checking; canon
+  (Peirce/LEM unprovable, double negations provable) + 80-formula Glivenko cross-check
+  against a classical truth-table oracle. A context-corruption bug in the first
+  mutate-and-restore draft was caught by the pre-registered Glivenko falsifier.
+- **`logic/manyvalued.zig`**: finite logical matrices — classical, K3, LP, FDE, Ł3 with
+  designated-value consequence; canon: LP paraconsistency (explosion & MP fail, LEM holds),
+  K3 gaps (no p→p), Ł3 contraction failure, FDE gap+glut; classical matrix verified
+  against truth tables on random formulas
+- **`modal/epistemic.zig`**: multi-agent S5 model checking with K/E/common-knowledge
+  (reachability fixpoint) and public announcements; full muddy-children canon (n=3),
+  S5 introspection properties, everybody-knows vs common-knowledge separation
+- **`logic/syllogistic.zig`**: complete categorical-syllogism decision via Venn-region
+  enumeration (2^8 patterns = exact semantics): exactly 15 Boolean-valid and 24
+  import-valid of 256 forms; Barbara/Celarent/Darii/Ferio/Darapti/Barbari/Baroco/Bocardo
+  named checks; AAA-2 fallacy rejected
+- **`logic/el.zig`**: description logic EL subsumption — normalization to the four EL
+  normal forms + completion-rule saturation; role-chain, conjunction and pericarditis
+  canon fixtures with exact closure (no spurious subsumptions)
+- **api/v1 → 1.4.0**: five new capability bits + re-exports
+- Taxonomy: intuitionistic-prop, fuzzy/many-valued, paraconsistent, epistemic,
+  syllogistic, description-al all advance `documented` → `fragment`
+- Pre-registered: exp-1784333657-083950258 (G4ip), exp-1784333658-394375372 (matrices),
+  exp-1784333658-988061669 (epistemic), exp-1784333662-689272384 (syllogistic),
+  exp-1784333663-779933697 (EL)
+
 ## [0.20.0] — 2026-07-17
 
 ### Nonmonotonic completion wave: argumentation · answer sets · belief revision · circumscription · analogy
