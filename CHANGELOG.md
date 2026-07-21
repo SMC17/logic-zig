@@ -27,6 +27,9 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   frameworks. Exhaustive tests cover every three-argument attack relation under
   admissible, complete, grounded, stable and preferred semantics; the scoped
   contract is now a verified exhibit without an ICCMA-scale claim.
+- Hardened propositional normal ASP with typed program validation and exact
+  stable-model-set verification. Positive, empty, omitted and duplicate evidence
+  now replay fail closed; the scoped finite engine is a verified exhibit.
 - Corrected inductive-invariant safety semantics and removed the invalid empty-
   invariant conversion from k-induction.
 - Made incremental SAT budgets and statistics per-call and equivalence tri-state.
