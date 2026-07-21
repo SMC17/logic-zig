@@ -72,9 +72,14 @@ Taxonomy map: `docs/TAXONOMY_COVERAGE.md`
   failures, and implements termination and learned-clause callbacks. A compiled C
   consumer exercises those contracts in `zig build test`; assumption-proof lifecycle
   and a fully specified state machine remain incomplete, so the registry says fragment.
+  IPASIR `signature()` now reports `logic-zig-ipasir-1.0`.
 - FOL evaluator binder environments now use `TermId` and restore scope. SAT-backed
   constants have proper decision variables, model reconstruction, and replay;
   functional terms now compose inside predicate atoms (arity remains limited to two).
+  The finite-model finder's module header now states its honest scope (symbols keyed
+  by `(name,arity)`, missing constants → `error.Unbound`, domain cap 4).
+- Public `isTautology`/`areEquivalent` root helpers are tri-state (`?bool`, `null` =
+  solver `unknown`); they no longer fold `unknown` into `false`.
 - Evidence-bearing museum manifests exist for classical propositional logic, S4,
   and first-order logic. Classical propositional logic is the first
   `verified_exhibit`: producer proofs cross a serialized, search-independent RUP

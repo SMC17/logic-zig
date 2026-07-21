@@ -2,6 +2,19 @@
 //!
 //! Supports unary/binary predicates and unary/binary total functions on
 //! domain {0..d-1}, with an explicit search-space budget.
+//!
+//! Known limitations (honest scope — this is a bounded finite-model finder,
+//! not a complete FOL semantic engine):
+//! - Symbols (constants/predicates/functions) are keyed by printed `(name,arity)`,
+//!   not by `TermId`. Two syntactically distinct symbols that share a name and
+//!   arity therefore cannot coexist; this is an intentional finite-domain
+//!   simplification, not a general FOL term interpreter.
+//! - Missing constants evaluate to `error.Unbound` (not silently to 0); missing
+//!   predicate/function applications are rejected rather than defaulted.
+//! - Domain is capped at 4 (exhaustive enumeration budget); larger domains are
+//!   `error.DomainTooLarge`.
+//! - Quantifier bindings save/restore correctly (shadowing is sound), but the
+//!   search is brute-force over all interpretations up to `max_models`.
 
 const std = @import("std");
 const term_mod = @import("term.zig");

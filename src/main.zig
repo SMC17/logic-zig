@@ -845,8 +845,12 @@ fn cmdDoctor(gpa: std.mem.Allocator, io: std.Io) !void {
     {
         var pool = try logic.ExprPool.init(gpa);
         defer pool.deinit();
-        if (try logic.isTautology(gpa, &pool, try logic.parse(&pool, "a | !a"))) {
+        const taut = try logic.isTautology(gpa, &pool, try logic.parse(&pool, "a | !a"));
+        if (taut == true) {
             std.debug.print("ok  prop tautology\n", .{});
+        } else if (taut == null) {
+            std.debug.print("UNKNOWN prop tautology (resource limit)\n", .{});
+            fails += 1;
         } else {
             std.debug.print("FAIL prop tautology\n", .{});
             fails += 1;
@@ -1410,8 +1414,12 @@ fn cmdTautology(gpa: std.mem.Allocator, formula: []const u8) !void {
     var pool = try logic.ExprPool.init(gpa);
     defer pool.deinit();
     const e = logic.parse(&pool, formula) catch return fail("parse error");
-    if (try logic.isTautology(gpa, &pool, e)) {
+    const taut = try logic.isTautology(gpa, &pool, e);
+    if (taut == true) {
         std.debug.print("TAUTOLOGY\n", .{});
+    } else if (taut == null) {
+        std.debug.print("UNKNOWN (resource limit; not proven)\n", .{});
+        std.process.exit(2);
     } else {
         std.debug.print("NOT_TAUTOLOGY\n", .{});
         std.process.exit(1);
@@ -1423,8 +1431,12 @@ fn cmdEquiv(gpa: std.mem.Allocator, f1: []const u8, f2: []const u8) !void {
     defer pool.deinit();
     const a = logic.parse(&pool, f1) catch return fail("parse error formula1");
     const b = logic.parse(&pool, f2) catch return fail("parse error formula2");
-    if (try logic.areEquivalent(gpa, &pool, a, b)) {
+    const eq = try logic.areEquivalent(gpa, &pool, a, b);
+    if (eq == true) {
         std.debug.print("EQUIVALENT\n", .{});
+    } else if (eq == null) {
+        std.debug.print("UNKNOWN (resource limit; not proven)\n", .{});
+        std.process.exit(2);
     } else {
         std.debug.print("NOT_EQUIVALENT\n", .{});
         std.process.exit(1);

@@ -168,15 +168,34 @@ pub fn satFormulaOpts(
     return .{ .status = .sat, .model = model, .conflicts = r.conflicts, .learned = r.learned };
 }
 
-pub fn isTautology(allocator: std.mem.Allocator, pool: *ExprPool, id: ExprId) !bool {
+/// Decide whether `id` is a tautology by checking `¬id` for UNSAT.
+/// Returns `true` / `false` when the SAT solver decides; `null` when the
+/// solver exhausted its resource budget and returned `unknown` (do NOT
+/// collapse `unknown` into `false` — that would misreport an undecided
+/// formula as non-tautological).
+pub fn isTautology(allocator: std.mem.Allocator, pool: *ExprPool, id: ExprId) !?bool {
     const neg = try pool.mkNot(id);
     const q = try satFormula(allocator, pool, neg);
     defer if (q.model) |m| allocator.free(m);
-    return q.status == .unsat;
+    return if (q.status == .unsat) true else if (q.status == .sat) false else null;
 }
 
-pub fn areEquivalent(allocator: std.mem.Allocator, pool: *ExprPool, a: ExprId, b: ExprId) !bool {
+/// Equivalence is `a ↔ b` being a tautology. Tri-state (null = unknown).
+pub fn areEquivalent(allocator: std.mem.Allocator, pool: *ExprPool, a: ExprId, b: ExprId) !?bool {
     return isTautology(allocator, pool, try pool.mkIff(a, b));
+}
+
+/// Like `isTautology` but forwards solver options (e.g. to bound conflicts).
+pub fn isTautologyOpts(
+    allocator: std.mem.Allocator,
+    pool: *ExprPool,
+    id: ExprId,
+    opts: solver.SolverOptions,
+) !?bool {
+    const neg = try pool.mkNot(id);
+    const q = try satFormulaOpts(allocator, pool, neg, opts);
+    defer if (q.model) |m| allocator.free(m);
+    return if (q.status == .unsat) true else if (q.status == .sat) false else null;
 }
 
 pub const Error = error{
@@ -283,5 +302,18 @@ test {
 test "end-to-end tautology a|!a" {
     var pool = try ExprPool.init(std.testing.allocator);
     defer pool.deinit();
-    try std.testing.expect(try isTautology(std.testing.allocator, &pool, try parse(&pool, "a | !a")));
+    try std.testing.expect((try isTautology(std.testing.allocator, &pool, try parse(&pool, "a | !a"))) == true);
+}
+
+test "isTautology reports unknown (null) instead of collapsing to false" {
+    // A non-trivial UNSAT needs >0 conflicts. With max_conflicts=0 the solver
+    // returns `unknown`; isTautology must surface that as null, not false.
+    var pool = try ExprPool.init(std.testing.allocator);
+    defer pool.deinit();
+    const unsat = try parse(&pool, "(a|b)&(a|!b)&(!a|b)&(!a|!b)");
+    const r = try satFormulaOpts(std.testing.allocator, &pool, unsat, .{ .max_conflicts = 0 });
+    try std.testing.expectEqual(solver.SolveStatus.unknown, r.status);
+    // isTautology must NOT report false here.
+    const t = try isTautologyOpts(std.testing.allocator, &pool, unsat, .{ .max_conflicts = 0 });
+    try std.testing.expect(t == null);
 }
