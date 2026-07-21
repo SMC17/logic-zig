@@ -73,6 +73,19 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   added a compiled C ABI test for empty clauses, interruption, and zero-terminated
   learned clauses. IPASIR remains a fragment pending assumption-proof lifecycle and
   an explicit complete state machine.
+- Closed the last `unknown`-collapse gap the audit re-flagged: the public
+  `isTautology`/`areEquivalent` root helpers now return tri-state `?bool`
+  (`null` = solver `unknown`) instead of folding `unknown` into `false`, with a
+  regression test proving `max_conflicts=0` yields `null`. CLI `tautology`/`equiv`
+  now report `UNKNOWN` (exit 2) rather than `NOT_TAUTOLOGY`.
+- Renamed bounded CTL result labels from `holds`/`fails` to
+  `holds_within_bound`/`fails_within_bound` so the API cannot be read as a complete
+  unbounded CTL proof; the module doc already states the bounded scope.
+- Bumped the IPASIR `signature()` string from the stale `logic-zig-ipasir-0.12` to
+  `logic-zig-ipasir-1.0`.
+- Documented the FOL finite-model finder's honest scope (symbols keyed by
+  `(name,arity)`, missing constants → `error.Unbound`, domain cap 4) in its module
+  header.
 
 ## [0.22.0] — 2026-07-17
 

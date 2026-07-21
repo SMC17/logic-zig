@@ -47,7 +47,7 @@ test "tautology suite" {
         var pool = try logic.ExprPool.init(std.testing.allocator);
         defer pool.deinit();
         const e = try logic.parse(&pool, f);
-        try std.testing.expect(try logic.isTautology(std.testing.allocator, &pool, e));
+        try std.testing.expect((try logic.isTautology(std.testing.allocator, &pool, e)) == true);
     }
 
     const not_tauts = [_][]const u8{
@@ -59,7 +59,7 @@ test "tautology suite" {
         var pool = try logic.ExprPool.init(std.testing.allocator);
         defer pool.deinit();
         const e = try logic.parse(&pool, f);
-        try std.testing.expect(!(try logic.isTautology(std.testing.allocator, &pool, e)));
+        try std.testing.expect((try logic.isTautology(std.testing.allocator, &pool, e)) == false);
     }
 }
 
@@ -96,7 +96,7 @@ test "semantic equivalence absorption" {
     defer pool.deinit();
     const a = try logic.parse(&pool, "(a & b) | (a & !b)");
     const b = try logic.parse(&pool, "a");
-    try std.testing.expect(try logic.areEquivalent(std.testing.allocator, &pool, a, b));
+    try std.testing.expect((try logic.areEquivalent(std.testing.allocator, &pool, a, b)) == true);
 }
 
 test "brute force prop check n<=3" {
