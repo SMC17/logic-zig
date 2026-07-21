@@ -92,6 +92,10 @@ Taxonomy map: `docs/TAXONOMY_COVERAGE.md`
   checked for both soundness and omitted models by replaying the Gelfond-Lifschitz
   reduct across the finite carrier. Its contract excludes grounding, disjunction,
   aggregates, optimization, ASP-Core-2 interoperability and industrial scale.
+- Finite propositional Reiter default logic is a `verified_exhibit` for CNF facts
+  and cube defaults. Exact generating-set replay checks groundedness,
+  justification consistency, stability and omissions; arbitrary formula and
+  first-order defaults remain outside the contract.
 - `logic-zig museum` also prints every uncontracted taxonomy row as a catalog-only
   restoration backlog, keeping the whole landscape visible without promoting it.
 

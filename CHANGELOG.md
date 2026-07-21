@@ -30,6 +30,9 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - Hardened propositional normal ASP with typed program validation and exact
   stable-model-set verification. Positive, empty, omitted and duplicate evidence
   now replay fail closed; the scoped finite engine is a verified exhibit.
+- Hardened finite Reiter default logic with typed enumeration limits,
+  generating-set shape checks and exact extension-set replay. The scoped CNF and
+  cube-default fragment is now a verified exhibit.
 - Corrected inductive-invariant safety semantics and removed the invalid empty-
   invariant conversion from k-induction.
 - Made incremental SAT budgets and statistics per-call and equivalence tri-state.
