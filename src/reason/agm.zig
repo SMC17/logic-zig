@@ -33,6 +33,21 @@ pub const Belief = struct {
 
 pub const Selection = enum { maxichoice, full_meet, cardinality };
 
+pub const BaseError = error{
+    TooManyBeliefs,
+    KeptSetOutOfRange,
+};
+
+pub const max_beliefs: u32 = 16;
+
+fn validateBase(base: []const Belief) BaseError!void {
+    if (base.len > max_beliefs) return error.TooManyBeliefs;
+}
+
+fn fullMask(base_len: usize) u32 {
+    return if (base_len == 0) 0 else (@as(u32, 1) << @intCast(base_len)) - 1;
+}
+
 fn addBelief(theory: *Cnf, b: Belief) !void {
     for (b.clauses) |c| try theory.addClause(c);
 }
@@ -88,7 +103,7 @@ pub fn remainders(
     base: []const Belief,
     target: Belief,
 ) !Remainders {
-    std.debug.assert(base.len <= 16);
+    try validateBase(base);
     var out = Remainders{ .allocator = allocator };
     errdefer out.deinit();
     const n: u5 = @intCast(base.len);
@@ -114,6 +129,45 @@ pub fn remainders(
     return out;
 }
 
+/// Verify the exact family K perpendicular phi: each claimed set is a unique,
+/// maximal non-entailing sub-base, and no such sub-base is omitted.
+pub fn verifyRemainders(
+    allocator: std.mem.Allocator,
+    base: []const Belief,
+    target: Belief,
+    claimed: []const u32,
+) !bool {
+    try validateBase(base);
+    const full = fullMask(base.len);
+    for (claimed, 0..) |set, index| {
+        if (set & ~full != 0) return false;
+        for (claimed[index + 1 ..]) |other| if (set == other) return false;
+    }
+    const total: u32 = full + 1;
+    var candidate: u32 = 0;
+    while (candidate < total) : (candidate += 1) {
+        var expected = !try entailsTarget(allocator, base, candidate, target);
+        if (expected) {
+            var superset: u32 = 0;
+            while (superset < total) : (superset += 1) {
+                if (candidate != superset and (candidate & superset) == candidate and
+                    !try entailsTarget(allocator, base, superset, target))
+                {
+                    expected = false;
+                    break;
+                }
+            }
+        }
+        var present = false;
+        for (claimed) |set| if (set == candidate) {
+            present = true;
+            break;
+        };
+        if (present != expected) return false;
+    }
+    return true;
+}
+
 pub const ChangeResult = struct {
     allocator: std.mem.Allocator,
     /// Kept belief indices as a bitmask over the input base.
@@ -136,9 +190,10 @@ pub fn contract(
     target: Belief,
     selection: Selection,
 ) !ChangeResult {
+    try validateBase(base);
     // Tautological target has no remainders except... every subset entails ⊤;
     // AGM: K ÷ ⊤ = K. Detect: full base does not entail target? then vacuity.
-    const full: u32 = if (base.len == 0) 0 else (@as(u32, 1) << @intCast(base.len)) - 1;
+    const full = fullMask(base.len);
     if (!try entailsTarget(allocator, base, full, target)) {
         return .{ .allocator = allocator, .kept = full }; // vacuity
     }
@@ -170,6 +225,44 @@ pub fn contract(
     return .{ .allocator = allocator, .kept = kept };
 }
 
+/// Replay a contraction result from exact remainders and the selected partial-
+/// meet policy. Maxichoice deliberately uses the deterministic enumeration order.
+pub fn verifyContraction(
+    allocator: std.mem.Allocator,
+    base: []const Belief,
+    target: Belief,
+    selection: Selection,
+    result: ChangeResult,
+) !bool {
+    try validateBase(base);
+    const full = fullMask(base.len);
+    if (result.kept & ~full != 0) return false;
+    const entailed = try entailsTarget(allocator, base, full, target);
+    if (!entailed) return result.kept == full;
+    var rem = try remainders(allocator, base, target);
+    defer rem.deinit();
+    if (!try verifyRemainders(allocator, base, target, rem.sets.items)) return false;
+    if (rem.sets.items.len == 0) return result.kept == full;
+    const expected: u32 = switch (selection) {
+        .maxichoice => rem.sets.items[0],
+        .full_meet => blk: {
+            var intersection = full;
+            for (rem.sets.items) |set| intersection &= set;
+            break :blk intersection;
+        },
+        .cardinality => blk: {
+            var best_size: u32 = 0;
+            for (rem.sets.items) |set| best_size = @max(best_size, @popCount(set));
+            var intersection = full;
+            for (rem.sets.items) |set| {
+                if (@popCount(set) == best_size) intersection &= set;
+            }
+            break :blk intersection;
+        },
+    };
+    return result.kept == expected;
+}
+
 /// Levi-identity revision K * φ: contract by ¬φ, then add φ.
 /// φ must be a **cube** here (so ¬φ is a single clause). Returns the kept
 /// sub-base; the caller conjoins φ itself.
@@ -184,6 +277,23 @@ pub fn revise(
     for (phi_cube, 0..) |l, i| neg_clause[i] = l.not();
     const neg_target = Belief{ .clauses = &.{neg_clause} };
     return contract(allocator, base, neg_target, selection);
+}
+
+/// Replay Levi revision evidence by reconstructing contraction by `not phi`.
+/// The returned bitmask certifies the retained sub-base; `phi_cube` is the
+/// explicit added belief and is therefore not encoded as a base index.
+pub fn verifyRevision(
+    allocator: std.mem.Allocator,
+    base: []const Belief,
+    phi_cube: []const Lit,
+    selection: Selection,
+    result: ChangeResult,
+) !bool {
+    var neg_clause = try allocator.alloc(Lit, phi_cube.len);
+    defer allocator.free(neg_clause);
+    for (phi_cube, 0..) |literal, index| neg_clause[index] = literal.not();
+    const neg_target = Belief{ .clauses = &.{neg_clause} };
+    return verifyContraction(allocator, base, neg_target, selection, result);
 }
 
 // ── Tests ────────────────────────────────────────────────────────────
@@ -260,6 +370,7 @@ test "agm: revision by ¬p is consistent and retains what it can" {
     try testing.expect(!c.keeps(0));
     // Success of the underlying contraction: kept base does not entail p.
     try testing.expect(!try entailsTarget(testing.allocator, &base3, c.kept, .{ .clauses = &.{&.{lp(0)}} }));
+    try testing.expect(try verifyRevision(testing.allocator, &base3, &.{ln(0)}, .full_meet, c));
 }
 
 test "agm: cardinality selection prefers larger remainders" {
@@ -275,4 +386,50 @@ test "agm: cardinality selection prefers larger remainders" {
     defer c.deinit();
     // All remainders have cardinality 2 → intersection of all three = ∅.
     try testing.expectEqual(@as(u32, 0), c.kept);
+}
+
+test "agm: exact remainder and contraction evidence replays exhaustively on sub-bases" {
+    const universe = [_]Belief{
+        .{ .clauses = &.{&.{lp(0)}} },
+        .{ .clauses = &.{&.{lp(1)}} },
+        .{ .clauses = &.{&.{ ln(0), lp(1) }} },
+        .{ .clauses = &.{&.{ ln(1), lp(2) }} },
+    };
+    var base: std.ArrayList(Belief) = .empty;
+    defer base.deinit(testing.allocator);
+    const targets = [_]Belief{
+        .{ .clauses = &.{&.{lp(0)}} },
+        .{ .clauses = &.{&.{lp(1)}} },
+        .{ .clauses = &.{&.{lp(2)}} },
+    };
+    var choice: u32 = 0;
+    while (choice < (@as(u32, 1) << universe.len)) : (choice += 1) {
+        base.clearRetainingCapacity();
+        for (universe, 0..) |belief, index| {
+            if ((choice >> @intCast(index)) & 1 == 1) try base.append(testing.allocator, belief);
+        }
+        for (targets) |target| {
+            var rem = try remainders(testing.allocator, base.items, target);
+            try testing.expect(try verifyRemainders(testing.allocator, base.items, target, rem.sets.items));
+            rem.deinit();
+            for (std.enums.values(Selection)) |selection| {
+                var result = try contract(testing.allocator, base.items, target, selection);
+                try testing.expect(try verifyContraction(testing.allocator, base.items, target, selection, result));
+                result.deinit();
+            }
+        }
+    }
+}
+
+test "agm: malformed bases and mutated evidence fail closed" {
+    const repeated = [_]Belief{b_p} ** 17;
+    try testing.expectError(error.TooManyBeliefs, remainders(testing.allocator, &repeated, b_p));
+    var rem = try remainders(testing.allocator, &base3, .{ .clauses = &.{&.{lp(1)}} });
+    defer rem.deinit();
+    try testing.expect(try verifyRemainders(testing.allocator, &base3, .{ .clauses = &.{&.{lp(1)}} }, rem.sets.items));
+    _ = rem.sets.pop();
+    try testing.expect(!(try verifyRemainders(testing.allocator, &base3, .{ .clauses = &.{&.{lp(1)}} }, rem.sets.items)));
+    var invalid = ChangeResult{ .allocator = testing.allocator, .kept = 0b1000 };
+    defer invalid.deinit();
+    try testing.expect(!(try verifyContraction(testing.allocator, &base3, b_p, .full_meet, invalid)));
 }
