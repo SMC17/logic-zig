@@ -9,6 +9,13 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ### Executable museum truth reset
 
+- Added a pinned Lean oracle project for finite-matrix semantics, an Aristotle
+  submission harness with environment-only credentials, and CI configuration for
+  Lean kernel plus independent nanoda checking without `sorryAx`.
+- Added GitHub issue forms, PR evidence template, security policy, code of conduct,
+  CODEOWNERS, Dependabot configuration and citation metadata. CI now builds pinned
+  CaDiCaL, DRAT-trim and ABC trust anchors before requiring `TRUST_OK`.
+
 - Added evidence-bearing exhibit manifests and a fail-closed `logic-zig museum`
   catalog for propositional logic, S4, and first-order logic.
 - Added a strict serialized RUP checker with no producer/search imports, a

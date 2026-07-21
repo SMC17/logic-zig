@@ -16,6 +16,7 @@ zig build test && zig build
 ./zig-out/bin/logic-zig trust-report
 ./zig-out/bin/logic-zig sat-scoreboard --dir corpus/bench/sat --limit 15 --conflicts 150000
 ./zig-out/bin/logic-zig api-info
+( cd lean && lake build )
 ```
 
 ## Universal platform (v0.17)
@@ -110,6 +111,15 @@ Taxonomy map: `docs/TAXONOMY_COVERAGE.md`
   countermodels rather than only Boolean/level evidence.
 - `logic-zig museum` also prints every uncontracted taxonomy row as a catalog-only
   restoration backlog, keeping the whole landscape visible without promoting it.
+- The first Lean oracle project formalizes the K3, LP, FDE and L3 separating
+  examples and Boolean-preservation lemmas under Lean 4.28.0. Local `lake build`
+  passes; CI is configured to add nanoda independent checking with `sorryAx`
+  forbidden. An Aristotle audit task has been submitted, but its output is not
+  evidence until downloaded, reviewed and kernel-checked.
+- GitHub CI now builds pinned CaDiCaL, DRAT-trim and ABC trust anchors instead of
+  invoking the fail-closed trust report in an environment where they are absent.
+  Structured issue forms, PR evidence gates, security policy, code ownership,
+  Dependabot configuration and citation metadata are present on the frontier PR.
 
 ## Residuals (honest — ambition ≠ achievement)
 
@@ -121,6 +131,7 @@ Taxonomy map: `docs/TAXONOMY_COVERAGE.md`
 | MaxSAT | Exact at explanation scale; **no industrial MaxSAT parity claim** (no core-guided/stratified engine) |
 | Informal argument analysis | Structure OK; no NLP / full schemes library |
 | Full type theory / proof assistant | Micro checker only |
+| Lean / Aristotle oracle | Initial finite-matrix formalization builds locally; CI and Aristotle result still need public receipts |
 | Beat Kissat/ABC/Z3/Vampire | Giants discover + CaDiCaL scoreboard; **no parity claim** |
 | Philosophical completeness | Rows exist; engines mostly future |
 
