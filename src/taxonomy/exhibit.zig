@@ -78,6 +78,7 @@ const prop_tests = [_][]const u8{
 };
 const syllogistic_tests = [_][]const u8{"src/logic/syllogistic.zig"};
 const matrix_tests = [_][]const u8{"src/logic/manyvalued.zig"};
+const dung_tests = [_][]const u8{"src/reason/argumentation.zig"};
 const modal_tests = [_][]const u8{"src/modal/kripke.zig"};
 const fol_term_tests = [_][]const u8{ "src/fol/term.zig", "src/fol/unify.zig" };
 const fol_resolution_tests = [_][]const u8{"src/fol/resolution.zig"};
@@ -193,6 +194,23 @@ pub const exhibits = [_]ExhibitManifest{
         .interoperability = claim(.absent, .none, "", &none),
     },
     .{
+        .id = "dung-af",
+        .name = "Dung abstract argumentation",
+        .formal_identity = "Finite abstract argumentation frameworks with conflict-free, defense-based and stable semantics",
+        .contract_version = "0.1.0",
+        .decidability = .decidable,
+        .completeness_scope = "Exact admissible, complete, grounded, stable and preferred extensions plus credulous and skeptical acceptance for finite AFs of at most 20 arguments",
+        .limitations = &.{ "Exponential subset enumeration", "No ICCMA parser or competition-scale specialized algorithms", "No semi-stable, stage, ideal or value-based semantics" },
+        .syntax = claim(.complete, .unit_tested, "docs/exhibits/dung-argumentation.md", &dung_tests),
+        .semantics = claim(.complete, .unit_tested, "docs/exhibits/dung-argumentation.md", &dung_tests),
+        .calculus = claim(.complete, .unit_tested, "docs/exhibits/dung-argumentation.md", &dung_tests),
+        .automation = claim(.complete, .unit_tested, "docs/exhibits/dung-argumentation.md", &dung_tests),
+        .proof_objects = claim(.complete, .unit_tested, "docs/exhibits/dung-argumentation.md", &dung_tests),
+        .countermodels = claim(.complete, .unit_tested, "docs/exhibits/dung-argumentation.md", &dung_tests),
+        .documentation = claim(.complete, .audited, "docs/exhibits/dung-argumentation.md", &dung_tests),
+        .interoperability = claim(.absent, .none, "", &none),
+    },
+    .{
         .id = "modal-s4",
         .name = "Modal propositional logic S4",
         .formal_identity = "Normal modal logic S4 over reflexive and transitive Kripke frames",
@@ -271,9 +289,9 @@ test "all exhibit claims are structurally evidenced" {
 test "promotion is derived and fail closed" {
     try std.testing.expectEqual(Promotion.verified_exhibit, exhibits[0].promotion());
     try std.testing.expectEqual(Promotion.verified_exhibit, exhibits[1].promotion());
-    for (exhibits[2..6]) |exhibit| try std.testing.expectEqual(Promotion.verified_exhibit, exhibit.promotion());
-    try std.testing.expectEqual(Promotion.cataloged, exhibits[6].promotion());
+    for (exhibits[2..7]) |exhibit| try std.testing.expectEqual(Promotion.verified_exhibit, exhibit.promotion());
     try std.testing.expectEqual(Promotion.cataloged, exhibits[7].promotion());
+    try std.testing.expectEqual(Promotion.cataloged, exhibits[8].promotion());
 
     var bad = exhibits[0];
     bad.syntax = claim(.complete, .none, "", &none);
