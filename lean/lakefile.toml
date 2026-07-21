@@ -1,0 +1,6 @@
+name = "logic-zig-oracle"
+version = "0.1.0"
+defaultTargets = ["LogicZigOracle"]
+
+[[lean_lib]]
+name = "LogicZigOracle"
