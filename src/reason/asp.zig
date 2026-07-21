@@ -26,6 +26,26 @@ pub const Options = struct {
     max_atoms: u32 = 16,
 };
 
+pub const ProgramError = error{
+    TooManyAtoms,
+    InvalidAtomLimit,
+    AtomOutOfRange,
+};
+
+/// The subset representation is a `u32`; the lower limit keeps exhaustive
+/// enumeration within the explicitly supported exhibit contract.
+pub const absolute_max_atoms: u32 = 20;
+
+pub fn validateProgram(num_atoms: u32, rules: []const Rule, opts: Options) ProgramError!void {
+    if (opts.max_atoms > absolute_max_atoms) return error.InvalidAtomLimit;
+    if (num_atoms > opts.max_atoms) return error.TooManyAtoms;
+    for (rules) |rule| {
+        if (rule.head) |head| if (head >= num_atoms) return error.AtomOutOfRange;
+        for (rule.pos) |atom| if (atom >= num_atoms) return error.AtomOutOfRange;
+        for (rule.neg) |atom| if (atom >= num_atoms) return error.AtomOutOfRange;
+    }
+}
+
 pub const Result = struct {
     allocator: std.mem.Allocator,
     /// Stable models as bitmasks over atom ids.
@@ -108,7 +128,7 @@ pub fn stableModels(
     rules: []const Rule,
     opts: Options,
 ) !Result {
-    std.debug.assert(num_atoms <= opts.max_atoms);
+    try validateProgram(num_atoms, rules, opts);
     var result = Result{ .allocator = allocator };
     errdefer result.deinit();
     const total: u32 = @as(u32, 1) << @intCast(num_atoms);
@@ -119,6 +139,43 @@ pub fn stableModels(
         }
     }
     return result;
+}
+
+/// Check one candidate directly against the Gelfond-Lifschitz definition.
+pub fn isStableModel(num_atoms: u32, rules: []const Rule, candidate: u32, opts: Options) !bool {
+    try validateProgram(num_atoms, rules, opts);
+    const total: u32 = @as(u32, 1) << @intCast(num_atoms);
+    if (candidate >= total) return false;
+    const least = reductLeastModel(rules, candidate) orelse return false;
+    return least == candidate;
+}
+
+/// Verify exact stable-model evidence: every claimed model is stable, and every
+/// stable model in the finite carrier is present exactly once. This also makes
+/// an empty list replayable evidence that the program has no stable model.
+pub fn verifyModels(num_atoms: u32, rules: []const Rule, opts: Options, claimed: []const u32) !bool {
+    try validateProgram(num_atoms, rules, opts);
+    const total: u32 = @as(u32, 1) << @intCast(num_atoms);
+    for (claimed, 0..) |model, index| {
+        if (model >= total) return false;
+        for (claimed[index + 1 ..]) |other| {
+            if (model == other) return false;
+        }
+    }
+    var candidate: u32 = 0;
+    while (candidate < total) : (candidate += 1) {
+        const least = reductLeastModel(rules, candidate);
+        const expected = least != null and least.? == candidate;
+        var present = false;
+        for (claimed) |model| {
+            if (model == candidate) {
+                present = true;
+                break;
+            }
+        }
+        if (present != expected) return false;
+    }
+    return true;
 }
 
 // ── Tests ────────────────────────────────────────────────────────────
@@ -198,4 +255,49 @@ test "asp: choice via even loop + dependent fact" {
     defer r.deinit();
     try testing.expectEqual(@as(usize, 2), r.models.items.len);
     try testing.expect(r.contains(bit(0) | bit(2)) and r.contains(bit(1)));
+}
+
+test "asp: exact evidence replays across a bounded program universe" {
+    // Every subset of this rule universe is a distinct two-atom normal program.
+    const universe = [_]Rule{
+        .{ .head = 0 },
+        .{ .head = 1 },
+        .{ .head = 0, .pos = &.{1} },
+        .{ .head = 1, .pos = &.{0} },
+        .{ .head = 0, .neg = &.{1} },
+        .{ .head = 1, .neg = &.{0} },
+        .{ .head = null, .pos = &.{0} },
+        .{ .head = null, .neg = &.{1} },
+    };
+    var rules: std.ArrayList(Rule) = .empty;
+    defer rules.deinit(testing.allocator);
+    var program: u32 = 0;
+    while (program < (@as(u32, 1) << universe.len)) : (program += 1) {
+        rules.clearRetainingCapacity();
+        for (universe, 0..) |rule, index| {
+            if ((program >> @intCast(index)) & 1 == 1) try rules.append(testing.allocator, rule);
+        }
+        var result = try stableModels(testing.allocator, 2, rules.items, .{});
+        try testing.expect(try verifyModels(2, rules.items, .{}, result.models.items));
+        result.deinit();
+    }
+}
+
+test "asp: malformed programs and mutated exact evidence fail closed" {
+    const malformed = [_]Rule{.{ .head = 2 }};
+    try testing.expectError(error.AtomOutOfRange, stableModels(testing.allocator, 2, &malformed, .{}));
+    try testing.expectError(error.TooManyAtoms, stableModels(testing.allocator, 17, &.{}, .{}));
+    try testing.expectError(error.InvalidAtomLimit, stableModels(testing.allocator, 2, &.{}, .{ .max_atoms = 21 }));
+
+    const rules = [_]Rule{
+        .{ .head = 0, .neg = &.{1} },
+        .{ .head = 1, .neg = &.{0} },
+    };
+    var result = try stableModels(testing.allocator, 2, &rules, .{});
+    defer result.deinit();
+    try testing.expect(try verifyModels(2, &rules, .{}, result.models.items));
+    _ = result.models.pop();
+    try testing.expect(!(try verifyModels(2, &rules, .{}, result.models.items)));
+    try result.models.append(testing.allocator, result.models.items[0]);
+    try testing.expect(!(try verifyModels(2, &rules, .{}, result.models.items)));
 }

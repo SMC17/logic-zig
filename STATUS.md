@@ -88,6 +88,10 @@ Taxonomy map: `docs/TAXONOMY_COVERAGE.md`
   Evidence replay rejects omissions and duplicates; all 512 three-argument attack
   relations are exhaustively checked. The implementation remains exponential and
   makes no ICCMA-scale claim.
+- Propositional normal ASP is a `verified_exhibit`: every stable-model list is
+  checked for both soundness and omitted models by replaying the Gelfond-Lifschitz
+  reduct across the finite carrier. Its contract excludes grounding, disjunction,
+  aggregates, optimization, ASP-Core-2 interoperability and industrial scale.
 - `logic-zig museum` also prints every uncontracted taxonomy row as a catalog-only
   restoration backlog, keeping the whole landscape visible without promoting it.
 
