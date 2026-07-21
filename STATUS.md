@@ -83,6 +83,11 @@ Taxonomy map: `docs/TAXONOMY_COVERAGE.md`
 - K3, LP, FDE, and L3 finite-matrix consequence are `verified_exhibit` contracts:
   decisions validate matrix/formula shape, exhaust the finite valuation space, and
   return replayable countervaluations. The explicit limit is eight atoms per query.
+- Finite Dung argumentation is a `verified_exhibit` for exact admissible, complete,
+  grounded, stable and preferred extensions plus credulous/skeptical acceptance.
+  Evidence replay rejects omissions and duplicates; all 512 three-argument attack
+  relations are exhaustively checked. The implementation remains exponential and
+  makes no ICCMA-scale claim.
 - `logic-zig museum` also prints every uncontracted taxonomy row as a catalog-only
   restoration backlog, keeping the whole landscape visible without promoting it.
 

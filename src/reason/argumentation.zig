@@ -32,6 +32,15 @@ pub const Af = struct {
 
 pub const Semantics = enum { admissible, complete, grounded, stable, preferred };
 
+pub const FrameworkError = error{ TooManyArguments, AttackOutOfRange, ArgumentOutOfRange };
+
+pub fn validate(af: Af) FrameworkError!void {
+    if (af.n > 20) return error.TooManyArguments;
+    for (af.attacks) |attack| {
+        if (attack[0] >= af.n or attack[1] >= af.n) return error.AttackOutOfRange;
+    }
+}
+
 fn conflictFree(af: Af, s: u32) bool {
     for (af.attacks) |at| {
         if ((s >> @intCast(at[0])) & 1 == 1 and (s >> @intCast(at[1])) & 1 == 1) return false;
@@ -90,7 +99,16 @@ fn isStable(af: Af, s: u32) bool {
 
 /// Grounded extension as a bitmask — iterated characteristic function from ∅.
 pub fn grounded(af: Af) u32 {
-    std.debug.assert(af.n <= 20);
+    validate(af) catch @panic("invalid argumentation framework; use groundedChecked");
+    return groundedUnchecked(af);
+}
+
+pub fn groundedChecked(af: Af) FrameworkError!u32 {
+    try validate(af);
+    return groundedUnchecked(af);
+}
+
+fn groundedUnchecked(af: Af) u32 {
     var s: u32 = 0;
     while (true) {
         var next: u32 = 0;
@@ -122,11 +140,15 @@ pub const Extensions = struct {
 
 /// Enumerate all extensions under the given semantics.
 pub fn extensions(allocator: std.mem.Allocator, af: Af, sem: Semantics) !Extensions {
-    std.debug.assert(af.n <= 20);
+    return extensionsChecked(allocator, af, sem);
+}
+
+pub fn extensionsChecked(allocator: std.mem.Allocator, af: Af, sem: Semantics) !Extensions {
+    try validate(af);
     var out = Extensions{ .allocator = allocator };
     errdefer out.deinit();
     if (sem == .grounded) {
-        try out.sets.append(allocator, grounded(af));
+        try out.sets.append(allocator, groundedUnchecked(af));
         return out;
     }
     const total: u32 = @as(u32, 1) << @intCast(af.n);
@@ -161,6 +183,91 @@ pub fn extensions(allocator: std.mem.Allocator, af: Af, sem: Semantics) !Extensi
     return out;
 }
 
+fn setSatisfies(af: Af, sem: Semantics, candidate: u32, admissible_sets: []const u32) bool {
+    return switch (sem) {
+        .admissible => isAdmissible(af, candidate),
+        .complete => isComplete(af, candidate),
+        .stable => isStable(af, candidate),
+        .grounded => candidate == groundedUnchecked(af),
+        .preferred => blk: {
+            if (!isAdmissible(af, candidate)) break :blk false;
+            for (admissible_sets) |other| {
+                if (candidate != other and (candidate & other) == candidate) break :blk false;
+            }
+            break :blk true;
+        },
+    };
+}
+
+/// Check exact extension evidence, including absence of omitted extensions.
+pub fn verifyExtensions(allocator: std.mem.Allocator, af: Af, sem: Semantics, claimed: []const u32) !bool {
+    try validate(af);
+    const total: u32 = @as(u32, 1) << @intCast(af.n);
+    for (claimed, 0..) |candidate, index| {
+        if (candidate >= total) return false;
+        for (claimed[index + 1 ..]) |other| if (candidate == other) return false;
+    }
+    var admissible: std.ArrayList(u32) = .empty;
+    defer admissible.deinit(allocator);
+    if (sem == .preferred) {
+        var candidate: u32 = 0;
+        while (candidate < total) : (candidate += 1) {
+            if (isAdmissible(af, candidate)) try admissible.append(allocator, candidate);
+        }
+    }
+    var candidate: u32 = 0;
+    while (candidate < total) : (candidate += 1) {
+        const expected = setSatisfies(af, sem, candidate, admissible.items);
+        var present = false;
+        for (claimed) |item| if (item == candidate) {
+            present = true;
+            break;
+        };
+        if (present != expected) return false;
+    }
+    return true;
+}
+
+pub const AcceptanceDecision = struct {
+    accepted: bool,
+    argument: u32,
+    semantics: Semantics,
+    mode: Acceptance,
+    extensions: Extensions,
+
+    pub fn deinit(self: *AcceptanceDecision) void {
+        self.extensions.deinit();
+        self.* = undefined;
+    }
+};
+
+pub fn decideAcceptance(allocator: std.mem.Allocator, af: Af, argument: u32, sem: Semantics, mode: Acceptance) !AcceptanceDecision {
+    try validate(af);
+    if (argument >= af.n) return error.ArgumentOutOfRange;
+    var exts = try extensionsChecked(allocator, af, sem);
+    errdefer exts.deinit();
+    var answer = mode == .skeptical and exts.sets.items.len > 0;
+    const bit = @as(u32, 1) << @intCast(argument);
+    for (exts.sets.items) |set| {
+        if (mode == .credulous and set & bit != 0) answer = true;
+        if (mode == .skeptical and set & bit == 0) answer = false;
+    }
+    return .{ .accepted = answer, .argument = argument, .semantics = sem, .mode = mode, .extensions = exts };
+}
+
+pub fn verifyAcceptance(allocator: std.mem.Allocator, af: Af, decision: *const AcceptanceDecision) !bool {
+    if (decision.argument >= af.n) return false;
+    if (!try verifyExtensions(allocator, af, decision.semantics, decision.extensions.sets.items)) return false;
+    if (decision.extensions.sets.items.len == 0) return !decision.accepted;
+    const bit = @as(u32, 1) << @intCast(decision.argument);
+    var expected = decision.mode == .skeptical;
+    for (decision.extensions.sets.items) |set| {
+        if (decision.mode == .credulous and set & bit != 0) expected = true;
+        if (decision.mode == .skeptical and set & bit == 0) expected = false;
+    }
+    return decision.accepted == expected;
+}
+
 pub const Acceptance = enum { credulous, skeptical };
 
 /// Is argument `a` accepted under the semantics/acceptance mode?
@@ -173,17 +280,9 @@ pub fn accepted(
     sem: Semantics,
     mode: Acceptance,
 ) !bool {
-    var exts = try extensions(allocator, af, sem);
-    defer exts.deinit();
-    if (exts.sets.items.len == 0) return false;
-    const bit = @as(u32, 1) << @intCast(a);
-    for (exts.sets.items) |s| {
-        switch (mode) {
-            .credulous => if (s & bit != 0) return true,
-            .skeptical => if (s & bit == 0) return false,
-        }
-    }
-    return mode == .skeptical;
+    var decision = try decideAcceptance(allocator, af, a, sem, mode);
+    defer decision.deinit();
+    return decision.accepted;
 }
 
 // ── Tests ────────────────────────────────────────────────────────────
@@ -274,4 +373,43 @@ test "af: grounded is a complete extension and included in every preferred" {
     for (pr.sets.items) |p| {
         try testing.expect((g & p) == g);
     }
+}
+
+test "af: exact extension and acceptance evidence replays exhaustively for n=3" {
+    var attack_storage: std.ArrayList([2]u32) = .empty;
+    defer attack_storage.deinit(testing.allocator);
+    var relation: u32 = 0;
+    while (relation < (@as(u32, 1) << 9)) : (relation += 1) {
+        attack_storage.clearRetainingCapacity();
+        for (0..3) |attacker| {
+            for (0..3) |target| {
+                const bit = attacker * 3 + target;
+                if ((relation >> @intCast(bit)) & 1 == 1)
+                    try attack_storage.append(testing.allocator, .{ @intCast(attacker), @intCast(target) });
+            }
+        }
+        const af = Af{ .n = 3, .attacks = attack_storage.items };
+        for (std.enums.values(Semantics)) |semantics| {
+            var exts = try extensionsChecked(testing.allocator, af, semantics);
+            try testing.expect(try verifyExtensions(testing.allocator, af, semantics, exts.sets.items));
+            exts.deinit();
+            for (std.enums.values(Acceptance)) |mode| {
+                var decision = try decideAcceptance(testing.allocator, af, 1, semantics, mode);
+                try testing.expect(try verifyAcceptance(testing.allocator, af, &decision));
+                decision.deinit();
+            }
+        }
+    }
+}
+
+test "af: malformed frameworks and mutated evidence fail closed" {
+    const bad = Af{ .n = 2, .attacks = &.{.{ 0, 2 }} };
+    try testing.expectError(error.AttackOutOfRange, extensionsChecked(testing.allocator, bad, .complete));
+    const af = Af{ .n = 2, .attacks = &.{.{ 0, 1 }} };
+    var exts = try extensionsChecked(testing.allocator, af, .complete);
+    defer exts.deinit();
+    try testing.expect(try verifyExtensions(testing.allocator, af, .complete, exts.sets.items));
+    try exts.sets.append(testing.allocator, 3);
+    try testing.expect(!(try verifyExtensions(testing.allocator, af, .complete, exts.sets.items)));
+    try testing.expectError(error.ArgumentOutOfRange, decideAcceptance(testing.allocator, af, 2, .preferred, .credulous));
 }

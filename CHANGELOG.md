@@ -23,6 +23,10 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - Added fail-closed finite-matrix decisions with exhaustive evidence counts and
   countervaluations; K3, LP, FDE, and L3 now have separate verified exhibit
   contracts and a shared formal specification.
+- Added exact, replayable extension and acceptance evidence for finite Dung
+  frameworks. Exhaustive tests cover every three-argument attack relation under
+  admissible, complete, grounded, stable and preferred semantics; the scoped
+  contract is now a verified exhibit without an ICCMA-scale claim.
 - Corrected inductive-invariant safety semantics and removed the invalid empty-
   invariant conversion from k-induction.
 - Made incremental SAT budgets and statistics per-call and equivalence tri-state.
