@@ -61,7 +61,7 @@ pub const systems = [_]System{
     // Classical / computational core
     .{ .id = "prop-classical", .name = "Classical propositional logic", .family = .classical_prop, .maturity = .engine, .module = "sat/ir", .notes = "ExprPool + Tseitin + CDCL" },
     .{ .id = "sat-cdcl", .name = "CDCL SAT", .family = .computational_sat, .maturity = .engine, .module = "sat/solver", .notes = "2WL VSIDS LBD portfolio preprocess vivify" },
-    .{ .id = "sat-ipasir", .name = "IPASIR embedding", .family = .computational_sat, .maturity = .engine, .module = "sat/ipasir", .notes = "partial callbacks documented" },
+    .{ .id = "sat-ipasir", .name = "IPASIR embedding", .family = .computational_sat, .maturity = .fragment, .module = "sat/ipasir", .notes = "C ABI tested: empty clauses, multishot, terminate and learn callbacks; assumption-proof lifecycle remains open" },
     .{ .id = "smt-bv", .name = "QF_BV bit-blast", .family = .computational_smt, .maturity = .fragment, .module = "smt/bv", .notes = "not word-level industrial" },
     .{ .id = "smt-uf", .name = "Ground EUF", .family = .computational_smt, .maturity = .fragment, .module = "smt/uf", .notes = "congruence closure" },
     .{ .id = "smt-array", .name = "Arrays", .family = .computational_smt, .maturity = .skeleton, .module = "smt/array", .notes = "select/store axioms spine" },

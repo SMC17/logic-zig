@@ -16,6 +16,8 @@ const Cnf = cnf_mod.Cnf;
 const Netlist = netlist_mod.Netlist;
 const NetId = netlist_mod.NetId;
 
+pub const VerificationStatus = enum { verified, invalid, unknown, unsupported };
+
 pub const InductiveInvariant = struct {
     allocator: std.mem.Allocator,
     clauses: [][]Lit,
@@ -29,19 +31,14 @@ pub const InductiveInvariant = struct {
         self.* = undefined;
     }
 
-    /// Init∧I∧bad unsat; Init⇒I (each clause).
-    pub fn verify(self: *const InductiveInvariant, allocator: std.mem.Allocator, nl: *const Netlist) !bool {
+    /// Establish Init => I, I => !Bad, and I & T => I'.
+    /// An inconclusive SAT query is never accepted as certificate evidence.
+    pub fn verify(self: *const InductiveInvariant, allocator: std.mem.Allocator, nl: *const Netlist) !VerificationStatus {
         {
             var cnf = Cnf.init(allocator);
             defer cnf.deinit();
             cnf.ensureVars(nl.num_nets);
             try blast.blastFrame(&cnf, nl, 0);
-            for (nl.latches.items) |lat| {
-                if (lat.init) |iv| {
-                    const q = Lit.positive(Var.fromIndex(lat.q.index()));
-                    if (iv) try cnf.addClause(&.{q}) else try cnf.addClause(&.{q.not()});
-                }
-            }
             for (self.clauses) |cl| try cnf.addClause(cl);
             try cnf.addClause(&.{Lit.positive(Var.fromIndex(self.bad.index()))});
             const r = try solver_mod.solveCnf(allocator, &cnf, .{ .max_conflicts = 100_000 });
@@ -50,7 +47,11 @@ pub const InductiveInvariant = struct {
                 var pp = p.*;
                 pp.deinit();
             };
-            if (r.status != .unsat) return false;
+            switch (r.status) {
+                .unsat => {},
+                .sat => return .invalid,
+                .unknown => return .unknown,
+            }
         }
         for (self.clauses) |cl| {
             var cnf = Cnf.init(allocator);
@@ -70,7 +71,11 @@ pub const InductiveInvariant = struct {
                 var pp = p.*;
                 pp.deinit();
             };
-            if (r.status == .sat) return false;
+            switch (r.status) {
+                .unsat => {},
+                .sat => return .invalid,
+                .unknown => return .unknown,
+            }
         }
         // Relative inductiveness: I ∧ T ∧ ¬I' unsat (best-effort when clauses non-empty)
         if (self.clauses.len > 0 and nl.latches.items.len > 0) {
@@ -122,9 +127,13 @@ pub const InductiveInvariant = struct {
                 var pp = p.*;
                 pp.deinit();
             };
-            if (r.status == .sat) return false;
+            switch (r.status) {
+                .unsat => {},
+                .sat => return .invalid,
+                .unknown => return .unknown,
+            }
         }
-        return true;
+        return .verified;
     }
 
     pub fn writeText(self: *const InductiveInvariant, allocator: std.mem.Allocator) ![]u8 {
@@ -171,22 +180,7 @@ pub fn fromPdrProven(
             .frames_used = r.frames,
             .source = .pdr,
         };
-        if (try inv.verify(allocator, nl)) return inv;
-        inv.deinit();
-    }
-
-    // Fallback: k-induction proven ⇒ empty I OK if Init∧bad unsat forever via kind
-    const kr = try kinduction.search(allocator, nl, bad, @max(max_frames, 3));
-    defer if (kr.base.trace) |t| allocator.free(t);
-    if (kr.status == .proven) {
-        var inv = InductiveInvariant{
-            .allocator = allocator,
-            .clauses = try allocator.alloc([]Lit, 0),
-            .bad = bad,
-            .frames_used = kr.k,
-            .source = .kinduction,
-        };
-        if (try inv.verify(allocator, nl)) return inv;
+        if (try inv.verify(allocator, nl) == .verified) return inv;
         inv.deinit();
     }
     return null;
@@ -266,10 +260,25 @@ test "pdr cert stuck0 verifies" {
     try std.testing.expect(inv != null);
     var i = inv.?;
     defer i.deinit();
-    try std.testing.expect(try i.verify(std.testing.allocator, &nl));
+    try std.testing.expectEqual(VerificationStatus.verified, try i.verify(std.testing.allocator, &nl));
     const text = try i.writeText(std.testing.allocator);
     defer std.testing.allocator.free(text);
     try std.testing.expect(std.mem.indexOf(u8, text, "inductive_invariant") != null);
+}
+
+test "empty invariant cannot certify merely initially safe state" {
+    var nl = Netlist.init(std.testing.allocator);
+    defer nl.deinit();
+    const q = try nl.allocNetNamed("q");
+    try nl.addLatch(q, q, false);
+    var inv = InductiveInvariant{
+        .allocator = std.testing.allocator,
+        .clauses = try std.testing.allocator.alloc([]Lit, 0),
+        .bad = q,
+        .source = .empty,
+    };
+    defer inv.deinit();
+    try std.testing.expectEqual(VerificationStatus.invalid, try inv.verify(std.testing.allocator, &nl));
 }
 
 test "unsat proof cert" {

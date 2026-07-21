@@ -58,6 +58,22 @@ pub const Syllogism = struct {
     figure: Figure,
 };
 
+pub const Certificate = struct {
+    valid: bool,
+    /// Exact set of premise-satisfying region models for a valid result.
+    eligible_models: [4]u64 = .{ 0, 0, 0, 0 },
+    /// Replayable Venn-region countermodel for an invalid result.
+    countermodel: ?u8 = null,
+};
+
+fn setModel(bits: *[4]u64, model: u8) void {
+    bits[model / 64] |= @as(u64, 1) << @intCast(model % 64);
+}
+
+fn hasModel(bits: *const [4]u64, model: u8) bool {
+    return (bits[model / 64] >> @intCast(model % 64)) & 1 == 1;
+}
+
 fn premisesHold(sy: Syllogism, regions: u8) bool {
     const major_ok = switch (sy.figure) {
         .first, .third => statementHolds(sy.major, m_bit, p_bit, regions), // M–P
@@ -83,14 +99,44 @@ fn termsNonempty(regions: u8) bool {
     return s and m and p;
 }
 
-/// Is the syllogism valid? Complete check over all 256 region patterns.
-pub fn valid(sy: Syllogism, existential_import: bool) bool {
+/// Complete decision with replayable exhaustive/countermodel evidence.
+pub fn decide(sy: Syllogism, existential_import: bool) Certificate {
+    var certificate: Certificate = .{ .valid = true };
     var regions: u32 = 0;
     while (regions < 256) : (regions += 1) {
         const rr: u8 = @intCast(regions);
         if (existential_import and !termsNonempty(rr)) continue;
         if (!premisesHold(sy, rr)) continue;
-        if (!statementHolds(sy.conclusion, s_bit, p_bit, rr)) return false;
+        setModel(&certificate.eligible_models, rr);
+        if (!statementHolds(sy.conclusion, s_bit, p_bit, rr)) {
+            certificate.valid = false;
+            certificate.countermodel = rr;
+            certificate.eligible_models = .{ 0, 0, 0, 0 };
+            return certificate;
+        }
+    }
+    return certificate;
+}
+
+/// Is the syllogism valid? Complete check over all 256 region patterns.
+pub fn valid(sy: Syllogism, existential_import: bool) bool {
+    return decide(sy, existential_import).valid;
+}
+
+/// Small evidence checker independent of the decision traversal state.
+pub fn verifyCertificate(sy: Syllogism, existential_import: bool, certificate: Certificate) bool {
+    if (!certificate.valid) {
+        const model = certificate.countermodel orelse return false;
+        if (existential_import and !termsNonempty(model)) return false;
+        return premisesHold(sy, model) and !statementHolds(sy.conclusion, s_bit, p_bit, model);
+    }
+    if (certificate.countermodel != null) return false;
+    var regions: u32 = 0;
+    while (regions < 256) : (regions += 1) {
+        const model: u8 = @intCast(regions);
+        const eligible = (!existential_import or termsNonempty(model)) and premisesHold(sy, model);
+        if (hasModel(&certificate.eligible_models, model) != eligible) return false;
+        if (eligible and !statementHolds(sy.conclusion, s_bit, p_bit, model)) return false;
     }
     return true;
 }
@@ -178,4 +224,38 @@ test "syllogistic: import-valid set strictly contains Boolean-valid set" {
             }
         }
     }
+}
+
+test "syllogistic: every form returns replayable evidence" {
+    for (0..4) |maj| {
+        for (0..4) |min| {
+            for (0..4) |con| {
+                for (0..4) |fig| {
+                    const sy = Syllogism{
+                        .major = @enumFromInt(maj),
+                        .minor = @enumFromInt(min),
+                        .conclusion = @enumFromInt(con),
+                        .figure = @enumFromInt(fig),
+                    };
+                    for ([_]bool{ false, true }) |with_import| {
+                        const certificate = decide(sy, with_import);
+                        try testing.expect(verifyCertificate(sy, with_import, certificate));
+                        if (!certificate.valid) try testing.expect(certificate.countermodel != null);
+                    }
+                }
+            }
+        }
+    }
+}
+
+test "syllogistic: certificate mutation is rejected" {
+    const barbara = Syllogism{ .major = .a, .minor = .a, .conclusion = .a, .figure = .first };
+    var certificate = decide(barbara, false);
+    certificate.eligible_models[0] ^= 1;
+    try testing.expect(!verifyCertificate(barbara, false, certificate));
+
+    const aaa2 = Syllogism{ .major = .a, .minor = .a, .conclusion = .a, .figure = .second };
+    var invalid = decide(aaa2, false);
+    invalid.countermodel = 0;
+    try testing.expect(!verifyCertificate(aaa2, false, invalid));
 }

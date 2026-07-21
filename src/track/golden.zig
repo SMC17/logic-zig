@@ -110,7 +110,7 @@ pub fn runBuiltin(allocator: std.mem.Allocator) !GoldenResult {
                 var ii = i.*;
                 ii.deinit();
             }
-            pass(&res, try i.verify(allocator, &nl));
+            pass(&res, try i.verify(allocator, &nl) == .verified);
         } else pass(&res, false);
     }
     // BMC counter
@@ -392,7 +392,7 @@ pub fn runBuiltin(allocator: std.mem.Allocator) !GoldenResult {
                 var ii = i.*;
                 ii.deinit();
             }
-            pass(&res, try i.verify(allocator, &d.nl));
+            pass(&res, try i.verify(allocator, &d.nl) == .verified);
         } else pass(&res, false);
     }
     {

@@ -260,8 +260,10 @@ pub const Netlist = struct {
     }
 };
 
+pub const EquivStatus = enum { equivalent, not_equivalent, unknown };
+
 pub const EquivResult = struct {
-    equivalent: bool,
+    status: EquivStatus,
     /// Counterexample on shared inputs when not equivalent (owned).
     cex: ?[]Value = null,
     conflicts: u64 = 0,
@@ -339,10 +341,10 @@ pub fn combinationalEquiv(
     };
 
     if (r.status == .unsat) {
-        return .{ .equivalent = true, .conflicts = r.conflicts };
+        return .{ .status = .equivalent, .conflicts = r.conflicts };
     }
     if (r.status != .sat) {
-        return .{ .equivalent = false, .conflicts = r.conflicts };
+        return .{ .status = .unknown, .conflicts = r.conflicts };
     }
     const full = r.model.?;
     defer allocator.free(full);
@@ -352,7 +354,7 @@ pub fn combinationalEquiv(
     for (a.inputs.items, 0..) |n, i| {
         cex[i] = full[a_off + n.index()];
     }
-    return .{ .equivalent = false, .cex = cex, .conflicts = r.conflicts };
+    return .{ .status = .not_equivalent, .cex = cex, .conflicts = r.conflicts };
 }
 
 fn blastWithOffset(allocator: std.mem.Allocator, cnf: *Cnf, nl: *const Netlist, off: u32) !void {
@@ -460,7 +462,7 @@ test "half adder equiv self" {
 
     const r = try combinationalEquiv(std.testing.allocator, &nl, &nl);
     defer if (r.cex) |c| std.testing.allocator.free(c);
-    try std.testing.expect(r.equivalent);
+    try std.testing.expectEqual(EquivStatus.equivalent, r.status);
 }
 
 test "half adder not equiv broken" {
@@ -486,6 +488,6 @@ test "half adder not equiv broken" {
 
     const r = try combinationalEquiv(std.testing.allocator, &good, &bad);
     defer if (r.cex) |c| std.testing.allocator.free(c);
-    try std.testing.expect(!r.equivalent);
+    try std.testing.expectEqual(EquivStatus.not_equivalent, r.status);
     try std.testing.expect(r.cex != null);
 }

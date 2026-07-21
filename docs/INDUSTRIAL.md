@@ -75,7 +75,9 @@ golden hook, (4) STATUS residual if not industrial.
 
 ### Phase 5 — CTL / BV polish + ecosystem
 - Fair CTL depth; BV word-level rewrites
-- C ABI stability for IPASIR; docs as product
+- C ABI stability for IPASIR; compiled consumer tests cover empty clauses,
+  interruption, learned-clause callbacks, and multishot solving. Assumption-proof
+  lifecycle and explicit state-machine conformance remain open.
 - External consumers
 
 ## Honesty clause

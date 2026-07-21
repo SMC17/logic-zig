@@ -192,7 +192,7 @@ pub fn mcSafety(
                             var ii = inv.*;
                             ii.deinit();
                         }
-                        cert_ok = try inv.verify(allocator, nl);
+                        cert_ok = try inv.verify(allocator, nl) == .verified;
                     }
                 }
                 return .{ .status = .proven, .engine = "pdr", .frames = pr.frames, .cert_verified = cert_ok };

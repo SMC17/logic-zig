@@ -8,6 +8,7 @@ const usage =
     \\
     \\Usage:
     \\  logic-zig sat <formula|--file path.cnf> [--proof] [--dump-proof PATH] [--check-drat]
+    \\  logic-zig check-rup <file.cnf> <file.rup>  # independent serialized checker
     \\  logic-zig sat-track <file.cnf> [--max-conflicts N] [--portfolio] [--proof] [--quiet]
     \\  logic-zig hwmcc-track <file.aag|aig> [--frames N] [--each] [--justice] [--lasso] [--cert] [--no-kind]
     \\  logic-zig fuzz / miter / unify / eval / cnf / tautology / equiv
@@ -24,6 +25,7 @@ const usage =
     \\  logic-zig api-info                      # stable api/v1 version + capabilities
     \\  logic-zig edge-suite                    # cross-domain adversarial edges
     \\  logic-zig taxonomy                      # universal named-systems registry
+    \\  logic-zig museum                        # evidence-derived exhibit contracts
     \\  logic-zig giants                        # discover Kissat/Z3/ABC/Vampire/…
     \\  logic-zig trust-report                  # DRAT + CaDiCaL + PDR certs + sequential
     \\  logic-zig sat-scoreboard [--dir DIR] [--limit N] [--conflicts N] [--portfolio] [--industrial]
@@ -83,6 +85,19 @@ pub fn main(init: std.process.Init) !void {
         } else {
             try cmdSatFormula(gpa, arg, proof);
         }
+        return;
+    }
+    if (std.mem.eql(u8, cmd, "check-rup")) {
+        const cnf_path = iter.next() orelse return fail("check-rup cnf path");
+        const proof_path = iter.next() orelse return fail("check-rup proof path");
+        if (iter.next() != null) return fail("check-rup trailing argument");
+        const cnf_text = std.Io.Dir.cwd().readFileAlloc(io, cnf_path, gpa, .limited(64 * 1024 * 1024)) catch return fail("read cnf failed");
+        defer gpa.free(cnf_text);
+        const proof_text = std.Io.Dir.cwd().readFileAlloc(io, proof_path, gpa, .limited(256 * 1024 * 1024)) catch return fail("read proof failed");
+        defer gpa.free(proof_text);
+        const status = logic.rup_checker.verify(gpa, cnf_text, proof_text) catch return fail("malformed cnf or proof");
+        std.debug.print("RUP_{s}\n", .{if (status == .verified) "VERIFIED" else "INVALID"});
+        if (status != .verified) std.process.exit(1);
         return;
     }
     if (std.mem.eql(u8, cmd, "fuzz")) {
@@ -246,6 +261,10 @@ pub fn main(init: std.process.Init) !void {
     }
     if (std.mem.eql(u8, cmd, "taxonomy")) {
         logic.taxonomy.printAll();
+        return;
+    }
+    if (std.mem.eql(u8, cmd, "museum")) {
+        logic.exhibits.printMuseum();
         return;
     }
     if (std.mem.eql(u8, cmd, "giants")) {
@@ -636,9 +655,9 @@ fn cmdMiter(gpa: std.mem.Allocator, io: std.Io, path_a: []const u8, path_b: []co
     defer nb.deinit();
     const r = logic.netlist.combinationalEquiv(gpa, &na, &nb) catch return fail("miter failed");
     defer if (r.cex) |c| gpa.free(c);
-    if (r.equivalent) {
+    if (r.status == .equivalent) {
         std.debug.print("EQUIVALENT\n", .{});
-    } else {
+    } else if (r.status == .not_equivalent) {
         std.debug.print("NOT_EQUIVALENT\n", .{});
         if (r.cex) |c| {
             for (c, 0..) |v, i| {
@@ -647,6 +666,9 @@ fn cmdMiter(gpa: std.mem.Allocator, io: std.Io, path_a: []const u8, path_b: []co
             }
         }
         std.process.exit(1);
+    } else {
+        std.debug.print("UNKNOWN\n", .{});
+        std.process.exit(2);
     }
 }
 

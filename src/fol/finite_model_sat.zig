@@ -25,7 +25,7 @@ const FuncSpec = fm.FuncSpec;
 const ModelResult = fm.ModelResult;
 const Interpretation = fm.Interpretation;
 
-const Env = std.StringHashMapUnmanaged(u32);
+const Env = std.AutoHashMapUnmanaged(TermId, u32);
 
 const Encoder = struct {
     allocator: std.mem.Allocator,
@@ -139,6 +139,31 @@ const Encoder = struct {
         }
     }
 
+    fn encodeTermConstants(self: *Encoder, pool: *const TermPool) !void {
+        for (pool.tags.items, 0..) |tag, index| {
+            const term = TermId.fromIndex(@intCast(index));
+            if (tag != .constant and !(tag == .func and pool.argsOf(term).len == 0)) continue;
+            const name = pool.nameOf(term);
+            var least: std.ArrayList(Lit) = .empty;
+            defer least.deinit(self.allocator);
+            var value: u32 = 0;
+            while (value < self.domain) : (value += 1) {
+                try least.append(self.allocator, try self.funcLit(name, &.{}, value, false));
+            }
+            try self.cnf.addClause(least.items);
+            value = 0;
+            while (value < self.domain) : (value += 1) {
+                var other = value + 1;
+                while (other < self.domain) : (other += 1) {
+                    try self.cnf.addClause(&.{
+                        try self.funcLit(name, &.{}, value, true),
+                        try self.funcLit(name, &.{}, other, true),
+                    });
+                }
+            }
+        }
+    }
+
     fn evalTermToCases(
         self: *Encoder,
         pool: *const TermPool,
@@ -153,27 +178,17 @@ const Encoder = struct {
         out_guards.clearRetainingCapacity();
         switch (pool.tag(t)) {
             .variable => {
-                const v = env.get(pool.nameOf(t)) orelse return error.Unbound;
+                const v = env.get(t) orelse return error.Unbound;
                 try out_vals.append(self.allocator, v);
                 try out_guards.append(self.allocator, null);
             },
             .constant => {
-                const v = env.get(pool.nameOf(t)) orelse @as(u32, 0); // const map via name digits?
-                // Constants: use env only if bound; else try parse as domain int or default 0.
-                // Better: constants fixed by name lookup in a const map — use 0 default.
-                _ = v;
-                const name = pool.nameOf(t);
-                // Map first d constant names a,b,c... or use 0
-                var code: u32 = 0;
-                if (name.len > 0) code = name[0] % self.domain;
-                try out_vals.append(self.allocator, code);
-                try out_guards.append(self.allocator, null);
+                try self.appendFuncResults(pool.nameOf(t), &.{}, null, out_vals, out_guards);
             },
             .func => {
                 const args = pool.argsOf(t);
                 if (args.len == 0) {
-                    try out_vals.append(self.allocator, 0);
-                    try out_guards.append(self.allocator, null);
+                    try self.appendFuncResults(pool.nameOf(t), &.{}, null, out_vals, out_guards);
                     return;
                 }
                 if (args.len > 2) return error.UnsupportedArity;
@@ -263,21 +278,48 @@ const Encoder = struct {
             },
             .atom => {
                 const args_t = fpool.atomArgs(f);
-                var args: [2]u32 = undefined;
                 if (args_t.len > 2) return error.TooManyArgs;
-                for (args_t, 0..) |t, i| {
-                    var av: std.ArrayList(u32) = .empty;
-                    defer av.deinit(self.allocator);
-                    var ag: std.ArrayList(?Lit) = .empty;
-                    defer ag.deinit(self.allocator);
-                    try self.evalTermToCases(pool, env, t, &av, &ag);
-                    if (av.items.len != 1) {
-                        // functional — expand (rare in tests); take first only if guarded
-                        return error.NonGround;
+                if (args_t.len == 0) return try self.predLit(fpool.atomPred(f), &.{}, false);
+
+                var a0v: std.ArrayList(u32) = .empty;
+                defer a0v.deinit(self.allocator);
+                var a0g: std.ArrayList(?Lit) = .empty;
+                defer a0g.deinit(self.allocator);
+                try self.evalTermToCases(pool, env, args_t[0], &a0v, &a0g);
+
+                var cases: std.ArrayList(Lit) = .empty;
+                defer cases.deinit(self.allocator);
+                if (args_t.len == 1) {
+                    for (a0v.items, 0..) |value, i| {
+                        const pred = try self.predLit(fpool.atomPred(f), &.{value}, false);
+                        try cases.append(self.allocator, (try self.conjGuards(a0g.items[i], pred)).?);
                     }
-                    args[i] = av.items[0];
+                } else {
+                    var a1v: std.ArrayList(u32) = .empty;
+                    defer a1v.deinit(self.allocator);
+                    var a1g: std.ArrayList(?Lit) = .empty;
+                    defer a1g.deinit(self.allocator);
+                    try self.evalTermToCases(pool, env, args_t[1], &a1v, &a1g);
+                    for (a0v.items, 0..) |left, i| {
+                        for (a1v.items, 0..) |right, j| {
+                            const args = [_]u32{ left, right };
+                            const pred = try self.predLit(fpool.atomPred(f), &args, false);
+                            const arg_guard = try self.conjGuards(a0g.items[i], a1g.items[j]);
+                            try cases.append(self.allocator, (try self.conjGuards(arg_guard, pred)).?);
+                        }
+                    }
                 }
-                return try self.predLit(fpool.atomPred(f), args[0..args_t.len], false);
+
+                const out = Lit.positive(Var.fromIndex(self.fresh()));
+                var reverse: std.ArrayList(Lit) = .empty;
+                defer reverse.deinit(self.allocator);
+                try reverse.append(self.allocator, out.not());
+                for (cases.items) |case| {
+                    try self.cnf.addClause(&.{ case.not(), out });
+                    try reverse.append(self.allocator, case);
+                }
+                try self.cnf.addClause(reverse.items);
+                return out;
             },
             .eq => {
                 var lv: std.ArrayList(u32) = .empty;
@@ -370,13 +412,19 @@ const Encoder = struct {
                 return ol;
             },
             .forall => {
-                const vname = pool.nameOf(fpool.binderVar(f));
+                const binder = fpool.binderVar(f);
                 const body = fpool.binderBody(f);
+                const previous = env.get(binder);
+                defer if (previous) |old| {
+                    env.put(self.allocator, binder, old) catch unreachable;
+                } else {
+                    _ = env.remove(binder);
+                };
                 var lits: std.ArrayList(Lit) = .empty;
                 defer lits.deinit(self.allocator);
                 var e: u32 = 0;
                 while (e < self.domain) : (e += 1) {
-                    try env.put(self.allocator, vname, e);
+                    try env.put(self.allocator, binder, e);
                     try lits.append(self.allocator, try self.encodeFormula(fpool, env, body));
                 }
                 const out = self.fresh();
@@ -390,13 +438,19 @@ const Encoder = struct {
                 return ol;
             },
             .exists => {
-                const vname = pool.nameOf(fpool.binderVar(f));
+                const binder = fpool.binderVar(f);
                 const body = fpool.binderBody(f);
+                const previous = env.get(binder);
+                defer if (previous) |old| {
+                    env.put(self.allocator, binder, old) catch unreachable;
+                } else {
+                    _ = env.remove(binder);
+                };
                 var lits: std.ArrayList(Lit) = .empty;
                 defer lits.deinit(self.allocator);
                 var e: u32 = 0;
                 while (e < self.domain) : (e += 1) {
-                    try env.put(self.allocator, vname, e);
+                    try env.put(self.allocator, binder, e);
                     try lits.append(self.allocator, try self.encodeFormula(fpool, env, body));
                 }
                 const out = self.fresh();
@@ -452,6 +506,7 @@ pub fn findModelSat(
         }
     }
     try enc.encodeFuncExactlyOne();
+    try enc.encodeTermConstants(fpool.terms);
 
     var env: Env = .{};
     defer env.deinit(allocator);
@@ -463,9 +518,10 @@ pub fn findModelSat(
         var pp = p.*;
         pp.deinit();
     };
-    if (r.status != .sat) {
-        if (r.model) |m| allocator.free(m);
-        return .{ .sat = false, .explored = 1 };
+    switch (r.status) {
+        .sat => {},
+        .unsat => return .{ .status = .no_model_at_domain, .sat = false, .explored = 1 },
+        .unknown => return .{ .status = .unknown, .sat = false, .explored = 1 },
     }
     const model = r.model.?;
     defer allocator.free(model);
@@ -516,7 +572,25 @@ pub fn findModelSat(
         }
     }
 
-    return .{ .sat = true, .model = interp, .explored = 1 };
+    for (fpool.terms.tags.items, 0..) |tag, index| {
+        const term = TermId.fromIndex(@intCast(index));
+        if (tag != .constant and !(tag == .func and fpool.terms.argsOf(term).len == 0)) continue;
+        const name = fpool.terms.nameOf(term);
+        var value: u32 = 0;
+        while (value < domain) : (value += 1) {
+            const lit = try enc.funcLit(name, &.{}, value, false);
+            if (model[lit.variable().index()] == .true_) {
+                try interp.setConst(name, value);
+                break;
+            }
+        }
+    }
+
+    var validation_env: Env = .{};
+    defer validation_env.deinit(allocator);
+    if (!try fm.evalFormula(fpool, &interp, &validation_env, sentence)) return error.ModelInvalid;
+
+    return .{ .status = .model_found, .sat = true, .model = interp, .explored = 1 };
 }
 
 test "sat model binary R" {
@@ -539,6 +613,54 @@ test "sat model binary R" {
         mm.deinit();
     };
     try std.testing.expect(r.sat);
+}
+
+test "sat model assigns constant denotations" {
+    var terms = TermPool.init(std.testing.allocator);
+    defer terms.deinit();
+    var fpool = try FormulaPool.init(std.testing.allocator, &terms);
+    defer fpool.deinit();
+    const a = try terms.mkConst("a");
+    const b = try terms.mkConst("b");
+    const distinct = try fpool.mkNot(try fpool.mkEq(a, b));
+
+    const one = try findModelSat(std.testing.allocator, &fpool, distinct, 1, .{});
+    defer if (one.model) |*m| {
+        var mm = m.*;
+        mm.deinit();
+    };
+    try std.testing.expect(!one.sat);
+
+    const two = try findModelSat(std.testing.allocator, &fpool, distinct, 2, .{});
+    defer if (two.model) |*m| {
+        var mm = m.*;
+        mm.deinit();
+    };
+    try std.testing.expect(two.sat);
+    try std.testing.expect(two.model.?.consts.get("a") != two.model.?.consts.get("b"));
+}
+
+test "sat model composes functional terms inside predicates" {
+    var terms = TermPool.init(std.testing.allocator);
+    defer terms.deinit();
+    var fpool = try FormulaPool.init(std.testing.allocator, &terms);
+    defer fpool.deinit();
+    const a = try terms.mkConst("a");
+    const fa = try terms.mkFunc("f", &.{a});
+    const pfa = try fpool.mkAtom("P", &.{fa});
+    const x = try terms.mkVar("x");
+    const no_p = try fpool.mkForall(x, try fpool.mkNot(try fpool.mkAtom("P", &.{x})));
+    const contradiction = try fpool.mkAnd(pfa, no_p);
+
+    const r = try findModelSat(std.testing.allocator, &fpool, contradiction, 2, .{
+        .preds = &.{.{ .name = "P", .arity = 1 }},
+        .funcs = &.{.{ .name = "f", .arity = 1 }},
+    });
+    defer if (r.model) |*m| {
+        var mm = m.*;
+        mm.deinit();
+    };
+    try std.testing.expectEqual(fm.ModelStatus.no_model_at_domain, r.status);
 }
 
 test "sat model involution" {

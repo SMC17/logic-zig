@@ -18,6 +18,7 @@ const Var = lit_mod.Var;
 const Value = lit_mod.Value;
 
 pub const SolveStatus = enum { sat, unsat, unknown };
+pub const PropertyStatus = enum { proved, disproved, unknown };
 
 pub const SolveResult = struct {
     status: SolveStatus,
@@ -33,6 +34,8 @@ pub const SolveResult = struct {
     assumption_core: ?[]i32 = null,
     /// True when `assumption_core` is the unique MUS of the assumption set.
     assumption_core_unique: bool = false,
+    assumption_core_minimality: PropertyStatus = .unknown,
+    assumption_core_uniqueness: PropertyStatus = .unknown,
 };
 
 pub const SolverOptions = struct {
@@ -63,6 +66,10 @@ pub const SolverOptions = struct {
     preprocess: bool = false,
     /// Every N conflicts at decision level 0-ish restart: delete satisfied learned clauses (0 = off).
     inprocess_interval: u32 = 0,
+    terminate_state: ?*anyopaque = null,
+    terminate_callback: ?*const fn (?*anyopaque) bool = null,
+    learn_state: ?*anyopaque = null,
+    learn_callback: ?*const fn (?*anyopaque, []const Lit) void = null,
 };
 
 const ClauseRange = struct {
@@ -117,6 +124,7 @@ pub const Solver = struct {
     pure_assign_count: u64 = 0,
     /// Assumption decision levels (for multi-shot): restart only back to this.
     assumption_level: i32 = 0,
+    termination_requested: bool = false,
 
     proof: ?drat_mod.Proof = null,
     /// Snapshot of original problem for model check (not including learned).
@@ -450,6 +458,7 @@ pub const Solver = struct {
 
     fn propagate(self: *Solver) error{OutOfMemory}!?ClauseId {
         while (self.qhead < self.trail.items.len) {
+            if (self.pollTermination()) return null;
             const p = self.trail.items[self.qhead];
             self.qhead += 1;
             const false_lit = p.not();
@@ -917,6 +926,7 @@ pub const Solver = struct {
         }
         if (progress) {
             if (try self.propagate()) |_| return false;
+            if (self.termination_requested) return true;
         }
         return true;
     }
@@ -1001,7 +1011,9 @@ pub const Solver = struct {
         if (r.status == .unsat and assumptions.len > 0) {
             const extracted = try self.extractAssumptionMus(assumptions);
             r.assumption_core = extracted.core;
-            r.assumption_core_unique = extracted.unique;
+            r.assumption_core_minimality = extracted.minimality;
+            r.assumption_core_uniqueness = extracted.uniqueness;
+            r.assumption_core_unique = extracted.uniqueness == .proved;
         }
         return r;
     }
@@ -1011,12 +1023,14 @@ pub const Solver = struct {
         core: []i32,
         /// True iff this is the **unique** MUS of the assumption set:
         /// ∀a∈MUS. assumptions\{a} is SAT.
-        unique: bool,
+        minimality: PropertyStatus,
+        uniqueness: PropertyStatus,
     };
 
     /// Extract a MUS of `assumptions` and test uniqueness.
     pub fn extractAssumptionMus(self: *Solver, assumptions: []const Lit) !MusResult {
-        const core_dimacs = try self.minimizeAssumptionCore(assumptions);
+        const minimized = try self.minimizeAssumptionCore(assumptions);
+        const core_dimacs = minimized.core;
         errdefer self.allocator.free(core_dimacs);
 
         var core_lits: std.ArrayList(Lit) = .empty;
@@ -1024,7 +1038,7 @@ pub const Solver = struct {
         for (core_dimacs) |d| try core_lits.append(self.allocator, Lit.fromDimacs(d));
 
         // Uniqueness: for every a in MUS, full assumption set without a is SAT.
-        var unique = true;
+        var uniqueness: PropertyStatus = if (minimized.status == .proved) .proved else .unknown;
         for (core_lits.items) |drop| {
             var reduced: std.ArrayList(Lit) = .empty;
             defer reduced.deinit(self.allocator);
@@ -1039,11 +1053,13 @@ pub const Solver = struct {
                 pp.deinit();
             };
             if (r.status == .unsat) {
-                unique = false;
+                uniqueness = .disproved;
                 break;
+            } else if (r.status == .unknown) {
+                uniqueness = .unknown;
             }
         }
-        return .{ .core = core_dimacs, .unique = unique };
+        return .{ .core = core_dimacs, .minimality = minimized.status, .uniqueness = uniqueness };
     }
 
     /// Full reset to decision level −1 / empty trail for a clean multi-shot probe.
@@ -1063,8 +1079,47 @@ pub const Solver = struct {
         self.assumption_level = 0;
     }
 
+    /// Resource limits and reported statistics are per solve call, even though
+    /// clauses, activities, phases, and learned state survive across calls.
+    fn resetCallStats(self: *Solver) void {
+        self.conflict_count = 0;
+        self.decision_count = 0;
+        self.prop_count = 0;
+        self.learned_count = 0;
+        self.reduced_count = 0;
+        self.termination_requested = false;
+    }
+
+    fn prepareProof(self: *Solver, assumptions: []const Lit) !void {
+        if (!self.opts.proof) return;
+        if (self.proof) |*proof| proof.deinit();
+        self.proof = drat_mod.Proof.init(self.allocator);
+        try self.proof.?.setAssumptions(assumptions);
+    }
+
+    fn pollTermination(self: *Solver) bool {
+        if (self.opts.terminate_callback) |callback| {
+            if (callback(self.opts.terminate_state)) {
+                self.termination_requested = true;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    fn interruptedResult(self: *const Solver) SolveResult {
+        return .{
+            .status = .unknown,
+            .conflicts = self.conflict_count,
+            .decisions = self.decision_count,
+            .propagations = self.prop_count,
+            .learned = self.learned_count,
+            .reduced = self.reduced_count,
+        };
+    }
+
     /// Verify that every member of `core` is necessary (deletion-minimal).
-    pub fn isDeletionMinimalCore(self: *Solver, core: []const Lit) !bool {
+    pub fn isDeletionMinimalCore(self: *Solver, core: []const Lit) !PropertyStatus {
         if (core.len == 0) {
             self.hardReset();
             const r = try self.solveAssumptionsRaw(&.{});
@@ -1073,7 +1128,11 @@ pub const Solver = struct {
                 var pp = p.*;
                 pp.deinit();
             };
-            return r.status == .unsat;
+            return switch (r.status) {
+                .unsat => .proved,
+                .sat => .disproved,
+                .unknown => .unknown,
+            };
         }
         {
             self.hardReset();
@@ -1083,7 +1142,8 @@ pub const Solver = struct {
                 var pp = p.*;
                 pp.deinit();
             };
-            if (r.status != .unsat) return false;
+            if (r.status == .sat) return .disproved;
+            if (r.status == .unknown) return .unknown;
         }
         var i: usize = 0;
         while (i < core.len) : (i += 1) {
@@ -1099,12 +1159,15 @@ pub const Solver = struct {
                 var pp = p.*;
                 pp.deinit();
             };
-            if (r.status == .unsat) return false;
+            if (r.status == .unsat) return .disproved;
+            if (r.status == .unknown) return .unknown;
         }
-        return true;
+        return .proved;
     }
 
     fn solveAssumptionsRaw(self: *Solver, assumptions: []const Lit) !SolveResult {
+        self.resetCallStats();
+        try self.prepareProof(assumptions);
         self.cancelUntil(0);
         self.assumption_level = 0;
         self.qhead = 0;
@@ -1119,6 +1182,7 @@ pub const Solver = struct {
             }
         }
         if (try self.propagate()) |_| return self.finishUnsat();
+        if (self.termination_requested) return self.interruptedResult();
 
         for (assumptions) |a| {
             switch (self.valueLit(a)) {
@@ -1135,6 +1199,7 @@ pub const Solver = struct {
                             return self.finishUnsat();
                         }
                     }
+                    if (self.termination_requested) return self.interruptedResult();
                 },
             }
         }
@@ -1145,11 +1210,14 @@ pub const Solver = struct {
 
     /// Deletion filter: drop assumptions that are not needed for unsat.
     /// Each probe hard-resets the trail so multi-shot state cannot poison the check.
-    fn minimizeAssumptionCore(self: *Solver, assumptions: []const Lit) ![]i32 {
+    const MinimizedCore = struct { core: []i32, status: PropertyStatus };
+
+    fn minimizeAssumptionCore(self: *Solver, assumptions: []const Lit) !MinimizedCore {
         var core: std.ArrayList(Lit) = .empty;
         defer core.deinit(self.allocator);
         try core.appendSlice(self.allocator, assumptions);
 
+        var status: PropertyStatus = .proved;
         var i: usize = 0;
         while (i < core.items.len) {
             var reduced: std.ArrayList(Lit) = .empty;
@@ -1167,16 +1235,19 @@ pub const Solver = struct {
             if (r.status == .unsat) {
                 _ = core.orderedRemove(i);
             } else {
+                if (r.status == .unknown) status = .unknown;
                 i += 1;
             }
         }
 
         const out = try self.allocator.alloc(i32, core.items.len);
         for (core.items, 0..) |a, j| out[j] = a.toDimacs();
-        return out;
+        return .{ .core = out, .status = status };
     }
 
     pub fn solve(self: *Solver) !SolveResult {
+        self.resetCallStats();
+        try self.prepareProof(&.{});
         self.assumption_level = 0;
         self.cancelUntil(0);
         self.qhead = 0;
@@ -1207,7 +1278,9 @@ pub const Solver = struct {
             }
         }
         if (try self.propagate()) |_| return self.finishUnsat();
+        if (self.termination_requested) return self.interruptedResult();
         if (!try self.eliminatePureLiterals()) return self.finishUnsat();
+        if (self.termination_requested) return self.interruptedResult();
         return try self.searchLoop();
     }
 
@@ -1220,6 +1293,7 @@ pub const Solver = struct {
             self.lubyLimit(0);
 
         while (true) {
+            if (self.pollTermination()) return self.interruptedResult();
             if (self.conflict_count >= self.opts.max_conflicts) {
                 return .{
                     .status = .unknown,
@@ -1289,6 +1363,9 @@ pub const Solver = struct {
                             self.rephase();
                         }
                     }
+                }
+                if (self.opts.learn_callback) |callback| {
+                    callback(self.opts.learn_state, learnt_copy);
                 }
                 continue;
             }
@@ -1376,9 +1453,51 @@ test "assumption core is deletion-minimal" {
     var core_lits: std.ArrayList(Lit) = .empty;
     defer core_lits.deinit(std.testing.allocator);
     for (r.assumption_core.?) |d| try core_lits.append(std.testing.allocator, Lit.fromDimacs(d));
-    try std.testing.expect(try s.isDeletionMinimalCore(core_lits.items));
+    try std.testing.expectEqual(PropertyStatus.proved, try s.isDeletionMinimalCore(core_lits.items));
     // Two MUSes exist → not unique
     try std.testing.expect(!r.assumption_core_unique);
+}
+
+test "conflict budget is per solve call" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    cnf.ensureVars(1);
+    try cnf.addClause(&.{Lit.positive(Var.fromIndex(0))});
+
+    var solver = try Solver.init(std.testing.allocator, &cnf, .{ .max_conflicts = 1 });
+    defer solver.deinit();
+    solver.conflict_count = 1; // simulate a prior call consuming its budget
+
+    const r = try solver.solve();
+    defer if (r.model) |m| std.testing.allocator.free(m);
+    try std.testing.expectEqual(SolveStatus.sat, r.status);
+    try std.testing.expectEqual(@as(u64, 0), r.conflicts);
+}
+
+test "incremental proofs carry assumptions and restart each call" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    cnf.ensureVars(1);
+    const a = Lit.positive(Var.fromIndex(0));
+    try cnf.addClause(&.{a});
+
+    var solver = try Solver.init(std.testing.allocator, &cnf, .{ .proof = true });
+    defer solver.deinit();
+
+    var first = try solver.solveAssumptions(&.{a.not()});
+    defer if (first.assumption_core) |core| std.testing.allocator.free(core);
+    defer if (first.proof) |*proof| proof.deinit();
+    try std.testing.expectEqual(SolveStatus.unsat, first.status);
+    try std.testing.expect(first.proof != null);
+    try std.testing.expectEqual(@as(usize, 1), first.proof.?.assumptions.items.len);
+    try std.testing.expect(try first.proof.?.verifyRup(std.testing.allocator, &cnf));
+
+    var second = try solver.solveAssumptions(&.{a.not()});
+    defer if (second.assumption_core) |core| std.testing.allocator.free(core);
+    defer if (second.proof) |*proof| proof.deinit();
+    try std.testing.expectEqual(SolveStatus.unsat, second.status);
+    try std.testing.expect(second.proof != null);
+    try std.testing.expectEqual(@as(usize, 1), second.proof.?.assumptions.items.len);
 }
 
 test "unique MUS when single minimal core" {
@@ -1403,6 +1522,18 @@ test "unique MUS when single minimal core" {
     try std.testing.expect(r.status == .unsat);
     try std.testing.expect(r.assumption_core.?.len == 2);
     try std.testing.expect(r.assumption_core_unique);
+}
+
+test "core minimality preserves inconclusive probes" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    cnf.ensureVars(2);
+    const a = Lit.positive(Var.fromIndex(0));
+    const b = Lit.positive(Var.fromIndex(1));
+    try cnf.addClause(&.{ a, b });
+    var solver = try Solver.init(std.testing.allocator, &cnf, .{ .max_conflicts = 0 });
+    defer solver.deinit();
+    try std.testing.expectEqual(PropertyStatus.unknown, try solver.isDeletionMinimalCore(&.{ a.not(), b.not() }));
 }
 
 test "multi-shot incremental assumptions" {
