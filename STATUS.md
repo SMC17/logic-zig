@@ -96,6 +96,10 @@ Taxonomy map: `docs/TAXONOMY_COVERAGE.md`
   and cube defaults. Exact generating-set replay checks groundedness,
   justification consistency, stability and omissions; arbitrary formula and
   first-order defaults remain outside the contract.
+- Finite AGM belief-base change is a `verified_exhibit`: remainder families are
+  checked for maximality and omissions, all three partial-meet policies replay,
+  and cube revision is verified through the Levi identity. Deductively closed
+  theories and iterated revision remain separate contracts.
 - `logic-zig museum` also prints every uncontracted taxonomy row as a catalog-only
   restoration backlog, keeping the whole landscape visible without promoting it.
 
