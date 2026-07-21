@@ -1,13 +1,16 @@
 # logic-zig status
 
 **Version:** 0.22.0  
-**North star:** universal logic library in Zig (`docs/UNIVERSAL.md`) — leave no stone unturned; stand on giants; deepen forever.
+**North star:** executable museum and comparative laboratory implementing every
+branch of logic in Zig. “Complete” is scoped to evidence-bearing exhibit contracts
+(`docs/MUSEUM.md`), never inferred from registry breadth.
 
 ## Climb gates
 
 ```sh
 zig build test && zig build
 ./zig-out/bin/logic-zig taxonomy
+./zig-out/bin/logic-zig museum
 ./zig-out/bin/logic-zig giants
 ./zig-out/bin/logic-zig edge-suite
 ./zig-out/bin/logic-zig trust-report
@@ -49,6 +52,39 @@ zig build test && zig build
 
 SAT/MC/SMT/FOL industrial program: `docs/INDUSTRIAL.md`  
 Taxonomy map: `docs/TAXONOMY_COVERAGE.md`
+
+## Truth-reset work in progress
+
+- Inductive-invariant verification now checks `I => !Bad`, rejects inconclusive
+  initiation/consecution queries, and no longer converts k-induction into an empty
+  invariant certificate.
+- SAT conflict limits and reported counters reset per solve call.
+- Assumption-core minimality and uniqueness are tri-state; inconclusive deletion
+  probes can no longer silently promote either property to true.
+- Proof-producing assumption solves record their ordered assumption context and
+  reinitialize proof state for every incremental call.
+- Combinational equivalence preserves `unknown` instead of reporting a false
+  inequivalence.
+- Scoreboard and trust gates require actual external evidence.
+- IPASIR preserves unterminated clauses, accepts empty clauses, records sticky C-ABI
+  failures, and implements termination and learned-clause callbacks. A compiled C
+  consumer exercises those contracts in `zig build test`; assumption-proof lifecycle
+  and a fully specified state machine remain incomplete, so the registry says fragment.
+- FOL evaluator binder environments now use `TermId` and restore scope. SAT-backed
+  constants have proper decision variables, model reconstruction, and replay;
+  functional terms now compose inside predicate atoms (arity remains limited to two).
+- Evidence-bearing museum manifests exist for classical propositional logic, S4,
+  and first-order logic. Classical propositional logic is the first
+  `verified_exhibit`: producer proofs cross a serialized, search-independent RUP
+  checker and a formal exhibit contract. Aristotelian categorical syllogistic is
+  also a `verified_exhibit`: every one of 512 form/semantics combinations emits
+  replayable exhaustive evidence or a countermodel. These are audited/unit-tested,
+  not formally verified.
+- K3, LP, FDE, and L3 finite-matrix consequence are `verified_exhibit` contracts:
+  decisions validate matrix/formula shape, exhaust the finite valuation space, and
+  return replayable countervaluations. The explicit limit is eight atoms per query.
+- `logic-zig museum` also prints every uncontracted taxonomy row as a catalog-only
+  restoration backlog, keeping the whole landscape visible without promoting it.
 
 ## Residuals (honest — ambition ≠ achievement)
 
