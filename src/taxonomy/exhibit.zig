@@ -79,6 +79,7 @@ const prop_tests = [_][]const u8{
 const syllogistic_tests = [_][]const u8{"src/logic/syllogistic.zig"};
 const matrix_tests = [_][]const u8{"src/logic/manyvalued.zig"};
 const dung_tests = [_][]const u8{"src/reason/argumentation.zig"};
+const asp_tests = [_][]const u8{"src/reason/asp.zig"};
 const modal_tests = [_][]const u8{"src/modal/kripke.zig"};
 const fol_term_tests = [_][]const u8{ "src/fol/term.zig", "src/fol/unify.zig" };
 const fol_resolution_tests = [_][]const u8{"src/fol/resolution.zig"};
@@ -211,6 +212,23 @@ pub const exhibits = [_]ExhibitManifest{
         .interoperability = claim(.absent, .none, "", &none),
     },
     .{
+        .id = "asp-stable",
+        .name = "Propositional normal answer-set programming",
+        .formal_identity = "Stable-model semantics for finite propositional normal logic programs with integrity constraints",
+        .contract_version = "0.1.0",
+        .decidability = .decidable,
+        .completeness_scope = "Exact stable-model enumeration and reduct replay for validated normal programs with at most 16 atoms by default and an absolute supported limit of 20",
+        .limitations = &.{ "Exponential subset enumeration", "No variables or grounding", "No disjunctive heads, classical negation, aggregates, weak constraints or optimization", "No ASP-Core-2 parser or clingo-scale claim" },
+        .syntax = claim(.complete, .unit_tested, "docs/exhibits/asp-stable.md", &asp_tests),
+        .semantics = claim(.complete, .unit_tested, "docs/exhibits/asp-stable.md", &asp_tests),
+        .calculus = claim(.complete, .unit_tested, "docs/exhibits/asp-stable.md", &asp_tests),
+        .automation = claim(.complete, .unit_tested, "docs/exhibits/asp-stable.md", &asp_tests),
+        .proof_objects = claim(.complete, .unit_tested, "docs/exhibits/asp-stable.md", &asp_tests),
+        .countermodels = claim(.complete, .unit_tested, "docs/exhibits/asp-stable.md", &asp_tests),
+        .documentation = claim(.complete, .audited, "docs/exhibits/asp-stable.md", &asp_tests),
+        .interoperability = claim(.absent, .none, "", &none),
+    },
+    .{
         .id = "modal-s4",
         .name = "Modal propositional logic S4",
         .formal_identity = "Normal modal logic S4 over reflexive and transitive Kripke frames",
@@ -289,9 +307,9 @@ test "all exhibit claims are structurally evidenced" {
 test "promotion is derived and fail closed" {
     try std.testing.expectEqual(Promotion.verified_exhibit, exhibits[0].promotion());
     try std.testing.expectEqual(Promotion.verified_exhibit, exhibits[1].promotion());
-    for (exhibits[2..7]) |exhibit| try std.testing.expectEqual(Promotion.verified_exhibit, exhibit.promotion());
-    try std.testing.expectEqual(Promotion.cataloged, exhibits[7].promotion());
+    for (exhibits[2..8]) |exhibit| try std.testing.expectEqual(Promotion.verified_exhibit, exhibit.promotion());
     try std.testing.expectEqual(Promotion.cataloged, exhibits[8].promotion());
+    try std.testing.expectEqual(Promotion.cataloged, exhibits[9].promotion());
 
     var bad = exhibits[0];
     bad.syntax = claim(.complete, .none, "", &none);
