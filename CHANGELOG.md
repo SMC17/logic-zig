@@ -46,6 +46,13 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - Replaced circumscription's assertion/Boolean boundary with validated partitions,
   exact minimal-signature decisions, complete countermodels and replay. The
   finite propositional fragment is now a verified exhibit.
+- Added Propositional Dynamic Logic (`modal/pdl.zig`) with two independent finite-frame
+  evaluators — matrix reflexive-transitive closure and Fischer–Ladner graph reach — a
+  brute-force exhaustive-frame oracle for validity, and a fail-closed `verifyClaim`
+  replay. Known validities (K, distribution, composition, union, star unroll, star
+  induction, test equivalence, diamond-star fixpoint) are confirmed and known
+  non-validities receive countermodels; the scoped finite regular-program fragment is
+  now a `verified_exhibit`. api/v1 bumped to 1.6.0 with a `modal_pdl` capability bit.
 - Hardened KLM rational closure so SAT `unknown` cannot become exceptionality,
   per-level allocations do not accumulate, and rankings/query levels have exact
   mutation-tested replay. Promotion remains withheld pending countermodels.

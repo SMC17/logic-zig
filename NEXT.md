@@ -1,35 +1,40 @@
 # NEXT — logic-zig
 
-_Last update: 2026-07-17 by Claude_
+_Last update: 2026-07-21 by Hermes_
 
 ## What just shipped
 
-Five releases in one session, all on `main`:
+`dynamic-pdl` is now a `verified_exhibit` (v0.23.0):
 
-- `57ee0db` v0.18.0 — Peircean triad: propositional abduction (MARCO, subset-minimal) + minimal-k DNF induction
-- `ad10d9a` v0.19.0 — MaxSAT engine, min-cost abduction (implicit hitting set), first-order ALP, Bayesian induction, Reiter defaults, KLM rational closure
-- `9f19cfb` v0.20.0 — Dung argumentation, ASP stable models, AGM revision, circumscription, analogical proportions
-- `c897021` v0.21.0 — G4ip intuitionistic prover, many-valued matrices (K3/LP/FDE/Ł3), epistemic S5 + common knowledge + announcements, complete syllogistic decision, EL subsumption
-- `2b1346d` v0.22.0 — MLL linear logic prover, deontic SDL (KD), registry widened to 61 systems
-
-18 pre-registered experiments, all confirmed; 3 Type-I errors self-caught by their
-falsifiers before ship (MaxSAT descent-to-zero status, analogy XOR overclaim, G4ip
-context corruption). api/v1 now 1.5.0 with 40 capability bits (u64, low word stable).
-Registry: 27 fragment / 10 engine / 15 documented / 3 skeleton / 6 external.
-**Not pushed to GitHub** — user has not asked; local commits only.
+- `src/modal/pdl.zig` implements Propositional Dynamic Logic on finite frames:
+  programs `α ::= a | α;β | α∪β | α* | φ?` and modalities `[α]φ` / `⟨α⟩φ`.
+- Two independent evaluators (`evalMatrix` via relation RTC, `evalReach` via
+  Fischer–Ladner graph reach) are cross-checked over hundreds of randomized
+  formulas/models and must agree.
+- `findCounter` is a brute-force exhaustive-frame oracle: it enumerates every
+  frame up to a bound and confirms PDL validities (K, distribution, composition,
+  union, star unroll, star induction, test equivalence, diamond-star fixpoint)
+  and produces concrete countermodels for known non-validities.
+- `verifyClaim` replays a recorded verdict against both engines and fails closed
+  on any divergence. Six unit tests pass beside the module.
+- Registry `dynamic-pdl` promoted `documented → fragment`; museum promotion
+  derived to `verified_exhibit`; api/v1 → 1.6.0 with `modal_pdl` capability bit.
+- Evidence contract: `docs/exhibits/pdl.md`.
 
 ## Next concrete action
 
-Pick the top row from the documented backlog and repeat the register→build→verdict
-loop: implement `src/modal/pdl.zig` (propositional dynamic logic: finite-model
-evaluation of [α]φ with α ::= atomic | α;β | α∪β | α* via reachability, canon:
-[α*]φ fixpoint, induction axiom), pre-registering with `stax-experiment register
---lane logic-zig` first, wiring api/v1 1.6.0 + taxonomy row `dynamic-pdl` → fragment.
+The next cheap stone from the documented backlog is one of:
+
+- `hybrid-logic` (nominals + @, satisfaction operators) on finite frames, or
+- `mu-calculus` (least/greatest fixpoint model checking) on finite transition
+  systems — a natural follow-on to PDL since PDL embeds into the μ-calculus.
+
+Pre-register with `stax-experiment register --lane logic-zig`, wire api/v1 1.7.0,
+add a taxonomy row, and follow the register→build→verify→exhibit loop used for PDL.
 
 ## In-flight hypotheses
 
-None — all 20 logic-zig registers have verdicts (2 stale ones from v0.13/v0.17
-sessions closed 2026-07-17 with current-suite evidence).
+None — all logic-zig registers have verdicts.
 
 ## Context that won't be obvious from git
 
@@ -37,17 +42,18 @@ sessions closed 2026-07-17 with current-suite evidence).
   never reassigned must be `const` (compile error), no standalone
   `zig test src/...` (module paths) — always `zig build test`.
 - Recurring lesson (3× this session): **mutate-and-restore on shared backtracking
-  state is a bug factory** — prefer immutable snapshot contexts (see
-  `reason/alp.zig` solveG and `logic/intuitionistic.zig` proveSeq rewrites).
+  state is a bug factory** — prefer immutable snapshot contexts.
+- `test` is a reserved keyword in Zig — program-test builders use `test_`; the
+  `Arena` program builder is `mkprog` to avoid shadowing `prop`'s `p` parameter.
 - A transient `zig build test` failure appeared once (seed-dependent?) early in
-  the session and never reproduced across ~12 subsequent green runs. If it
-  recurs, capture the seed from the failing command line.
+  v0.22 and never reproduced across ~12 subsequent green runs. If it recurs,
+  capture the seed from the failing command line.
 - The "c parse error: InvalidFormat" line in test output is an existing
   negative-path test elsewhere, not a failure.
-- Remaining big lifts (deliberately deferred, listed as documented): relevance R
-  (undecidable — needs a bounded fragment decision), HOL, categorical logic.
-  Cheap next stones: PDL, possibilistic logic, autoepistemic expansions, natural
-  logic monotonicity calculus, hybrid logic.
+- Remaining big lifts (deliberately deferred): relevance R (undecidable — needs a
+  bounded fragment decision), HOL, categorical logic. Cheap next stones after PDL:
+  hybrid logic, μ-calculus, possibilistic logic, autoepistemic expansions, natural
+  logic monotonicity calculus.
 - Taxonomy registry test enforces ≥5 documented rows (honest-placeholder guard):
   when advancing rows to fragment, add newly named documented rows rather than
   weakening the assertion.
