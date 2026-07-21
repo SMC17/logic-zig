@@ -104,6 +104,10 @@ Taxonomy map: `docs/TAXONOMY_COVERAGE.md`
   minimized/fixed partitions produce exact minimal-signature evidence, and every
   refutation carries a complete minimal countermodel. Random CNFs remain checked
   against the independent full-assignment oracle.
+- KLM rational closure now propagates inconclusive SAT checks, bounds scratch
+  allocation to one rank level, validates ranking shape, and replays exact ranks
+  and query levels. It remains catalog-only until refutations carry ranked
+  countermodels rather than only Boolean/level evidence.
 - `logic-zig museum` also prints every uncontracted taxonomy row as a catalog-only
   restoration backlog, keeping the whole landscape visible without promoting it.
 
