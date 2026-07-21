@@ -10,6 +10,11 @@ automation boundary, test corpus, and checkable evidence. The current SAT and
 model-checking spine supports that expansion; exhibit maturity is derived rather
 than implied by catalog breadth.
 
+Lean is the first external semantic oracle: formal exhibit claims are checked by
+the pinned Lean kernel and an independent checker in CI. Aristotle may generate
+or strengthen Lean proofs, but generated output is never trusted before those
+checks pass.
+
 | | |
 |---|---|
 | **SAT** | CDCL with VSIDS, LBD reduce, multi-shot assumptions, RUP/DRAT, IPASIR |
@@ -45,6 +50,9 @@ zig build   # umbrella + spin-offs + libipasirlogic.so
 ./zig-out/bin/logic-zig check-rup formula.cnf proof.rup
 ./zig-out/bin/logic-zig giants     # discover external industrial provers
 ./zig-out/bin/logic-hwmcc golden
+
+# External semantic oracle
+( cd lean && lake build )
 
 # Flagship spin-offs (each pins a unique tradeoff profile)
 ./zig-out/bin/logic-agent profile
@@ -161,8 +169,10 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/ENGINES.md](docs/ENGI
 | [docs/exhibits/prop-classical.md](docs/exhibits/prop-classical.md) | Verified classical propositional exhibit |
 | [docs/exhibits/syllogistic.md](docs/exhibits/syllogistic.md) | Verified categorical syllogistic exhibit |
 | [docs/exhibits/finite-matrices.md](docs/exhibits/finite-matrices.md) | Verified K3, LP, FDE, and L3 exhibits |
+| [docs/LEAN_ORACLE.md](docs/LEAN_ORACLE.md) | Lean kernel and Aristotle contribution workflow |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to hack on the tree |
+| [SECURITY.md](SECURITY.md) | Private vulnerability and unsoundness reporting |
 | [LICENSE](LICENSE) | Apache-2.0 |
 
 ---
@@ -191,6 +201,10 @@ We prefer **narrow, testable contracts** over marketing language:
 - PDR `proven` means an inductive frame fixed point (IC3a-oriented feature set, not full ABC).
 
 Known residuals are listed in [`STATUS.md`](STATUS.md).
+
+Lean compilation proves the formal statement accepted by the kernel; it does not
+by itself prove that the Lean statement faithfully represents the Zig API. That
+translation boundary is tested and reviewed explicitly.
 
 ---
 
