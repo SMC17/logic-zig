@@ -39,6 +39,9 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - Replaced circumscription's assertion/Boolean boundary with validated partitions,
   exact minimal-signature decisions, complete countermodels and replay. The
   finite propositional fragment is now a verified exhibit.
+- Hardened KLM rational closure so SAT `unknown` cannot become exceptionality,
+  per-level allocations do not accumulate, and rankings/query levels have exact
+  mutation-tested replay. Promotion remains withheld pending countermodels.
 - Corrected inductive-invariant safety semantics and removed the invalid empty-
   invariant conversion from k-induction.
 - Made incremental SAT budgets and statistics per-call and equivalence tri-state.
