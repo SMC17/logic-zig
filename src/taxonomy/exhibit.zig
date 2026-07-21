@@ -82,6 +82,7 @@ const dung_tests = [_][]const u8{"src/reason/argumentation.zig"};
 const asp_tests = [_][]const u8{"src/reason/asp.zig"};
 const default_tests = [_][]const u8{"src/reason/default_logic.zig"};
 const agm_tests = [_][]const u8{"src/reason/agm.zig"};
+const circ_tests = [_][]const u8{"src/reason/circumscription.zig"};
 const modal_tests = [_][]const u8{"src/modal/kripke.zig"};
 const fol_term_tests = [_][]const u8{ "src/fol/term.zig", "src/fol/unify.zig" };
 const fol_resolution_tests = [_][]const u8{"src/fol/resolution.zig"};
@@ -265,6 +266,23 @@ pub const exhibits = [_]ExhibitManifest{
         .interoperability = claim(.absent, .none, "", &none),
     },
     .{
+        .id = "circumscription",
+        .name = "Finite propositional circumscription",
+        .formal_identity = "McCarthy-style propositional minimal-model entailment with minimized, fixed and varying atoms",
+        .contract_version = "0.1.0",
+        .decidability = .decidable,
+        .completeness_scope = "Exact P-minimal signature enumeration and cube entailment for CNF theories with at most 16 minimized plus fixed atoms",
+        .limitations = &.{ "Exponential signature enumeration", "Queries are literal cubes", "No first-order or predicate circumscription", "No prioritized, parallel or nested circumscription syntax", "No industrial minimal-model solver" },
+        .syntax = claim(.complete, .unit_tested, "docs/exhibits/propositional-circumscription.md", &circ_tests),
+        .semantics = claim(.complete, .unit_tested, "docs/exhibits/propositional-circumscription.md", &circ_tests),
+        .calculus = claim(.complete, .unit_tested, "docs/exhibits/propositional-circumscription.md", &circ_tests),
+        .automation = claim(.complete, .unit_tested, "docs/exhibits/propositional-circumscription.md", &circ_tests),
+        .proof_objects = claim(.complete, .unit_tested, "docs/exhibits/propositional-circumscription.md", &circ_tests),
+        .countermodels = claim(.complete, .unit_tested, "docs/exhibits/propositional-circumscription.md", &circ_tests),
+        .documentation = claim(.complete, .audited, "docs/exhibits/propositional-circumscription.md", &circ_tests),
+        .interoperability = claim(.absent, .none, "", &none),
+    },
+    .{
         .id = "modal-s4",
         .name = "Modal propositional logic S4",
         .formal_identity = "Normal modal logic S4 over reflexive and transitive Kripke frames",
@@ -343,9 +361,9 @@ test "all exhibit claims are structurally evidenced" {
 test "promotion is derived and fail closed" {
     try std.testing.expectEqual(Promotion.verified_exhibit, exhibits[0].promotion());
     try std.testing.expectEqual(Promotion.verified_exhibit, exhibits[1].promotion());
-    for (exhibits[2..10]) |exhibit| try std.testing.expectEqual(Promotion.verified_exhibit, exhibit.promotion());
-    try std.testing.expectEqual(Promotion.cataloged, exhibits[10].promotion());
+    for (exhibits[2..11]) |exhibit| try std.testing.expectEqual(Promotion.verified_exhibit, exhibit.promotion());
     try std.testing.expectEqual(Promotion.cataloged, exhibits[11].promotion());
+    try std.testing.expectEqual(Promotion.cataloged, exhibits[12].promotion());
 
     var bad = exhibits[0];
     bad.syntax = claim(.complete, .none, "", &none);

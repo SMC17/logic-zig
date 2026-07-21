@@ -100,6 +100,10 @@ Taxonomy map: `docs/TAXONOMY_COVERAGE.md`
   checked for maximality and omissions, all three partial-meet policies replay,
   and cube revision is verified through the Levi identity. Deductively closed
   theories and iterated revision remain separate contracts.
+- Finite propositional circumscription is a `verified_exhibit`: validated
+  minimized/fixed partitions produce exact minimal-signature evidence, and every
+  refutation carries a complete minimal countermodel. Random CNFs remain checked
+  against the independent full-assignment oracle.
 - `logic-zig museum` also prints every uncontracted taxonomy row as a catalog-only
   restoration backlog, keeping the whole landscape visible without promoting it.
 

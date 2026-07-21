@@ -34,6 +34,30 @@ pub const Partition = struct {
     // Every other atom of the theory varies.
 };
 
+pub const CircError = error{
+    SignatureTooLarge,
+    PartitionAtomOutOfRange,
+    DuplicatePartitionAtom,
+    QueryAtomOutOfRange,
+    InconclusiveSatQuery,
+};
+
+pub fn validate(theory: *const Cnf, part: Partition, phi_cube: []const Lit) CircError!void {
+    if (part.minimized.len + part.fixed.len > 16) return error.SignatureTooLarge;
+    for (part.minimized, 0..) |atom, index| {
+        if (atom >= theory.num_vars) return error.PartitionAtomOutOfRange;
+        for (part.minimized[index + 1 ..]) |other| if (atom == other) return error.DuplicatePartitionAtom;
+        for (part.fixed) |other| if (atom == other) return error.DuplicatePartitionAtom;
+    }
+    for (part.fixed, 0..) |atom, index| {
+        if (atom >= theory.num_vars) return error.PartitionAtomOutOfRange;
+        for (part.fixed[index + 1 ..]) |other| if (atom == other) return error.DuplicatePartitionAtom;
+    }
+    for (phi_cube) |literal| {
+        if (literal.variable().index() >= theory.num_vars) return error.QueryAtomOutOfRange;
+    }
+}
+
 fn signatureSat(
     allocator: std.mem.Allocator,
     theory: *const Cnf,
@@ -71,7 +95,51 @@ fn signatureSat(
     }
     const r = try solver_mod.solveCnf(allocator, &t, .{});
     defer if (r.model) |m| allocator.free(m);
-    return r.status == .sat;
+    return switch (r.status) {
+        .sat => true,
+        .unsat => false,
+        .unknown => error.InconclusiveSatQuery,
+    };
+}
+
+fn signatureModel(
+    allocator: std.mem.Allocator,
+    theory: *const Cnf,
+    part: Partition,
+    sig: u32,
+    negated_cube: []const Lit,
+) !?[]Value {
+    var t = Cnf.init(allocator);
+    defer t.deinit();
+    t.ensureVars(theory.num_vars);
+    for (0..theory.numClauses()) |ci| try t.addClause(theory.clauseSlice(ClauseId.fromIndex(@intCast(ci))));
+    var idx: u5 = 0;
+    for (part.minimized) |atom| {
+        const literal = if ((sig >> idx) & 1 == 1) Lit.positive(Var.fromIndex(atom)) else Lit.negative(Var.fromIndex(atom));
+        try t.addClause(&.{literal});
+        idx += 1;
+    }
+    for (part.fixed) |atom| {
+        const literal = if ((sig >> idx) & 1 == 1) Lit.positive(Var.fromIndex(atom)) else Lit.negative(Var.fromIndex(atom));
+        try t.addClause(&.{literal});
+        idx += 1;
+    }
+    var negated: std.ArrayList(Lit) = .empty;
+    defer negated.deinit(allocator);
+    for (negated_cube) |literal| try negated.append(allocator, literal.not());
+    try t.addClause(negated.items);
+    const result = try solver_mod.solveCnf(allocator, &t, .{});
+    return switch (result.status) {
+        .sat => result.model,
+        .unsat => blk: {
+            if (result.model) |model| allocator.free(model);
+            break :blk null;
+        },
+        .unknown => blk: {
+            if (result.model) |model| allocator.free(model);
+            break :blk error.InconclusiveSatQuery;
+        },
+    };
 }
 
 fn pPart(sig: u32, np: u5) u32 {
@@ -81,6 +149,160 @@ fn qPart(sig: u32, np: u5) u32 {
     return sig >> np;
 }
 
+fn collectMinimalSignatures(
+    allocator: std.mem.Allocator,
+    theory: *const Cnf,
+    part: Partition,
+) !std.ArrayList(u32) {
+    const np: u5 = @intCast(part.minimized.len);
+    const nq: u5 = @intCast(part.fixed.len);
+    const total: u32 = @as(u32, 1) << (np + nq);
+    var satisfiable: std.ArrayList(u32) = .empty;
+    defer satisfiable.deinit(allocator);
+    var sig: u32 = 0;
+    while (sig < total) : (sig += 1) {
+        if (try signatureSat(allocator, theory, part, sig, null)) try satisfiable.append(allocator, sig);
+    }
+    var minimal: std.ArrayList(u32) = .empty;
+    errdefer minimal.deinit(allocator);
+    for (satisfiable.items) |candidate| {
+        var is_minimal = true;
+        for (satisfiable.items) |other| {
+            if (other == candidate or qPart(other, np) != qPart(candidate, np)) continue;
+            const other_p = pPart(other, np);
+            const candidate_p = pPart(candidate, np);
+            if ((other_p & candidate_p) == other_p and other_p != candidate_p) {
+                is_minimal = false;
+                break;
+            }
+        }
+        if (is_minimal) try minimal.append(allocator, candidate);
+    }
+    return minimal;
+}
+
+pub const Decision = struct {
+    allocator: std.mem.Allocator,
+    entailed: bool,
+    minimal_signatures: std.ArrayList(u32) = .empty,
+    counterexample_signature: ?u32 = null,
+    counterexample_model: ?[]Value = null,
+
+    pub fn deinit(self: *Decision) void {
+        self.minimal_signatures.deinit(self.allocator);
+        if (self.counterexample_model) |model| self.allocator.free(model);
+        self.* = undefined;
+    }
+};
+
+pub fn decide(
+    allocator: std.mem.Allocator,
+    theory: *const Cnf,
+    part: Partition,
+    phi_cube: []const Lit,
+) !Decision {
+    try validate(theory, part, phi_cube);
+    var decision = Decision{ .allocator = allocator, .entailed = true };
+    errdefer decision.deinit();
+    decision.minimal_signatures = try collectMinimalSignatures(allocator, theory, part);
+    for (decision.minimal_signatures.items) |signature| {
+        if (try signatureModel(allocator, theory, part, signature, phi_cube)) |model| {
+            decision.entailed = false;
+            decision.counterexample_signature = signature;
+            decision.counterexample_model = model;
+            break;
+        }
+    }
+    return decision;
+}
+
+fn literalHolds(model: []const Value, literal: Lit) bool {
+    const value = model[literal.variable().index()];
+    return if (literal.isNeg()) value == .false_ else value == .true_;
+}
+
+fn modelSatisfiesTheory(theory: *const Cnf, model: []const Value) bool {
+    if (model.len < theory.num_vars) return false;
+    for (0..theory.numClauses()) |clause_index| {
+        const clause = theory.clauseSlice(ClauseId.fromIndex(@intCast(clause_index)));
+        var satisfied = false;
+        for (clause) |literal| {
+            if (literalHolds(model, literal)) {
+                satisfied = true;
+                break;
+            }
+        }
+        if (!satisfied) return false;
+    }
+    return true;
+}
+
+/// Replay exact minimal-signature evidence and, for non-entailment, the full
+/// counterexample assignment. Entailment is accepted only after every minimal
+/// signature is conclusively checked against the negated query.
+pub fn verifyDecision(
+    allocator: std.mem.Allocator,
+    theory: *const Cnf,
+    part: Partition,
+    phi_cube: []const Lit,
+    decision: *const Decision,
+) !bool {
+    try validate(theory, part, phi_cube);
+    const signature_bits = part.minimized.len + part.fixed.len;
+    const total: u32 = @as(u32, 1) << @intCast(signature_bits);
+    for (decision.minimal_signatures.items, 0..) |signature, index| {
+        if (signature >= total) return false;
+        for (decision.minimal_signatures.items[index + 1 ..]) |other| if (signature == other) return false;
+    }
+    var expected = try collectMinimalSignatures(allocator, theory, part);
+    defer expected.deinit(allocator);
+    if (expected.items.len != decision.minimal_signatures.items.len) return false;
+    for (expected.items) |signature| {
+        var present = false;
+        for (decision.minimal_signatures.items) |claimed| if (signature == claimed) {
+            present = true;
+            break;
+        };
+        if (!present) return false;
+    }
+
+    if (decision.entailed) {
+        if (decision.counterexample_signature != null or decision.counterexample_model != null) return false;
+        for (expected.items) |signature| {
+            if (try signatureSat(allocator, theory, part, signature, phi_cube)) return false;
+        }
+        return true;
+    }
+
+    const signature = decision.counterexample_signature orelse return false;
+    const model = decision.counterexample_model orelse return false;
+    var is_minimal = false;
+    for (expected.items) |candidate| if (candidate == signature) {
+        is_minimal = true;
+        break;
+    };
+    if (!is_minimal or !modelSatisfiesTheory(theory, model)) return false;
+    var bit_index: u5 = 0;
+    for (part.minimized) |atom| {
+        const expected_true = (signature >> bit_index) & 1 == 1;
+        if ((model[atom] == .true_) != expected_true) return false;
+        bit_index += 1;
+    }
+    for (part.fixed) |atom| {
+        const expected_true = (signature >> bit_index) & 1 == 1;
+        if ((model[atom] == .true_) != expected_true) return false;
+        bit_index += 1;
+    }
+    var query_holds = true;
+    for (phi_cube) |literal| {
+        if (!literalHolds(model, literal)) {
+            query_holds = false;
+            break;
+        }
+    }
+    return !query_holds;
+}
+
 /// Does CIRC[T; minimized; varying] entail the cube φ?
 pub fn circEntails(
     allocator: std.mem.Allocator,
@@ -88,37 +310,9 @@ pub fn circEntails(
     part: Partition,
     phi_cube: []const Lit,
 ) !bool {
-    const np: u5 = @intCast(part.minimized.len);
-    const nq: u5 = @intCast(part.fixed.len);
-    std.debug.assert(@as(u32, np) + nq <= 16);
-    const total: u32 = @as(u32, 1) << (np + nq);
-
-    var sat_sigs: std.ArrayList(u32) = .empty;
-    defer sat_sigs.deinit(allocator);
-    var sig: u32 = 0;
-    while (sig < total) : (sig += 1) {
-        if (try signatureSat(allocator, theory, part, sig, null)) {
-            try sat_sigs.append(allocator, sig);
-        }
-    }
-    // P-minimal per Q-class.
-    for (sat_sigs.items) |s| {
-        var minimal = true;
-        for (sat_sigs.items) |s2| {
-            if (s2 == s) continue;
-            if (qPart(s2, np) != qPart(s, np)) continue;
-            const p2 = pPart(s2, np);
-            const p1 = pPart(s, np);
-            if ((p2 & p1) == p2 and p2 != p1) {
-                minimal = false;
-                break;
-            }
-        }
-        if (!minimal) continue;
-        // Counterexample completion under this minimal signature?
-        if (try signatureSat(allocator, theory, part, s, phi_cube)) return false;
-    }
-    return true;
+    var decision = try decide(allocator, theory, part, phi_cube);
+    defer decision.deinit();
+    return decision.entailed;
 }
 
 // ── Tests ────────────────────────────────────────────────────────────
@@ -281,4 +475,37 @@ test "circ: random instances match brute-force oracle" {
             try testing.expectEqual(want, got);
         }
     }
+}
+
+test "circ: decisions carry replayable minimal countermodels" {
+    var theory = Cnf.init(testing.allocator);
+    defer theory.deinit();
+    try theory.addClause(&.{ lp(0), lp(1) });
+    theory.ensureVars(3);
+    const part = Partition{ .minimized = &.{ 0, 1 }, .fixed = &.{2} };
+    var negative = try decide(testing.allocator, &theory, part, &.{lp(0)});
+    defer negative.deinit();
+    try testing.expect(!negative.entailed);
+    try testing.expect(negative.counterexample_model != null);
+    try testing.expect(try verifyDecision(testing.allocator, &theory, part, &.{lp(0)}, &negative));
+    negative.counterexample_signature = 3;
+    try testing.expect(!(try verifyDecision(testing.allocator, &theory, part, &.{lp(0)}, &negative)));
+
+    var positive = try decide(testing.allocator, &theory, part, &.{ lp(0), lp(1) });
+    defer positive.deinit();
+    try testing.expect(!positive.entailed);
+    try testing.expect(try verifyDecision(testing.allocator, &theory, part, &.{ lp(0), lp(1) }, &positive));
+    _ = positive.minimal_signatures.pop();
+    try testing.expect(!(try verifyDecision(testing.allocator, &theory, part, &.{ lp(0), lp(1) }, &positive)));
+}
+
+test "circ: malformed partitions and queries fail closed" {
+    var theory = Cnf.init(testing.allocator);
+    defer theory.deinit();
+    theory.ensureVars(2);
+    try testing.expectError(error.DuplicatePartitionAtom, decide(testing.allocator, &theory, .{ .minimized = &.{0}, .fixed = &.{0} }, &.{lp(1)}));
+    try testing.expectError(error.PartitionAtomOutOfRange, decide(testing.allocator, &theory, .{ .minimized = &.{2} }, &.{lp(1)}));
+    try testing.expectError(error.QueryAtomOutOfRange, decide(testing.allocator, &theory, .{ .minimized = &.{0} }, &.{lp(2)}));
+    const too_wide = [_]u32{ 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0 };
+    try testing.expectError(error.SignatureTooLarge, decide(testing.allocator, &theory, .{ .minimized = &too_wide }, &.{lp(0)}));
 }
