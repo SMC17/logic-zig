@@ -27,6 +27,7 @@ pub const Row = struct {
 pub const Scoreboard = struct {
     rows: []Row,
     mismatches: u32 = 0,
+    inconclusive: u32 = 0,
     model_failures: u32 = 0,
     solved_internal: u32 = 0,
     solved_external: u32 = 0,
@@ -47,7 +48,8 @@ pub const Scoreboard = struct {
     }
 
     pub fn correctnessOk(self: *const Scoreboard) bool {
-        return self.mismatches == 0 and self.model_failures == 0;
+        return self.external_available and self.rows.len > 0 and self.both_agreed > 0 and
+            self.inconclusive == 0 and self.mismatches == 0 and self.model_failures == 0;
     }
 };
 
@@ -200,15 +202,17 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, opts: ScoreOpts) !Scoreboar
         }
 
         const match = blk: {
-            if (!sb.external_available) break :blk true;
-            if (istatus == .unknown or estatus == .unknown) break :blk true;
+            if (!sb.external_available) break :blk false;
+            if (istatus == .unknown or estatus == .unknown) break :blk false;
             if (istatus == .error_ or estatus == .error_) break :blk false;
             break :blk istatus == estatus;
         };
 
         if (istatus == .sat or istatus == .unsat) sb.solved_internal += 1;
         if (estatus == .sat or estatus == .unsat) sb.solved_external += 1;
-        if (!match) sb.mismatches += 1;
+        if (!sb.external_available or istatus == .unknown or estatus == .unknown) {
+            sb.inconclusive += 1;
+        } else if (!match) sb.mismatches += 1;
         if (!model_ok) sb.model_failures += 1;
         if (match and (istatus == .sat or istatus == .unsat) and (estatus == .sat or estatus == .unsat)) {
             sb.both_agreed += 1;
@@ -250,11 +254,12 @@ pub fn print(sb: *const Scoreboard) void {
     } else {
         std.debug.print("cadical: UNAVAILABLE (set LOGIC_ZIG_EXTERNAL_SOLVER or third_party/cadical)\n", .{});
     }
-    std.debug.print("instances={d} solved_int={d} solved_ext={d} agreed={d} mismatches={d} model_fail={d}\n", .{
+    std.debug.print("instances={d} solved_int={d} solved_ext={d} agreed={d} inconclusive={d} mismatches={d} model_fail={d}\n", .{
         sb.rows.len,
         sb.solved_internal,
         sb.solved_external,
         sb.both_agreed,
+        sb.inconclusive,
         sb.mismatches,
         sb.model_failures,
     });

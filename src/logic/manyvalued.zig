@@ -144,6 +144,15 @@ pub const Formula = union(enum) {
     imp: [2]*const Formula,
 };
 
+pub const DecisionStatus = enum { valid, invalid, invalid_input };
+
+pub const Decision = struct {
+    status: DecisionStatus,
+    num_atoms: u32,
+    valuations_checked: u64 = 0,
+    countervaluation: ?[8]u8 = null,
+};
+
 pub const Builder = struct {
     arena: std.heap.ArenaAllocator,
 
@@ -183,6 +192,80 @@ pub fn eval(m: *const Matrix, f: *const Formula, valuation: []const u8) u8 {
         .disj => |p| m.disj[eval(m, p[0], valuation)][eval(m, p[1], valuation)],
         .imp => |p| m.imp[eval(m, p[0], valuation)][eval(m, p[1], valuation)],
     };
+}
+
+fn validMatrix(m: *const Matrix) bool {
+    if (m.n < 2 or m.n > max_values) return false;
+    var designated = false;
+    for (0..m.n) |a| {
+        designated = designated or m.designated[a];
+        if (m.neg[a] >= m.n) return false;
+        for (0..m.n) |b| {
+            if (m.conj[a][b] >= m.n or m.disj[a][b] >= m.n or m.imp[a][b] >= m.n) return false;
+        }
+    }
+    return designated;
+}
+
+fn formulaInRange(f: *const Formula, num_atoms: u32) bool {
+    return switch (f.*) {
+        .atom => |atom| atom < num_atoms,
+        .neg => |inner| formulaInRange(inner, num_atoms),
+        .conj, .disj, .imp => |pair| formulaInRange(pair[0], num_atoms) and formulaInRange(pair[1], num_atoms),
+    };
+}
+
+fn decodeValuation(index: u64, radix: u8, num_atoms: u32) [8]u8 {
+    var valuation = [_]u8{0} ** 8;
+    var remaining = index;
+    var atom: u32 = 0;
+    while (atom < num_atoms) : (atom += 1) {
+        valuation[atom] = @intCast(remaining % radix);
+        remaining /= radix;
+    }
+    return valuation;
+}
+
+pub fn decide(m: *const Matrix, premises: []const *const Formula, conclusion: *const Formula, num_atoms: u32) Decision {
+    if (num_atoms > 8 or !validMatrix(m) or !formulaInRange(conclusion, num_atoms))
+        return .{ .status = .invalid_input, .num_atoms = num_atoms };
+    for (premises) |premise| {
+        if (!formulaInRange(premise, num_atoms)) return .{ .status = .invalid_input, .num_atoms = num_atoms };
+    }
+    const total = std.math.pow(u64, m.n, num_atoms);
+    var index: u64 = 0;
+    while (index < total) : (index += 1) {
+        const valuation = decodeValuation(index, m.n, num_atoms);
+        var premises_designated = true;
+        for (premises) |premise| {
+            if (!m.designated[eval(m, premise, valuation[0..num_atoms])]) {
+                premises_designated = false;
+                break;
+            }
+        }
+        if (premises_designated and !m.designated[eval(m, conclusion, valuation[0..num_atoms])]) {
+            return .{ .status = .invalid, .num_atoms = num_atoms, .valuations_checked = index + 1, .countervaluation = valuation };
+        }
+    }
+    return .{ .status = .valid, .num_atoms = num_atoms, .valuations_checked = total };
+}
+
+pub fn verifyDecision(m: *const Matrix, premises: []const *const Formula, conclusion: *const Formula, decision: Decision) bool {
+    if (decision.status == .invalid_input) return false;
+    if (!validMatrix(m) or decision.num_atoms > 8 or !formulaInRange(conclusion, decision.num_atoms)) return false;
+    for (premises) |premise| if (!formulaInRange(premise, decision.num_atoms)) return false;
+    if (decision.status == .invalid) {
+        const valuation = decision.countervaluation orelse return false;
+        for (0..decision.num_atoms) |atom| if (valuation[atom] >= m.n) return false;
+        for (premises) |premise| {
+            if (!m.designated[eval(m, premise, valuation[0..decision.num_atoms])]) return false;
+        }
+        return !m.designated[eval(m, conclusion, valuation[0..decision.num_atoms])];
+    }
+    if (decision.countervaluation != null) return false;
+    const expected = std.math.pow(u64, m.n, decision.num_atoms);
+    if (decision.valuations_checked != expected) return false;
+    return consequence(m, premises, conclusion, decision.num_atoms);
 }
 
 /// Designated-value consequence: Γ ⊨_M φ over all valuations of `num_atoms`.
@@ -333,4 +416,32 @@ test "manyvalued: K3 ⊆ classical and LP-invalid ⊆ classical tautologies inte
         if (tautology(&k3, f, 2)) try testing.expect(tautology(&classical, f, 2));
         if (!tautology(&classical, f, 2)) try testing.expect(!tautology(&k3, f, 2));
     }
+}
+
+test "manyvalued: decisions carry replayable evidence across every matrix" {
+    var b = Builder.init(testing.allocator);
+    defer b.deinit();
+    const p = b.atom(0);
+    const q = b.atom(1);
+    const formulas = [_]*const Formula{ b.orF(p, b.notF(p)), b.impF(p, p), b.impF(b.andF(p, b.notF(p)), q) };
+    const matrices = [_]*const Matrix{ &classical, &k3, &lp, &fde, &l3 };
+    for (matrices) |matrix| {
+        for (formulas) |formula| {
+            const decision = decide(matrix, &.{}, formula, 2);
+            try testing.expect(decision.status != .invalid_input);
+            try testing.expect(verifyDecision(matrix, &.{}, formula, decision));
+            if (decision.status == .invalid) try testing.expect(decision.countervaluation != null);
+        }
+    }
+}
+
+test "manyvalued: malformed and mutated evidence fails closed" {
+    var b = Builder.init(testing.allocator);
+    defer b.deinit();
+    const p = b.atom(0);
+    const lem = b.orF(p, b.notF(p));
+    var decision = decide(&classical, &.{}, lem, 1);
+    decision.valuations_checked -= 1;
+    try testing.expect(!verifyDecision(&classical, &.{}, lem, decision));
+    try testing.expectEqual(DecisionStatus.invalid_input, decide(&classical, &.{}, b.atom(2), 1).status);
 }

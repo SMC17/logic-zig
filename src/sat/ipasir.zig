@@ -19,6 +19,9 @@ const Var = lit_mod.Var;
 const Value = lit_mod.Value;
 const Solver = solver_mod.Solver;
 
+pub const TerminateCallback = *const fn (?*anyopaque) callconv(.c) c_int;
+pub const LearnCallback = *const fn (?*anyopaque, [*c]const c_int) callconv(.c) void;
+
 pub const IpasirResult = enum(c_int) {
     unknown = 0,
     sat = 10,
@@ -42,6 +45,14 @@ pub const IpasirSolver = struct {
     model: ?[]Value = null,
     /// Failed assumptions after UNSAT (dimacs lits).
     failed_set: std.AutoHashMapUnmanaged(i32, void) = .{},
+    /// Sticky C-ABI failure state. Void ABI calls cannot return allocation errors.
+    fatal: bool = false,
+    terminate_state: ?*anyopaque = null,
+    terminate_callback: ?TerminateCallback = null,
+    learn_state: ?*anyopaque = null,
+    learn_callback: ?LearnCallback = null,
+    learn_max_len: c_int = 0,
+    learn_buf: std.ArrayList(c_int) = .empty,
     opts: solver_mod.SolverOptions = .{},
 
     pub fn init(allocator: std.mem.Allocator) IpasirSolver {
@@ -58,6 +69,7 @@ pub const IpasirSolver = struct {
         self.assumptions.deinit(self.allocator);
         if (self.model) |m| self.allocator.free(m);
         self.failed_set.deinit(self.allocator);
+        self.learn_buf.deinit(self.allocator);
         self.* = undefined;
     }
 
@@ -78,12 +90,10 @@ pub const IpasirSolver = struct {
     /// IPASIR add: dimacs lit, 0 ends clause.
     pub fn add(self: *IpasirSolver, lit_dimacs: i32) !void {
         if (lit_dimacs == 0) {
-            if (self.clause_buf.items.len > 0) {
-                try self.formula.addClause(self.clause_buf.items);
-                // Live-add into engine if present
-                if (self.engine) |*e| {
-                    try e.addClausePermanent(self.clause_buf.items);
-                }
+            // Empty buffer followed by 0 is the empty clause, not a no-op.
+            try self.formula.addClause(self.clause_buf.items);
+            if (self.engine) |*e| {
+                try e.addClausePermanent(self.clause_buf.items);
             }
             self.clause_buf.clearRetainingCapacity();
             return;
@@ -102,6 +112,45 @@ pub const IpasirSolver = struct {
         self.engine = try Solver.init(self.allocator, &self.formula, self.opts);
     }
 
+    fn terminationThunk(ctx: ?*anyopaque) bool {
+        const self: *IpasirSolver = @ptrCast(@alignCast(ctx orelse return false));
+        const callback = self.terminate_callback orelse return false;
+        return callback(self.terminate_state) != 0;
+    }
+
+    fn learnThunk(ctx: ?*anyopaque, clause: []const Lit) void {
+        const self: *IpasirSolver = @ptrCast(@alignCast(ctx orelse return));
+        const callback = self.learn_callback orelse return;
+        if (self.learn_max_len <= 0 or clause.len > @as(usize, @intCast(self.learn_max_len))) return;
+        self.learn_buf.clearRetainingCapacity();
+        for (clause) |lit| self.learn_buf.append(self.allocator, lit.toDimacs()) catch {
+            self.fatal = true;
+            return;
+        };
+        self.learn_buf.append(self.allocator, 0) catch {
+            self.fatal = true;
+            return;
+        };
+        callback(self.learn_state, self.learn_buf.items.ptr);
+    }
+
+    pub fn setTerminate(self: *IpasirSolver, state: ?*anyopaque, callback: ?TerminateCallback) void {
+        self.terminate_state = state;
+        self.terminate_callback = callback;
+        self.opts.terminate_state = self;
+        self.opts.terminate_callback = if (callback == null) null else terminationThunk;
+        if (self.engine) |*engine| engine.opts = self.opts;
+    }
+
+    pub fn setLearn(self: *IpasirSolver, state: ?*anyopaque, max_len: c_int, callback: ?LearnCallback) void {
+        self.learn_state = state;
+        self.learn_callback = callback;
+        self.learn_max_len = max_len;
+        self.opts.learn_state = self;
+        self.opts.learn_callback = if (callback == null or max_len <= 0) null else learnThunk;
+        if (self.engine) |*engine| engine.opts = self.opts;
+    }
+
     pub fn solve(self: *IpasirSolver) !IpasirResult {
         self.failed_set.clearRetainingCapacity();
         if (self.model) |m| {
@@ -109,8 +158,8 @@ pub const IpasirSolver = struct {
             self.model = null;
         }
 
-        // Flush partial clause as error? IPASIR undefined — ignore empty.
-        self.clause_buf.clearRetainingCapacity();
+        // An unterminated clause is not part of the formula yet. Preserve it so
+        // a later add(0) completes the caller's clause instead of losing data.
 
         if (self.engine == null or self.engine.?.num_vars < self.max_var) {
             try self.rebuildEngine();
@@ -183,6 +232,22 @@ pub const IpasirSolver = struct {
 
 // C ABI lives in ipasir_c.zig (linked into libipasirlogic.so with libc).
 
+const CallbackState = struct { calls: u32 = 0, last_len: u32 = 0 };
+
+fn terminateImmediately(state: ?*anyopaque) callconv(.c) c_int {
+    const s: *CallbackState = @ptrCast(@alignCast(state.?));
+    s.calls += 1;
+    return 1;
+}
+
+fn recordLearned(state: ?*anyopaque, clause: [*c]const c_int) callconv(.c) void {
+    const s: *CallbackState = @ptrCast(@alignCast(state.?));
+    s.calls += 1;
+    var len: u32 = 0;
+    while (clause[len] != 0) : (len += 1) {}
+    s.last_len = len;
+}
+
 test "ipasir zig api sat unsat" {
     var s = IpasirSolver.init(std.testing.allocator);
     defer s.deinit();
@@ -245,4 +310,49 @@ test "ipasir multi-shot keep clauses" {
     try std.testing.expect((try s.solve()) == .unsat);
     // without assumption, still sat
     try std.testing.expect((try s.solve()) == .sat);
+}
+
+test "ipasir add zero creates empty clause" {
+    var s = IpasirSolver.init(std.testing.allocator);
+    defer s.deinit();
+    try s.add(0);
+    try std.testing.expectEqual(IpasirResult.unsat, try s.solve());
+}
+
+test "ipasir solve preserves unterminated clause" {
+    var s = IpasirSolver.init(std.testing.allocator);
+    defer s.deinit();
+    try s.add(1);
+    try std.testing.expectEqual(IpasirResult.sat, try s.solve());
+    try s.add(0);
+    try s.assume(-1);
+    try std.testing.expectEqual(IpasirResult.unsat, try s.solve());
+}
+
+test "ipasir termination callback interrupts solve" {
+    var s = IpasirSolver.init(std.testing.allocator);
+    defer s.deinit();
+    try s.add(1);
+    try s.add(0);
+    var state: CallbackState = .{};
+    s.setTerminate(&state, terminateImmediately);
+    try std.testing.expectEqual(IpasirResult.unknown, try s.solve());
+    try std.testing.expect(state.calls > 0);
+}
+
+test "ipasir learned clause callback receives zero-terminated clause" {
+    var s = IpasirSolver.init(std.testing.allocator);
+    defer s.deinit();
+    // Unsatisfiable parity square with no root-level unit conflict.
+    const clauses = [_][2]i32{ .{ 1, 2 }, .{ 1, -2 }, .{ -1, 2 }, .{ -1, -2 } };
+    for (clauses) |clause| {
+        try s.add(clause[0]);
+        try s.add(clause[1]);
+        try s.add(0);
+    }
+    var state: CallbackState = .{};
+    s.setLearn(&state, 8, recordLearned);
+    try std.testing.expectEqual(IpasirResult.unsat, try s.solve());
+    try std.testing.expect(state.calls > 0);
+    try std.testing.expect(state.last_len > 0 and state.last_len <= 8);
 }

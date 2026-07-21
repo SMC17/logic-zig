@@ -139,3 +139,36 @@ test "brute force prop check n<=3" {
         }
     }
 }
+
+test "producer serialized proof passes independent checker" {
+    const src = "p cnf 2 4\n1 2 0\n1 -2 0\n-1 2 0\n-1 -2 0\n";
+    var cnf = try logic.dimacs.parse(std.testing.allocator, src);
+    defer cnf.deinit();
+    var result = try logic.solveCnf(std.testing.allocator, &cnf, .{ .proof = true });
+    defer if (result.proof) |*proof| proof.deinit();
+    try std.testing.expectEqual(logic.SolveStatus.unsat, result.status);
+    var output: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer output.deinit();
+    try result.proof.?.writeDimacsLike(&output.writer);
+    const serialized = try output.toOwnedSlice();
+    defer std.testing.allocator.free(serialized);
+    try std.testing.expectEqual(logic.rup_checker.CheckStatus.verified, try logic.rup_checker.verify(std.testing.allocator, src, serialized));
+}
+
+test "producer assumption proof preserves serialized context" {
+    const src = "p cnf 1 1\n1 0\n";
+    var cnf = try logic.dimacs.parse(std.testing.allocator, src);
+    defer cnf.deinit();
+    const not_a = logic.Lit.negative(logic.Var.fromIndex(0));
+    var solver = try logic.Solver.init(std.testing.allocator, &cnf, .{ .proof = true });
+    defer solver.deinit();
+    var result = try solver.solveAssumptions(&.{not_a});
+    defer if (result.assumption_core) |core| std.testing.allocator.free(core);
+    defer if (result.proof) |*proof| proof.deinit();
+    var output: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer output.deinit();
+    try result.proof.?.writeDimacsLike(&output.writer);
+    const serialized = try output.toOwnedSlice();
+    defer std.testing.allocator.free(serialized);
+    try std.testing.expectEqual(logic.rup_checker.CheckStatus.verified, try logic.rup_checker.verify(std.testing.allocator, src, serialized));
+}

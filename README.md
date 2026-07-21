@@ -4,9 +4,11 @@
 [![Zig](https://img.shields.io/badge/Zig-0.16-orange.svg)](https://ziglang.org/)
 [![CI](https://github.com/SMC17/logic-zig/actions/workflows/ci.yml/badge.svg)](https://github.com/SMC17/logic-zig/actions/workflows/ci.yml)
 
-**A Zig-native logic kernel** with a shared **core library** and **flagship spin-offs**
-optimized for different targets (agent multishot, SAT throughput, HWMCC, certificates,
-BV-SMT, bounded CTL).
+**An executable museum and comparative laboratory of logic in Zig.** Each named
+system is intended to receive an explicit syntax, semantics, proof theory,
+automation boundary, test corpus, and checkable evidence. The current SAT and
+model-checking spine supports that expansion; exhibit maturity is derived rather
+than implied by catalog breadth.
 
 | | |
 |---|---|
@@ -39,6 +41,8 @@ zig build   # umbrella + spin-offs + libipasirlogic.so
 ./zig-out/bin/logic-zig doctor
 ./zig-out/bin/logic-zig api-info   # stable api/v1 + industrial capability matrix
 ./zig-out/bin/logic-zig taxonomy   # universal named-systems registry
+./zig-out/bin/logic-zig museum     # evidence-derived exhibit contracts
+./zig-out/bin/logic-zig check-rup formula.cnf proof.rup
 ./zig-out/bin/logic-zig giants     # discover external industrial provers
 ./zig-out/bin/logic-hwmcc golden
 
@@ -153,6 +157,10 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/ENGINES.md](docs/ENGI
 | [STATUS.md](STATUS.md) | Proof levels, green checklist, residuals |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Layered design |
 | [docs/ENGINES.md](docs/ENGINES.md) | Engine contracts |
+| [docs/MUSEUM.md](docs/MUSEUM.md) | Exhibit contracts and promotion gates |
+| [docs/exhibits/prop-classical.md](docs/exhibits/prop-classical.md) | Verified classical propositional exhibit |
+| [docs/exhibits/syllogistic.md](docs/exhibits/syllogistic.md) | Verified categorical syllogistic exhibit |
+| [docs/exhibits/finite-matrices.md](docs/exhibits/finite-matrices.md) | Verified K3, LP, FDE, and L3 exhibits |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to hack on the tree |
 | [LICENSE](LICENSE) | Apache-2.0 |

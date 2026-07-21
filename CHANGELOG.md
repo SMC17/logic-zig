@@ -5,6 +5,42 @@ All notable changes to **logic-zig** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Executable museum truth reset
+
+- Added evidence-bearing exhibit manifests and a fail-closed `logic-zig museum`
+  catalog for propositional logic, S4, and first-order logic.
+- Added a strict serialized RUP checker with no producer/search imports, a
+  `check-rup` CLI, producer-to-bytes integration tests, mutation tests, and a
+  trust-report gate. Classical propositional logic is the first
+  `verified_exhibit` under its explicit audited contract.
+- Added exhaustive validity certificates and countermodels for categorical
+  syllogistic; all 256 forms under both Boolean and existential-import semantics
+  replay successfully, promoting it to the second `verified_exhibit`.
+- Museum output now includes every uncontracted registry system as a catalog-only
+  restoration backlog.
+- Added fail-closed finite-matrix decisions with exhaustive evidence counts and
+  countervaluations; K3, LP, FDE, and L3 now have separate verified exhibit
+  contracts and a shared formal specification.
+- Corrected inductive-invariant safety semantics and removed the invalid empty-
+  invariant conversion from k-induction.
+- Made incremental SAT budgets and statistics per-call and equivalence tri-state.
+- Made assumption-core minimality and uniqueness tri-state so budget exhaustion
+  cannot be reported as proof of either property.
+- Assumption-dependent UNSAT proofs now carry their ordered assumption context and
+  proof logging is reinitialized for every incremental solve.
+- Made scoreboard/trust gates require external evidence instead of treating missing
+  or inconclusive comparisons as passes.
+- Corrected FOL binder identity/scoping and hardened partial IPASIR clause/error
+  handling. SAT-backed finite models now encode and replay constant denotations,
+  compose functional predicate arguments, and distinguish bounded UNSAT from
+  solver `unknown`.
+- Implemented IPASIR termination and learned-clause callbacks through the CDCL loop;
+  added a compiled C ABI test for empty clauses, interruption, and zero-terminated
+  learned clauses. IPASIR remains a fragment pending assumption-proof lifecycle and
+  an explicit complete state machine.
+
 ## [0.22.0] — 2026-07-17
 
 ### Substructural + normative wave: MLL linear logic · deontic SDL
