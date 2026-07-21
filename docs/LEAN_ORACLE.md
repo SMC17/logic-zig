@@ -33,6 +33,16 @@ rg -n '\b(sorry|admit|axiom|unsafe)\b' . --glob '*.lean'
 
 The second command is a source audit, not a substitute for Lean's kernel.
 
+Blocking CI builds the oracle with Lean 4.28, performs that trust-escape audit,
+and runs Lean's bundled `leanchecker` over the compiled environment. This is a
+separate whole-environment checking pass, but it is not an
+implementation-independent checker.
+
+Nanoda remains a valuable independent Rust checker. Its current parser does not
+accept the Lean 4.28 export stream, so it is tracked as an additional upstream
+compatibility gate rather than being misreported as passing. Once compatible,
+the nanoda gate should be restored alongside `leanchecker`.
+
 ## Aristotle workflow
 
 Install the official CLI and provide its credential through the environment.

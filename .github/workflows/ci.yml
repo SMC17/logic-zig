@@ -104,15 +104,20 @@ jobs:
           ./zig-out/bin/logic-hwmcc track corpus/golden/aiger/stuck0.aag --frames 12 --cert
 
   lean-oracle:
-    name: Lean oracle and independent checker
+    name: Lean oracle and kernel checker
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Build and independently check Lean oracle
+      - name: Reject trust escapes
+        run: |
+          if rg -n '\b(sorry|admit|axiom|unsafe)\b' lean --glob '*.lean'; then
+            echo 'Lean oracle contains a forbidden trust escape.' >&2
+            exit 1
+          fi
+      - name: Build and check Lean oracle
         uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9 # v1.5.0
         with:
           lake-package-directory: lean
           build: true
           test: false
-          nanoda: true
-          nanoda-allow-sorry: false
+          leanchecker: true
