@@ -1,6 +1,6 @@
 # logic-zig status
 
-**Version:** 0.22.0  
+**Version:** 0.23.0  
 **North star:** executable museum and comparative laboratory implementing every
 branch of logic in Zig. “Complete” is scoped to evidence-bearing exhibit contracts
 (`docs/MUSEUM.md`), never inferred from registry breadth.
@@ -47,6 +47,7 @@ zig build test && zig build
 | `logic/el` | EL subsumption via completion rules |
 | `modal/deontic` | SDL (KD): D⇔seriality, Ross canon |
 | `logic/linear` | MLL sequent prover: no weakening/contraction, no MIX |
+| `modal/pdl` | PDL: [α]φ/⟨α⟩φ for α::=a|α;β|α∪β|α*|φ? on finite frames; two semantics + exhaustive oracle |
 | `docs/UNIVERSAL.md` | Destination + non-fiction rules |
 
 ## Computational depth (unchanged spine)
@@ -93,6 +94,15 @@ Taxonomy map: `docs/TAXONOMY_COVERAGE.md`
   checked for both soundness and omitted models by replaying the Gelfond-Lifschitz
   reduct across the finite carrier. Its contract excludes grounding, disjunction,
   aggregates, optimization, ASP-Core-2 interoperability and industrial scale.
+- Propositional Dynamic Logic is a `verified_exhibit` for finite-frame semantics
+  of [α]φ/⟨α⟩φ over regular programs α::=a|α;β|α∪β|α*|φ?. Two independent
+  evaluators (matrix reflexive-transitive closure and Fischer–Ladner graph
+  reach) are cross-checked over randomized formulas/models, a brute-force oracle
+  confirms validities/non-validities on all frames up to small bounds, and
+  `verifyClaim` replays a verdict against both engines and fails closed on any
+  divergence. The contract excludes a parser, a Segerberg Hilbert calculus and
+  proof objects, converse/intersection/hybrid PDL, and models over 16 worlds or
+  8 atomic programs.
 - Finite propositional Reiter default logic is a `verified_exhibit` for CNF facts
   and cube defaults. Exact generating-set replay checks groundedness,
   justification consistency, stability and omissions; arbitrary formula and
@@ -129,6 +139,7 @@ Taxonomy map: `docs/TAXONOMY_COVERAGE.md`
 | Peircean triad | All three modes real: propositional + first-order (ALP) abduction, SAT-exact + Bayesian induction. Residual: no probabilistic ALP, no ILP over clauses, no MCMC/graphical models |
 | Nonmonotonic family | Defaults, rational closure, ASP, circumscription, argumentation, AGM all shipped as fragments; residual: autoepistemic logic, inheritance networks, truth maintenance, industrial ASP/ICCMA scale |
 | MaxSAT | Exact at explanation scale; **no industrial MaxSAT parity claim** (no core-guided/stratified engine) |
+| Modal / dynamic / temporal | K/S4 finite-frame eval; epistemic S5 + common knowledge + announcements; deontic SDL; **PDL finite-frame semantics `verified_exhibit`**. Residual: no PDL parser/Segerberg calculus, no converse/intersection/hybrid PDL, no CTL* / LTL / μ-calculus exhibit |
 | Informal argument analysis | Structure OK; no NLP / full schemes library |
 | Full type theory / proof assistant | Micro checker only |
 | Lean / Aristotle oracle | Initial finite-matrix formalization builds locally; CI and Aristotle result still need public receipts |

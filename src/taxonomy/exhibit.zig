@@ -87,6 +87,7 @@ const modal_tests = [_][]const u8{"src/modal/kripke.zig"};
 const fol_term_tests = [_][]const u8{ "src/fol/term.zig", "src/fol/unify.zig" };
 const fol_resolution_tests = [_][]const u8{"src/fol/resolution.zig"};
 const fol_model_tests = [_][]const u8{ "src/fol/finite_model.zig", "src/fol/finite_model_sat.zig" };
+const pdl_tests = [_][]const u8{"src/modal/pdl.zig"};
 
 fn claim(coverage: Coverage, evidence: EvidenceLevel, spec: []const u8, tests: []const []const u8) Claim {
     return .{ .coverage = coverage, .evidence = evidence, .specification = spec, .tests = tests };
@@ -316,6 +317,23 @@ pub const exhibits = [_]ExhibitManifest{
         .documentation = claim(.partial, .sketch, "docs/INDUSTRIAL.md#first-order", &fol_term_tests),
         .interoperability = claim(.absent, .none, "", &none),
     },
+    .{
+        .id = "dynamic-pdl",
+        .name = "Propositional Dynamic Logic",
+        .formal_identity = "PDL over regular programs α ::= a | α;β | α∪β | α* | φ? on finite Kripke models",
+        .contract_version = "0.1.0",
+        .decidability = .decidable,
+        .completeness_scope = "Exact [α]φ / ⟨α⟩φ evaluation for finite models; two independent semantics (matrix RTC and Fischer–Ladner graph reach) cross-checked, plus an exhaustive finite-frame oracle and a fail-closed claim verifier",
+        .limitations = &.{ "At most 16 worlds and 8 atomic programs per model", "No parser: formulas are built via the arena", "No Segerberg axioms / Hilbert calculus or proof objects", "No converse / intersection / hybrid PDL, no determinism/well-foundedness fragments" },
+        .syntax = claim(.complete, .unit_tested, "docs/exhibits/pdl.md", &pdl_tests),
+        .semantics = claim(.complete, .unit_tested, "docs/exhibits/pdl.md", &pdl_tests),
+        .calculus = claim(.complete, .unit_tested, "docs/exhibits/pdl.md", &pdl_tests),
+        .automation = claim(.complete, .unit_tested, "docs/exhibits/pdl.md", &pdl_tests),
+        .proof_objects = claim(.complete, .unit_tested, "docs/exhibits/pdl.md", &pdl_tests),
+        .countermodels = claim(.complete, .unit_tested, "docs/exhibits/pdl.md", &pdl_tests),
+        .documentation = claim(.complete, .audited, "docs/exhibits/pdl.md", &pdl_tests),
+        .interoperability = claim(.absent, .none, "", &none),
+    },
 };
 
 pub fn printMuseum() void {
@@ -364,6 +382,16 @@ test "promotion is derived and fail closed" {
     for (exhibits[2..11]) |exhibit| try std.testing.expectEqual(Promotion.verified_exhibit, exhibit.promotion());
     try std.testing.expectEqual(Promotion.cataloged, exhibits[11].promotion());
     try std.testing.expectEqual(Promotion.cataloged, exhibits[12].promotion());
+
+    // dynamic-pdl must be a verified_exhibit (two semantics + exhaustive oracle + fail-closed verifier)
+    var found_pdl = false;
+    for (exhibits) |exhibit| {
+        if (std.mem.eql(u8, exhibit.id, "dynamic-pdl")) {
+            try std.testing.expectEqual(Promotion.verified_exhibit, exhibit.promotion());
+            found_pdl = true;
+        }
+    }
+    try std.testing.expect(found_pdl);
 
     var bad = exhibits[0];
     bad.syntax = claim(.complete, .none, "", &none);

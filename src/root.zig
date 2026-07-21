@@ -89,6 +89,7 @@ pub const exhibits = @import("taxonomy/exhibit.zig");
 pub const informal = @import("informal/argument.zig");
 pub const type_theory = @import("type_theory/tt.zig");
 pub const modal = @import("modal/kripke.zig");
+pub const pdl = @import("modal/pdl.zig");
 pub const giants = @import("bridge/giants.zig");
 
 pub const Lit = lit.Lit;
@@ -256,6 +257,7 @@ test {
     _ = informal;
     _ = type_theory;
     _ = modal;
+    _ = pdl;
     _ = giants;
     _ = abduction;
     _ = induction;

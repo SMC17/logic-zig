@@ -26,8 +26,8 @@ const agent_session = @import("../agent/session.zig");
 
 /// API major.minor — bump minor for additive; major requires new module path.
 pub const version_major: u32 = 1;
-pub const version_minor: u32 = 5;
-pub const version_string = "1.5.0";
+pub const version_minor: u32 = 6;
+pub const version_string = "1.6.0";
 
 /// Feature bits — consumers can feature-detect without parsing docs.
 /// Widened to u64 in 1.3.0; `toU32` keeps returning the low word for
@@ -73,7 +73,8 @@ pub const Capability = packed struct(u64) {
     kr_el: bool = true, // description logic EL subsumption
     modal_deontic: bool = true, // SDL (KD) on serial finite frames
     logic_linear_mll: bool = true, // MLL sequent prover (units, exact splitting)
-    _pad: u24 = 0,
+    modal_pdl: bool = true, // Propositional Dynamic Logic on finite frames
+    _pad: u23 = 0,
 
     pub fn current() Capability {
         return .{};
@@ -400,6 +401,18 @@ pub const DeonticFrame = deo_mod.Frame;
 pub const mllProvable = lin_mod.provable;
 pub const MllBuilder = lin_mod.Builder;
 
+const pdl_mod = @import("../modal/pdl.zig");
+
+/// Propositional Dynamic Logic on finite frames.
+pub const PdlFormula = pdl_mod.Formula;
+pub const PdlProgram = pdl_mod.Program;
+pub const PdlModel = pdl_mod.Model;
+pub const PdlArena = pdl_mod.Arena;
+pub const pdlEvalMatrix = pdl_mod.evalMatrix;
+pub const pdlEvalReach = pdl_mod.evalReach;
+pub const pdlIsValid = pdl_mod.isValid;
+pub const pdlVerifyClaim = pdl_mod.verifyClaim;
+
 test "api v1 version and caps" {
     const line = try versionLine(std.testing.allocator);
     defer std.testing.allocator.free(line);
@@ -426,6 +439,7 @@ test "api v1 version and caps" {
     try std.testing.expect(caps.kr_el);
     try std.testing.expect(caps.modal_deontic);
     try std.testing.expect(caps.logic_linear_mll);
+    try std.testing.expect(caps.modal_pdl);
     // Low-word compatibility: pre-1.3 bits unchanged.
     try std.testing.expect(caps.toU32() == @as(u32, @truncate(caps.toU64())));
 }
