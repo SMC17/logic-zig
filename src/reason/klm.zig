@@ -36,6 +36,12 @@ pub const Conditional = struct {
 
 pub const infinite_rank: u32 = std.math.maxInt(u32);
 
+pub const KlmError = error{
+    InconclusiveSatQuery,
+    RankingLengthMismatch,
+    InvalidRankValue,
+};
+
 pub const Ranking = struct {
     allocator: std.mem.Allocator,
     /// Rank per rule (parallel to the KB); `infinite_rank` = totally exceptional.
@@ -109,7 +115,11 @@ fn cubeConsistentWith(
     }
     const r = try solver_mod.solveCnf(allocator, &theory, .{});
     defer if (r.model) |m| allocator.free(m);
-    return r.status == .sat;
+    return switch (r.status) {
+        .sat => true,
+        .unsat => false,
+        .unknown => error.InconclusiveSatQuery,
+    };
 }
 
 /// Compute the rational-closure ranking of a conditional KB.
@@ -132,13 +142,15 @@ pub fn rank(
         // A rule survives to the next level iff its antecedent is exceptional
         // (inconsistent with the current level's materialization).
         const next = try allocator.alloc(bool, kb.len);
-        defer allocator.free(next);
         for (kb, 0..) |r, i| {
             if (!active[i]) {
                 next[i] = false;
                 continue;
             }
-            const consistent = try cubeConsistentWith(allocator, background, kb, active, r.antecedent, null);
+            const consistent = cubeConsistentWith(allocator, background, kb, active, r.antecedent, null) catch |err| {
+                allocator.free(next);
+                return err;
+            };
             if (consistent) {
                 ranks[i] = level;
                 next[i] = false;
@@ -149,6 +161,7 @@ pub fn rank(
             }
         }
         @memcpy(active, next);
+        allocator.free(next);
         if (dropped == 0) {
             // Fixpoint: remaining rules are totally exceptional.
             return .{ .allocator = allocator, .ranks = ranks, .levels = level };
@@ -157,6 +170,27 @@ pub fn rank(
             return .{ .allocator = allocator, .ranks = ranks, .levels = level + 1 };
         }
     }
+}
+
+fn rankingShapeValid(kb: []const Conditional, ranking: *const Ranking) KlmError!void {
+    if (ranking.ranks.len != kb.len) return error.RankingLengthMismatch;
+    for (ranking.ranks) |value| {
+        if (value != infinite_rank and value >= ranking.levels) return error.InvalidRankValue;
+    }
+}
+
+/// Replay the entire Lehmann-Magidor exceptionality iteration and compare every
+/// finite and infinite rank. This detects forged ranks, levels and omissions.
+pub fn verifyRanking(
+    allocator: std.mem.Allocator,
+    background: ?*const Cnf,
+    kb: []const Conditional,
+    claimed: *const Ranking,
+) !bool {
+    rankingShapeValid(kb, claimed) catch return false;
+    var expected = try rank(allocator, background, kb);
+    defer expected.deinit();
+    return claimed.levels == expected.levels and std.mem.eql(u32, claimed.ranks, expected.ranks);
 }
 
 pub const QueryResult = struct {
@@ -175,6 +209,7 @@ pub fn query(
     antecedent: []const Lit,
     consequent: []const Lit,
 ) !QueryResult {
+    try rankingShapeValid(kb, ranking);
     const active = try allocator.alloc(bool, kb.len);
     defer allocator.free(active);
 
@@ -192,6 +227,23 @@ pub fn query(
     }
     // Antecedent impossible even under background + fully exceptional core.
     return .{ .entailed = true, .level = null };
+}
+
+/// Replay a query only after establishing that its ranking is exact. This is an
+/// evidence checker for the Boolean/level pair; countermodel-carrying query
+/// evidence remains required before exhibit promotion.
+pub fn verifyQueryResult(
+    allocator: std.mem.Allocator,
+    background: ?*const Cnf,
+    kb: []const Conditional,
+    ranking: *const Ranking,
+    antecedent: []const Lit,
+    consequent: []const Lit,
+    claimed: QueryResult,
+) !bool {
+    if (!try verifyRanking(allocator, background, kb, ranking)) return false;
+    const expected = try query(allocator, background, kb, ranking, antecedent, consequent);
+    return claimed.entailed == expected.entailed and claimed.level == expected.level;
 }
 
 // ── Tests ────────────────────────────────────────────────────────────
@@ -270,4 +322,21 @@ test "klm: empty KB entails only classical consequences of the antecedent" {
     try testing.expect(yes.entailed);
     const no = try query(testing.allocator, null, &kb, &rk, &.{lp(0)}, &.{lp(1)});
     try testing.expect(!no.entailed);
+}
+
+test "klm: ranking and query evidence replay and reject mutation" {
+    var ranking = try rank(testing.allocator, null, &canon_kb);
+    defer ranking.deinit();
+    try testing.expect(try verifyRanking(testing.allocator, null, &canon_kb, &ranking));
+    const answer = try query(testing.allocator, null, &canon_kb, &ranking, &.{lp(2)}, &.{ln(1)});
+    try testing.expect(try verifyQueryResult(testing.allocator, null, &canon_kb, &ranking, &.{lp(2)}, &.{ln(1)}, answer));
+    try testing.expect(!(try verifyQueryResult(testing.allocator, null, &canon_kb, &ranking, &.{lp(2)}, &.{ln(1)}, .{ .entailed = !answer.entailed, .level = answer.level })));
+    ranking.ranks[0] = 1;
+    try testing.expect(!(try verifyRanking(testing.allocator, null, &canon_kb, &ranking)));
+}
+
+test "klm: malformed ranking fails closed" {
+    var ranks = [_]u32{0};
+    const short = Ranking{ .allocator = testing.allocator, .ranks = &ranks, .levels = 1 };
+    try testing.expectError(error.RankingLengthMismatch, query(testing.allocator, null, &canon_kb, &short, &.{lp(0)}, &.{lp(1)}));
 }
