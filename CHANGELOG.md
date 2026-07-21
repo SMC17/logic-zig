@@ -33,6 +33,9 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - Hardened finite Reiter default logic with typed enumeration limits,
   generating-set shape checks and exact extension-set replay. The scoped CNF and
   cube-default fragment is now a verified exhibit.
+- Added exact remainder-family, contraction and Levi-revision replay for finite
+  AGM belief bases, including exhaustive sub-base tests and mutation rejection;
+  the scoped base-change engine is now a verified exhibit.
 - Corrected inductive-invariant safety semantics and removed the invalid empty-
   invariant conversion from k-induction.
 - Made incremental SAT budgets and statistics per-call and equivalence tri-state.
