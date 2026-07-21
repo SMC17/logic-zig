@@ -83,7 +83,7 @@ pub const systems = [_]System{
     .{ .id = "informal-arg", .name = "Informal argument structure", .family = .informal, .maturity = .fragment, .module = "informal/argument", .notes = "premises conclusion schemes" },
     .{ .id = "intuitionistic-prop", .name = "Intuitionistic propositional", .family = .constructive, .maturity = .fragment, .module = "logic/intuitionistic.zig", .notes = "G4ip decision procedure; Glivenko-verified vs classical oracle" },
     .{ .id = "linear-logic", .name = "Linear logic", .family = .substructural, .maturity = .fragment, .module = "logic/linear.zig", .notes = "MLL+units sequent prover; weakening/contraction refuted; MALL/exponentials future" },
-    .{ .id = "dynamic-pdl", .name = "Propositional dynamic logic", .family = .modal_temporal, .maturity = .documented, .module = "—", .notes = "planned" },
+    .{ .id = "dynamic-pdl", .name = "Propositional Dynamic Logic", .family = .modal_temporal, .maturity = .fragment, .module = "modal/pdl.zig", .notes = "PDL on finite frames: [α]φ/⟨α⟩φ for α::=a|α;β|α∪β|α*|φ?; two-semantics + exhaustive oracle" },
     .{ .id = "hybrid-logic", .name = "Hybrid logic (nominals, @)", .family = .modal_temporal, .maturity = .documented, .module = "—", .notes = "planned" },
     .{ .id = "mu-calculus", .name = "Modal μ-calculus", .family = .modal_temporal, .maturity = .documented, .module = "—", .notes = "planned; fixpoint model checking" },
     .{ .id = "causal-models", .name = "Causal models / interventions", .family = .probabilistic, .maturity = .documented, .module = "—", .notes = "planned; Pearl do-calculus slice" },
