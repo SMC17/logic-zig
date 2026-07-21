@@ -36,6 +36,9 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - Added exact remainder-family, contraction and Levi-revision replay for finite
   AGM belief bases, including exhaustive sub-base tests and mutation rejection;
   the scoped base-change engine is now a verified exhibit.
+- Replaced circumscription's assertion/Boolean boundary with validated partitions,
+  exact minimal-signature decisions, complete countermodels and replay. The
+  finite propositional fragment is now a verified exhibit.
 - Corrected inductive-invariant safety semantics and removed the invalid empty-
   invariant conversion from k-induction.
 - Made incremental SAT budgets and statistics per-call and equivalence tri-state.
