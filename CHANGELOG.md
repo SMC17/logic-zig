@@ -92,6 +92,15 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   (trace, formula) pairs, textbook validities asserted (F p ↔ ¬G ¬p duality,
   p U q → F q, G p → p@0), and a fail-closed `verifyClaim`. Registry `ltl-bounded` added; museum promotion
   derived to `verified_exhibit` (13th exhibit); `logic.ltl` exported from the root.
+- Extended **bounded LTL** with the **past-time fragment (PLTL)** in the same
+  `ctl/ltl.zig`: `Y` (strict previous), `Z` (weak previous), `S` (since), `B`
+  (before). Each shares the two-evaluator discipline — direct backward
+  recurrence (`S_i = ψ_i ∨ (φ_i ∧ S_{i-1})`, `B` dual) and a Tseitin SAT encoding
+  that mirrors it exactly — and is folded into the exhaustive cross-check
+  oracle (all traces frames≤4, nets≤2, zero mismatches) plus PLTL dualities
+  (`Z φ ↔ ¬Y ¬φ`, boundary `Z φ` true / `Y φ` false at frame 0). No new module;
+  registry `ltl-bounded` notes updated. Verified: exhaustive direct==SAT oracle
+  green; canonical `zig build test` green.
 
 ## [0.22.0] — 2026-07-17
 
