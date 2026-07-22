@@ -16,6 +16,7 @@ pub const cnf = @import("sat/cnf.zig");
 pub const solver = @import("sat/solver.zig");
 pub const drat = @import("sat/drat.zig");
 pub const drat_external = @import("sat/drat_external.zig");
+pub const rup_checker = @import("proof/rup_checker.zig");
 pub const fuzz = @import("sat/fuzz.zig");
 pub const external = @import("sat/external.zig");
 pub const ipasir = @import("sat/ipasir.zig");
@@ -48,6 +49,7 @@ pub const golden = @import("track/golden.zig");
 pub const profiles = @import("profile/profiles.zig");
 pub const certificate = @import("cert/certificate.zig");
 pub const ctl = @import("ctl/ctl.zig");
+pub const ltl = @import("ctl/ltl.zig");
 pub const bv = @import("smt/bv.zig");
 pub const portfolio = @import("sat/portfolio.zig");
 pub const abc_interop = @import("bridge/abc_interop.zig");
@@ -63,11 +65,32 @@ pub const smt_uf = @import("smt/uf.zig");
 pub const smt_array = @import("smt/array.zig");
 pub const fol_resolution = @import("fol/resolution.zig");
 pub const sat_scoreboard = @import("track/sat_scoreboard.zig");
+pub const abduction = @import("reason/abduction.zig");
+pub const induction = @import("reason/induction.zig");
+pub const maxsat = @import("sat/maxsat.zig");
+pub const klm = @import("reason/klm.zig");
+pub const default_logic = @import("reason/default_logic.zig");
+pub const bayes = @import("reason/bayes.zig");
+pub const alp = @import("reason/alp.zig");
+pub const argumentation = @import("reason/argumentation.zig");
+pub const asp = @import("reason/asp.zig");
+pub const agm = @import("reason/agm.zig");
+pub const circumscription = @import("reason/circumscription.zig");
+pub const analogy = @import("reason/analogy.zig");
+pub const intuitionistic = @import("logic/intuitionistic.zig");
+pub const manyvalued = @import("logic/manyvalued.zig");
+pub const epistemic = @import("modal/epistemic.zig");
+pub const syllogistic = @import("logic/syllogistic.zig");
+pub const el = @import("logic/el.zig");
+pub const deontic = @import("modal/deontic.zig");
+pub const linear = @import("logic/linear.zig");
 pub const edge_suite = @import("track/edge_suite.zig");
 pub const taxonomy = @import("taxonomy/registry.zig");
+pub const exhibits = @import("taxonomy/exhibit.zig");
 pub const informal = @import("informal/argument.zig");
 pub const type_theory = @import("type_theory/tt.zig");
 pub const modal = @import("modal/kripke.zig");
+pub const pdl = @import("modal/pdl.zig");
 pub const giants = @import("bridge/giants.zig");
 
 pub const Lit = lit.Lit;
@@ -146,15 +169,34 @@ pub fn satFormulaOpts(
     return .{ .status = .sat, .model = model, .conflicts = r.conflicts, .learned = r.learned };
 }
 
-pub fn isTautology(allocator: std.mem.Allocator, pool: *ExprPool, id: ExprId) !bool {
+/// Decide whether `id` is a tautology by checking `¬id` for UNSAT.
+/// Returns `true` / `false` when the SAT solver decides; `null` when the
+/// solver exhausted its resource budget and returned `unknown` (do NOT
+/// collapse `unknown` into `false` — that would misreport an undecided
+/// formula as non-tautological).
+pub fn isTautology(allocator: std.mem.Allocator, pool: *ExprPool, id: ExprId) !?bool {
     const neg = try pool.mkNot(id);
     const q = try satFormula(allocator, pool, neg);
     defer if (q.model) |m| allocator.free(m);
-    return q.status == .unsat;
+    return if (q.status == .unsat) true else if (q.status == .sat) false else null;
 }
 
-pub fn areEquivalent(allocator: std.mem.Allocator, pool: *ExprPool, a: ExprId, b: ExprId) !bool {
+/// Equivalence is `a ↔ b` being a tautology. Tri-state (null = unknown).
+pub fn areEquivalent(allocator: std.mem.Allocator, pool: *ExprPool, a: ExprId, b: ExprId) !?bool {
     return isTautology(allocator, pool, try pool.mkIff(a, b));
+}
+
+/// Like `isTautology` but forwards solver options (e.g. to bound conflicts).
+pub fn isTautologyOpts(
+    allocator: std.mem.Allocator,
+    pool: *ExprPool,
+    id: ExprId,
+    opts: solver.SolverOptions,
+) !?bool {
+    const neg = try pool.mkNot(id);
+    const q = try satFormulaOpts(allocator, pool, neg, opts);
+    defer if (q.model) |m| allocator.free(m);
+    return if (q.status == .unsat) true else if (q.status == .sat) false else null;
 }
 
 pub const Error = error{
@@ -181,6 +223,7 @@ test {
     _ = solver;
     _ = drat;
     _ = drat_external;
+    _ = rup_checker;
     _ = fuzz;
     _ = external;
     _ = ipasir;
@@ -230,14 +273,48 @@ test {
     _ = sat_scoreboard;
     _ = edge_suite;
     _ = taxonomy;
+    _ = exhibits;
     _ = informal;
     _ = type_theory;
     _ = modal;
+    _ = pdl;
     _ = giants;
+    _ = abduction;
+    _ = induction;
+    _ = maxsat;
+    _ = klm;
+    _ = default_logic;
+    _ = bayes;
+    _ = alp;
+    _ = argumentation;
+    _ = asp;
+    _ = agm;
+    _ = circumscription;
+    _ = analogy;
+    _ = intuitionistic;
+    _ = manyvalued;
+    _ = epistemic;
+    _ = syllogistic;
+    _ = el;
+    _ = deontic;
+    _ = linear;
 }
 
 test "end-to-end tautology a|!a" {
     var pool = try ExprPool.init(std.testing.allocator);
     defer pool.deinit();
-    try std.testing.expect(try isTautology(std.testing.allocator, &pool, try parse(&pool, "a | !a")));
+    try std.testing.expect((try isTautology(std.testing.allocator, &pool, try parse(&pool, "a | !a"))) == true);
+}
+
+test "isTautology reports unknown (null) instead of collapsing to false" {
+    // A non-trivial UNSAT needs >0 conflicts. With max_conflicts=0 the solver
+    // returns `unknown`; isTautology must surface that as null, not false.
+    var pool = try ExprPool.init(std.testing.allocator);
+    defer pool.deinit();
+    const unsat = try parse(&pool, "(a|b)&(a|!b)&(!a|b)&(!a|!b)");
+    const r = try satFormulaOpts(std.testing.allocator, &pool, unsat, .{ .max_conflicts = 0 });
+    try std.testing.expectEqual(solver.SolveStatus.unknown, r.status);
+    // isTautology must NOT report false here.
+    const t = try isTautologyOpts(std.testing.allocator, &pool, unsat, .{ .max_conflicts = 0 });
+    try std.testing.expect(t == null);
 }

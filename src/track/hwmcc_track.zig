@@ -62,7 +62,7 @@ fn emitCert(allocator: std.mem.Allocator, nl: *netlist_mod.Netlist, bad: netlist
             var ii = i.*;
             ii.deinit();
         }
-        const ok = try i.verify(allocator, nl);
+        const ok = try i.verify(allocator, nl) == .verified;
         std.debug.print("c cert source={s} clauses={d} verified={}\n", .{
             @tagName(i.source),
             i.clauses.len,

@@ -8,6 +8,7 @@ const usage =
     \\
     \\Usage:
     \\  logic-zig sat <formula|--file path.cnf> [--proof] [--dump-proof PATH] [--check-drat]
+    \\  logic-zig check-rup <file.cnf> <file.rup>  # independent serialized checker
     \\  logic-zig sat-track <file.cnf> [--max-conflicts N] [--portfolio] [--proof] [--quiet]
     \\  logic-zig hwmcc-track <file.aag|aig> [--frames N] [--each] [--justice] [--lasso] [--cert] [--no-kind]
     \\  logic-zig fuzz / miter / unify / eval / cnf / tautology / equiv
@@ -16,11 +17,15 @@ const usage =
     \\  logic-zig aiger-write <in.aag|aig> <out.aag> [--binary] [--extended]
     \\  logic-zig justice-demo [--bound K] [--lasso]
     \\  logic-zig klive-demo [--max-k K]        # infinite justice proof (k-liveness)
+    \\  logic-zig abduce-demo                   # observation → minimal causes (diagnosis)
+    \\  logic-zig induce-demo                   # examples → minimal-k DNF rule
+    \\  logic-zig reason-demo                   # min-cost abduce · ALP · Bayes · defaults · KLM
     \\  logic-zig ternary-demo
     \\  logic-zig doctor                        # self-check smoke suite
     \\  logic-zig api-info                      # stable api/v1 version + capabilities
     \\  logic-zig edge-suite                    # cross-domain adversarial edges
     \\  logic-zig taxonomy                      # universal named-systems registry
+    \\  logic-zig museum                        # evidence-derived exhibit contracts
     \\  logic-zig giants                        # discover Kissat/Z3/ABC/Vampire/…
     \\  logic-zig trust-report                  # DRAT + CaDiCaL + PDR certs + sequential
     \\  logic-zig sat-scoreboard [--dir DIR] [--limit N] [--conflicts N] [--portfolio] [--industrial]
@@ -80,6 +85,19 @@ pub fn main(init: std.process.Init) !void {
         } else {
             try cmdSatFormula(gpa, arg, proof);
         }
+        return;
+    }
+    if (std.mem.eql(u8, cmd, "check-rup")) {
+        const cnf_path = iter.next() orelse return fail("check-rup cnf path");
+        const proof_path = iter.next() orelse return fail("check-rup proof path");
+        if (iter.next() != null) return fail("check-rup trailing argument");
+        const cnf_text = std.Io.Dir.cwd().readFileAlloc(io, cnf_path, gpa, .limited(64 * 1024 * 1024)) catch return fail("read cnf failed");
+        defer gpa.free(cnf_text);
+        const proof_text = std.Io.Dir.cwd().readFileAlloc(io, proof_path, gpa, .limited(256 * 1024 * 1024)) catch return fail("read proof failed");
+        defer gpa.free(proof_text);
+        const status = logic.rup_checker.verify(gpa, cnf_text, proof_text) catch return fail("malformed cnf or proof");
+        std.debug.print("RUP_{s}\n", .{if (status == .verified) "VERIFIED" else "INVALID"});
+        if (status != .verified) std.process.exit(1);
         return;
     }
     if (std.mem.eql(u8, cmd, "fuzz")) {
@@ -180,6 +198,18 @@ pub fn main(init: std.process.Init) !void {
         try cmdKliveDemo(gpa, max_k);
         return;
     }
+    if (std.mem.eql(u8, cmd, "abduce-demo")) {
+        try cmdAbduceDemo(gpa);
+        return;
+    }
+    if (std.mem.eql(u8, cmd, "induce-demo")) {
+        try cmdInduceDemo(gpa);
+        return;
+    }
+    if (std.mem.eql(u8, cmd, "reason-demo")) {
+        try cmdReasonDemo(gpa);
+        return;
+    }
     if (std.mem.eql(u8, cmd, "ternary-demo")) {
         try cmdTernaryDemo(gpa);
         return;
@@ -207,6 +237,19 @@ pub fn main(init: std.process.Init) !void {
         std.debug.print("  ctl_bounded={} agent_session={} abc_interop={}\n", .{
             caps.ctl_bounded, caps.agent_session, caps.abc_interop,
         });
+        std.debug.print("  reason_abduce={} reason_induce={} reason_abduce_cost={} sat_maxsat={}\n", .{
+            caps.reason_abduce, caps.reason_induce, caps.reason_abduce_cost, caps.sat_maxsat,
+        });
+        std.debug.print("  reason_alp={} reason_bayes={} reason_default={} reason_klm={}\n", .{
+            caps.reason_alp, caps.reason_bayes, caps.reason_default, caps.reason_klm,
+        });
+        std.debug.print("  reason_af={} reason_asp={} reason_agm={} reason_circ={} reason_analogy={}\n", .{
+            caps.reason_af, caps.reason_asp, caps.reason_agm, caps.reason_circ, caps.reason_analogy,
+        });
+        std.debug.print("  logic_intuitionistic={} logic_manyvalued={} modal_epistemic={} logic_syllogistic={} kr_el={}\n", .{
+            caps.logic_intuitionistic, caps.logic_manyvalued, caps.modal_epistemic, caps.logic_syllogistic, caps.kr_el,
+        });
+        std.debug.print("  modal_deontic={} logic_linear_mll={}\n", .{ caps.modal_deontic, caps.logic_linear_mll });
         std.debug.print("program: docs/INDUSTRIAL.md\n", .{});
         return;
     }
@@ -218,6 +261,10 @@ pub fn main(init: std.process.Init) !void {
     }
     if (std.mem.eql(u8, cmd, "taxonomy")) {
         logic.taxonomy.printAll();
+        return;
+    }
+    if (std.mem.eql(u8, cmd, "museum")) {
+        logic.exhibits.printMuseum();
         return;
     }
     if (std.mem.eql(u8, cmd, "giants")) {
@@ -608,9 +655,9 @@ fn cmdMiter(gpa: std.mem.Allocator, io: std.Io, path_a: []const u8, path_b: []co
     defer nb.deinit();
     const r = logic.netlist.combinationalEquiv(gpa, &na, &nb) catch return fail("miter failed");
     defer if (r.cex) |c| gpa.free(c);
-    if (r.equivalent) {
+    if (r.status == .equivalent) {
         std.debug.print("EQUIVALENT\n", .{});
-    } else {
+    } else if (r.status == .not_equivalent) {
         std.debug.print("NOT_EQUIVALENT\n", .{});
         if (r.cex) |c| {
             for (c, 0..) |v, i| {
@@ -619,6 +666,9 @@ fn cmdMiter(gpa: std.mem.Allocator, io: std.Io, path_a: []const u8, path_b: []co
             }
         }
         std.process.exit(1);
+    } else {
+        std.debug.print("UNKNOWN\n", .{});
+        std.process.exit(2);
     }
 }
 
@@ -795,8 +845,12 @@ fn cmdDoctor(gpa: std.mem.Allocator, io: std.Io) !void {
     {
         var pool = try logic.ExprPool.init(gpa);
         defer pool.deinit();
-        if (try logic.isTautology(gpa, &pool, try logic.parse(&pool, "a | !a"))) {
+        const taut = try logic.isTautology(gpa, &pool, try logic.parse(&pool, "a | !a"));
+        if (taut == true) {
             std.debug.print("ok  prop tautology\n", .{});
+        } else if (taut == null) {
+            std.debug.print("UNKNOWN prop tautology (resource limit)\n", .{});
+            fails += 1;
         } else {
             std.debug.print("FAIL prop tautology\n", .{});
             fails += 1;
@@ -1104,6 +1158,154 @@ fn cmdBenchComp(
     if (!r.correctnessOk()) std.process.exit(1);
 }
 
+fn cmdAbduceDemo(gpa: std.mem.Allocator) !void {
+    const Lit = logic.lit.Lit;
+    const Var = logic.lit.Var;
+    const lp = Lit.positive;
+    const ln = Lit.negative;
+    const v = Var.fromIndex;
+
+    // Diagnosis theory: faultA → s1, faultB → s1, faultB → s2.
+    var b = logic.cnf.Cnf.init(gpa);
+    defer b.deinit();
+    try b.addClause(&.{ ln(v(0)), lp(v(2)) });
+    try b.addClause(&.{ ln(v(1)), lp(v(2)) });
+    try b.addClause(&.{ ln(v(1)), lp(v(3)) });
+    const names = [_][]const u8{ "faultA", "faultB", "s1", "s2" };
+
+    const cases = [_]struct { obs: []const Lit, label: []const u8 }{
+        .{ .obs = &.{lp(v(2))}, .label = "s1" },
+        .{ .obs = &.{ lp(v(2)), lp(v(3)) }, .label = "s1 & s2" },
+    };
+    for (cases) |c| {
+        var r = try logic.abduction.abduce(gpa, &b, c.obs, &.{ lp(v(0)), lp(v(1)) }, .{});
+        defer r.deinit();
+        std.debug.print("observe {s}: {d} minimal explanation(s), complete={}\n", .{
+            c.label, r.explanations.items.len, r.complete,
+        });
+        for (r.explanations.items) |e| {
+            std.debug.print("  {{", .{});
+            for (e, 0..) |l, i| {
+                std.debug.print("{s}{s}{s}", .{
+                    if (i > 0) ", " else " ",
+                    if (l.isNeg()) "!" else "",
+                    names[l.variable().index()],
+                });
+            }
+            std.debug.print(" }} verified={}\n", .{
+                try logic.abduction.verifyExplanation(gpa, &b, c.obs, e),
+            });
+        }
+    }
+}
+
+fn cmdInduceDemo(gpa: std.mem.Allocator) !void {
+    // Learn xor(x0, x1) from all four labeled rows.
+    const examples = [_]logic.induction.Example{
+        .{ .features = &.{ false, false }, .label = false },
+        .{ .features = &.{ true, true }, .label = false },
+        .{ .features = &.{ true, false }, .label = true },
+        .{ .features = &.{ false, true }, .label = true },
+    };
+    var r = try logic.induction.induceDnf(gpa, 2, &examples, .{});
+    defer r.deinit();
+    std.debug.print("xor: status={s} k={d} minimal={} verified={}\n", .{
+        @tagName(r.status), r.k_used, r.minimal, r.verified,
+    });
+    for (r.terms) |t| {
+        std.debug.print("  term:", .{});
+        for (t) |l| std.debug.print(" {s}x{d}", .{ if (l.negated) "!" else "", l.feature });
+        std.debug.print("\n", .{});
+    }
+}
+
+fn cmdReasonDemo(gpa: std.mem.Allocator) !void {
+    const Lit = logic.lit.Lit;
+    const Var = logic.lit.Var;
+    const lp = Lit.positive;
+    const ln = Lit.negative;
+    const v = Var.fromIndex;
+
+    // 1. Min-cost abduction: a→o (w=5) vs b∧c→o (w=1+1).
+    {
+        var b = logic.cnf.Cnf.init(gpa);
+        defer b.deinit();
+        try b.addClause(&.{ ln(v(0)), lp(v(3)) });
+        try b.addClause(&.{ ln(v(1)), ln(v(2)), lp(v(3)) });
+        const w = [_]u32{ 5, 1, 1 };
+        var r = try logic.abduction.abduceMinCost(gpa, &b, &.{lp(v(3))}, &.{ lp(v(0)), lp(v(1)), lp(v(2)) }, .{ .weights = &w });
+        defer r.deinit();
+        std.debug.print("min-cost abduce: cost={d} optimal={} size={d}\n", .{
+            r.cost, r.optimal, if (r.explanation) |e| e.len else 0,
+        });
+    }
+    // 2. ALP: flies(tweety) needs normal(tweety).
+    {
+        var pool = logic.fol_term.TermPool.init(gpa);
+        defer pool.deinit();
+        const tweety = try pool.mkConst("tweety");
+        const x = try pool.mkVar("X");
+        const clauses = [_]logic.alp.Clause{
+            .{ .head = try pool.mkFunc("bird", &.{tweety}) },
+            .{ .head = try pool.mkFunc("flies", &.{x}), .body = &.{
+                try pool.mkFunc("bird", &.{x}),
+                try pool.mkFunc("normal", &.{x}),
+            } },
+        };
+        const abd = [_][]const u8{"normal"};
+        var r = try logic.alp.abduce(gpa, &pool, .{ .clauses = &clauses, .abducibles = &abd }, &.{
+            try pool.mkFunc("flies", &.{tweety}),
+        }, .{});
+        defer r.deinit();
+        std.debug.print("alp: flies(tweety) ← {d} hypothesis set(s), first has {d} atom(s)\n", .{
+            r.solutions.items.len,
+            if (r.solutions.items.len > 0) r.solutions.items[0].len else 0,
+        });
+    }
+    // 3. Bayesian induction: rule of succession + MAP.
+    {
+        std.debug.print("bayes: laplace(7 of 10)={d:.4}\n", .{logic.bayes.laplace(7, 10)});
+        const ex = [_]logic.bayes.Example{
+            .{ .features = &.{ true, true }, .label = true },
+            .{ .features = &.{ false, false }, .label = false },
+        };
+        var post = try logic.bayes.posterior(gpa, 2, &ex, .{ .noise = 0.0 });
+        defer post.deinit();
+        std.debug.print("bayes: MAP size={d} P(true|{{t,t}})={d:.3}\n", .{
+            post.map.size(), post.predict(&.{ true, true }),
+        });
+    }
+    // 4. Default logic: Nixon diamond.
+    {
+        var w = logic.cnf.Cnf.init(gpa);
+        defer w.deinit();
+        try w.addClause(&.{lp(v(0))});
+        try w.addClause(&.{lp(v(1))});
+        const d = [_]logic.default_logic.Default{
+            .{ .prereq = &.{lp(v(0))}, .justifications = &.{&.{lp(v(2))}}, .consequent = &.{lp(v(2))} },
+            .{ .prereq = &.{lp(v(1))}, .justifications = &.{&.{ln(v(2))}}, .consequent = &.{ln(v(2))} },
+        };
+        var exts = try logic.default_logic.extensions(gpa, &w, &d, .{});
+        defer exts.deinit();
+        std.debug.print("default: nixon diamond → {d} extensions\n", .{exts.generating.items.len});
+    }
+    // 5. KLM rational closure: penguin canon.
+    {
+        const kb = [_]logic.klm.Conditional{
+            .{ .antecedent = &.{lp(v(0))}, .consequent = &.{lp(v(1))} },
+            .{ .antecedent = &.{lp(v(2))}, .consequent = &.{ln(v(1))} },
+            .{ .antecedent = &.{lp(v(2))}, .consequent = &.{lp(v(0))} },
+        };
+        var rk = try logic.klm.rank(gpa, null, &kb);
+        defer rk.deinit();
+        const pf = try logic.klm.query(gpa, null, &kb, &rk, &.{lp(v(2))}, &.{ln(v(1))});
+        const rb = try logic.klm.query(gpa, null, &kb, &rk, &.{ lp(v(3)), lp(v(0)) }, &.{lp(v(1))});
+        std.debug.print("klm: penguin|~¬fly={} red∧bird|~fly={} levels={d}\n", .{
+            pf.entailed, rb.entailed, rk.levels,
+        });
+    }
+}
+
 fn cmdKindDemo(gpa: std.mem.Allocator, max_k: u32) !void {
     // Stuck-at-zero: should PROVEN
     {
@@ -1212,8 +1414,12 @@ fn cmdTautology(gpa: std.mem.Allocator, formula: []const u8) !void {
     var pool = try logic.ExprPool.init(gpa);
     defer pool.deinit();
     const e = logic.parse(&pool, formula) catch return fail("parse error");
-    if (try logic.isTautology(gpa, &pool, e)) {
+    const taut = try logic.isTautology(gpa, &pool, e);
+    if (taut == true) {
         std.debug.print("TAUTOLOGY\n", .{});
+    } else if (taut == null) {
+        std.debug.print("UNKNOWN (resource limit; not proven)\n", .{});
+        std.process.exit(2);
     } else {
         std.debug.print("NOT_TAUTOLOGY\n", .{});
         std.process.exit(1);
@@ -1225,8 +1431,12 @@ fn cmdEquiv(gpa: std.mem.Allocator, f1: []const u8, f2: []const u8) !void {
     defer pool.deinit();
     const a = logic.parse(&pool, f1) catch return fail("parse error formula1");
     const b = logic.parse(&pool, f2) catch return fail("parse error formula2");
-    if (try logic.areEquivalent(gpa, &pool, a, b)) {
+    const eq = try logic.areEquivalent(gpa, &pool, a, b);
+    if (eq == true) {
         std.debug.print("EQUIVALENT\n", .{});
+    } else if (eq == null) {
+        std.debug.print("UNKNOWN (resource limit; not proven)\n", .{});
+        std.process.exit(2);
     } else {
         std.debug.print("NOT_EQUIVALENT\n", .{});
         std.process.exit(1);

@@ -5,6 +5,238 @@ All notable changes to **logic-zig** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Executable museum truth reset
+
+- Added a pinned Lean oracle project for finite-matrix semantics, an Aristotle
+  submission harness with environment-only credentials, and CI configuration for
+  Lean kernel plus independent nanoda checking without `sorryAx`.
+- Added GitHub issue forms, PR evidence template, security policy, code of conduct,
+  CODEOWNERS, Dependabot configuration and citation metadata. CI now builds pinned
+  CaDiCaL, DRAT-trim and ABC trust anchors before requiring `TRUST_OK`.
+
+- Added evidence-bearing exhibit manifests and a fail-closed `logic-zig museum`
+  catalog for propositional logic, S4, and first-order logic.
+- Added a strict serialized RUP checker with no producer/search imports, a
+  `check-rup` CLI, producer-to-bytes integration tests, mutation tests, and a
+  trust-report gate. Classical propositional logic is the first
+  `verified_exhibit` under its explicit audited contract.
+- Added exhaustive validity certificates and countermodels for categorical
+  syllogistic; all 256 forms under both Boolean and existential-import semantics
+  replay successfully, promoting it to the second `verified_exhibit`.
+- Museum output now includes every uncontracted registry system as a catalog-only
+  restoration backlog.
+- Added fail-closed finite-matrix decisions with exhaustive evidence counts and
+  countervaluations; K3, LP, FDE, and L3 now have separate verified exhibit
+  contracts and a shared formal specification.
+- Added exact, replayable extension and acceptance evidence for finite Dung
+  frameworks. Exhaustive tests cover every three-argument attack relation under
+  admissible, complete, grounded, stable and preferred semantics; the scoped
+  contract is now a verified exhibit without an ICCMA-scale claim.
+- Hardened propositional normal ASP with typed program validation and exact
+  stable-model-set verification. Positive, empty, omitted and duplicate evidence
+  now replay fail closed; the scoped finite engine is a verified exhibit.
+- Hardened finite Reiter default logic with typed enumeration limits,
+  generating-set shape checks and exact extension-set replay. The scoped CNF and
+  cube-default fragment is now a verified exhibit.
+- Added exact remainder-family, contraction and Levi-revision replay for finite
+  AGM belief bases, including exhaustive sub-base tests and mutation rejection;
+  the scoped base-change engine is now a verified exhibit.
+- Replaced circumscription's assertion/Boolean boundary with validated partitions,
+  exact minimal-signature decisions, complete countermodels and replay. The
+  finite propositional fragment is now a verified exhibit.
+- Added Propositional Dynamic Logic (`modal/pdl.zig`) with two independent finite-frame
+  evaluators — matrix reflexive-transitive closure and Fischer–Ladner graph reach — a
+  brute-force exhaustive-frame oracle for validity, and a fail-closed `verifyClaim`
+  replay. Known validities (K, distribution, composition, union, star unroll, star
+  induction, test equivalence, diamond-star fixpoint) are confirmed and known
+  non-validities receive countermodels; the scoped finite regular-program fragment is
+  now a `verified_exhibit`. api/v1 bumped to 1.6.0 with a `modal_pdl` capability bit.
+- Hardened KLM rational closure so SAT `unknown` cannot become exceptionality,
+  per-level allocations do not accumulate, and rankings/query levels have exact
+  mutation-tested replay. Promotion remains withheld pending countermodels.
+- Corrected inductive-invariant safety semantics and removed the invalid empty-
+  invariant conversion from k-induction.
+- Made incremental SAT budgets and statistics per-call and equivalence tri-state.
+- Made assumption-core minimality and uniqueness tri-state so budget exhaustion
+  cannot be reported as proof of either property.
+- Assumption-dependent UNSAT proofs now carry their ordered assumption context and
+  proof logging is reinitialized for every incremental solve.
+- Made scoreboard/trust gates require external evidence instead of treating missing
+  or inconclusive comparisons as passes.
+- Corrected FOL binder identity/scoping and hardened partial IPASIR clause/error
+  handling. SAT-backed finite models now encode and replay constant denotations,
+  compose functional predicate arguments, and distinguish bounded UNSAT from
+  solver `unknown`.
+- Implemented IPASIR termination and learned-clause callbacks through the CDCL loop;
+  added a compiled C ABI test for empty clauses, interruption, and zero-terminated
+  learned clauses. IPASIR remains a fragment pending assumption-proof lifecycle and
+  an explicit complete state machine.
+- Closed the last `unknown`-collapse gap the audit re-flagged: the public
+  `isTautology`/`areEquivalent` root helpers now return tri-state `?bool`
+  (`null` = solver `unknown`) instead of folding `unknown` into `false`, with a
+  regression test proving `max_conflicts=0` yields `null`. CLI `tautology`/`equiv`
+  now report `UNKNOWN` (exit 2) rather than `NOT_TAUTOLOGY`.
+- Renamed bounded CTL result labels from `holds`/`fails` to
+  `holds_within_bound`/`fails_within_bound` so the API cannot be read as a complete
+  unbounded CTL proof; the module doc already states the bounded scope.
+- Bumped the IPASIR `signature()` string from the stale `logic-zig-ipasir-0.12` to
+  `logic-zig-ipasir-1.0`.
+- Documented the FOL finite-model finder's honest scope (symbols keyed by
+  `(name,arity)`, missing constants → `error.Unbound`, domain cap 4) in its module
+  header.
+- Added **bounded Linear Temporal Logic** (`ctl/ltl.zig`): X/F/G/U/R over finite
+  traces, with two independent evaluators — direct structural recursion and a
+  textbook bounded LTL→SAT encoding — cross-checked on thousands of random
+  (trace, formula) pairs, textbook validities asserted (F p ↔ ¬G ¬p duality,
+  p U q → F q, G p → p@0), and a fail-closed `verifyClaim`. Registry `ltl-bounded` added; museum promotion
+  derived to `verified_exhibit` (13th exhibit); `logic.ltl` exported from the root.
+- Extended **bounded LTL** with the **past-time fragment (PLTL)** in the same
+  `ctl/ltl.zig`: `Y` (strict previous), `Z` (weak previous), `S` (since), `B`
+  (before). Each shares the two-evaluator discipline — direct backward
+  recurrence (`S_i = ψ_i ∨ (φ_i ∧ S_{i-1})`, `B` dual) and a Tseitin SAT encoding
+  that mirrors it exactly — and is folded into the exhaustive cross-check
+  oracle (all traces frames≤4, nets≤2, zero mismatches) plus PLTL dualities
+  (`Z φ ↔ ¬Y ¬φ`, boundary `Z φ` true / `Y φ` false at frame 0). No new module;
+  registry `ltl-bounded` notes updated. Verified: exhaustive direct==SAT oracle
+  green; canonical `zig build test` green.
+
+## [0.22.0] — 2026-07-17
+
+### Substructural + normative wave: MLL linear logic · deontic SDL
+
+- **`logic/linear.zig`**: multiplicative linear logic (MLL + units) — one-sided sequent
+  prover, invertible ⅋/⊥ then exhaustive ⊗ context splitting (exact on the small-sequent
+  slice); canon: identity/symmetry/currying/composition provable, **weakening and
+  contraction refuted**, MIX not admissible; balanced-atom counting invariant verified on
+  300 random formulas
+- **`modal/deontic.zig`**: standard deontic logic (KD) on finite serial frames — O/P
+  duality, D axiom ⇔ seriality (frame check + failure demo on dead-end worlds), K
+  distribution, no-conflict theorem, Ross's inference valid (SDL bites the bullet),
+  converse-Ross refuted
+- **api/v1 → 1.5.0**: `modal_deontic`, `logic_linear_mll` bits + re-exports
+- Taxonomy: linear-logic and deontic rows `documented` → `fragment`
+  (registry now: 27 fragment / 10 engine / 3 documented — the 3 remaining are
+  relevance R, HOL, categorical: genuinely large lifts, honestly deferred)
+- `build.zig.zon` version unstuck (0.12.0 → 0.22.0)
+- Pre-registered: exp-1784335002-534622769 (deontic), exp-1784335002-580965220 (MLL)
+
+## [0.21.0] — 2026-07-17
+
+### Classical-adjacent wave: intuitionistic · many-valued · epistemic · syllogistic · EL
+
+- **`logic/intuitionistic.zig`**: G4ip (Dyckhoff contraction-free) decision procedure for
+  intuitionistic propositional validity — immutable contexts, no loop checking; canon
+  (Peirce/LEM unprovable, double negations provable) + 80-formula Glivenko cross-check
+  against a classical truth-table oracle. A context-corruption bug in the first
+  mutate-and-restore draft was caught by the pre-registered Glivenko falsifier.
+- **`logic/manyvalued.zig`**: finite logical matrices — classical, K3, LP, FDE, Ł3 with
+  designated-value consequence; canon: LP paraconsistency (explosion & MP fail, LEM holds),
+  K3 gaps (no p→p), Ł3 contraction failure, FDE gap+glut; classical matrix verified
+  against truth tables on random formulas
+- **`modal/epistemic.zig`**: multi-agent S5 model checking with K/E/common-knowledge
+  (reachability fixpoint) and public announcements; full muddy-children canon (n=3),
+  S5 introspection properties, everybody-knows vs common-knowledge separation
+- **`logic/syllogistic.zig`**: complete categorical-syllogism decision via Venn-region
+  enumeration (2^8 patterns = exact semantics): exactly 15 Boolean-valid and 24
+  import-valid of 256 forms; Barbara/Celarent/Darii/Ferio/Darapti/Barbari/Baroco/Bocardo
+  named checks; AAA-2 fallacy rejected
+- **`logic/el.zig`**: description logic EL subsumption — normalization to the four EL
+  normal forms + completion-rule saturation; role-chain, conjunction and pericarditis
+  canon fixtures with exact closure (no spurious subsumptions)
+- **api/v1 → 1.4.0**: five new capability bits + re-exports
+- Taxonomy: intuitionistic-prop, fuzzy/many-valued, paraconsistent, epistemic,
+  syllogistic, description-al all advance `documented` → `fragment`
+- Pre-registered: exp-1784333657-083950258 (G4ip), exp-1784333658-394375372 (matrices),
+  exp-1784333658-988061669 (epistemic), exp-1784333662-689272384 (syllogistic),
+  exp-1784333663-779933697 (EL)
+
+## [0.20.0] — 2026-07-17
+
+### Nonmonotonic completion wave: argumentation · answer sets · belief revision · circumscription · analogy
+
+- **`reason/argumentation.zig`**: Dung AFs — grounded via characteristic-function fixpoint;
+  admissible/complete/stable/preferred enumeration; credulous & skeptical acceptance;
+  canon: reinstatement, mutual attack, odd/even cycles, floating acceptance,
+  grounded ⊆ every preferred
+- **`reason/asp.zig`**: stable models of normal programs — Gelfond–Lifschitz reduct
+  least-model check as the certificate; canon: even/odd negative loops, constraints,
+  stratified programs, supported-but-unfounded models rejected
+- **`reason/agm.zig`**: AGM base contraction via remainder sets (maxichoice, full-meet,
+  cardinality partial-meet) + Levi-identity revision; postulate tests: success, inclusion,
+  vacuity, tautology-failure, revision consistency
+- **`reason/circumscription.zig`**: propositional circumscription — P-minimal-model
+  entailment with fixed/varying atoms via signature enumeration over the SAT oracle;
+  bird/ab canon, exception defeat; 30 random instances cross-checked against an
+  independent full-assignment oracle
+- **`reason/analogy.zig`**: Boolean analogical proportions (Miclet–Prade) — axioms
+  verified over 200 random vectors + exhaustive 16-pattern check; unique-solution
+  solving; analogical classifier exact & unanimous on affine concepts, **abstains**
+  when no label-solvable triple exists (minimal-XOR honesty test)
+- **api/v1 → 1.3.0**: Capability widened to u64 (low word unchanged, `toU32` kept);
+  5 new bits; re-exports for all five engines
+- Taxonomy: +5 fragment rows (dung-af, asp-stable, agm-revision, circumscription,
+  analogical); coverage doc: Analogical and Dialogical/argumentation modes now M
+- Pre-registered: exp-1784310435-261237507 (AF), exp-1784310435-294505035 (ASP),
+  exp-1784310435-326080521 (AGM), exp-1784310439-633429721 (circumscription),
+  exp-1784310439-666082653 (analogy)
+
+## [0.19.0] — 2026-07-17
+
+### Reasoning-mode wave: MaxSAT · cost-ranked & first-order abduction · Bayesian induction · nonmonotonic family
+
+- **`sat/maxsat.zig`**: weighted partial MaxSAT — exact optimum via descending upper-bound
+  search with a sequential weighted counter PB encoding; verified against brute force on
+  60 random instances
+- **`reason/abduction.zig` + `abduceMinCost`**: cost-optimal explanations via the implicit
+  hitting-set duality (min-cost hitting sets of accumulated MCSes via MaxSAT, candidates
+  checked deductively, inconsistent candidates blocked); cardinality-minimal by default,
+  weighted objectives supported; brute-force cross-checked incl. 25 random instances
+- **`reason/alp.zig`**: abductive logic programming — **first-order abduction** over the
+  Horn substrate: SLD with hypothesis collection (KKT-style, definite fragment), trail-based
+  Robinson unification with occurs check, integrity denials with variables, set-semantic Δ,
+  independent deductive re-check (`derives`); hypotheses genuinely instantiated by
+  unification (flies(tweety) → normal(tweety))
+- **`reason/bayes.zig`**: Bayesian/statistical induction — Laplace rule of succession
+  (Beta priors) and exact posterior over the conjunction hypothesis class with Occam prior
+  and ε-noise likelihood; MAP + predictive by full model averaging
+- **`reason/default_logic.zig`**: Reiter default logic — extension enumeration with
+  groundedness, justification consistency against the final extension, and stability;
+  credulous/skeptical consequence; canon: Tweety, Nixon diamond (2 extensions),
+  ( :p / ¬p ) (0 extensions), self-support rejected, inconsistent-W degeneracy
+- **`reason/klm.zig`**: KLM rational closure — Lehmann–Magidor exceptionality ranking and
+  entailment, all SAT-backed; canon: specificity overrides, irrelevance preserved
+  (red bird flies), nonmonotonicity, vacuous impossible antecedents
+- **api/v1 → 1.2.0**: six new capability bits + re-exports for all engines
+- Taxonomy: `default-logic`, `probabilistic` → `fragment`; new rows `klm-rational`,
+  `alp`, `maxsat`
+- CLI: `reason-demo` exercising all five new engines
+- Pre-registered and confirmed: exp-1784300107-552194486 (MaxSAT),
+  exp-1784300107-605449209 (min-cost abduction), exp-1784300112-349635420 (ALP),
+  exp-1784300112-405562520 (Bayes), exp-1784300117-164722046 (defaults),
+  exp-1784300117-228825284 (rational closure)
+
+## [0.18.0] — 2026-07-17
+
+### Peircean triad: abduction and induction as first-class engines
+
+- **`reason/abduction.zig`**: propositional abduction — B ∧ H ⊨ O with H ⊆ abducibles,
+  **subset-minimal** (deletion-minimal MUS via `solveAssumptions`) and **background-consistent**;
+  MARCO-style enumeration (UNSAT seeds shrink to MUS, SAT seeds grow to MSS, map solver prunes);
+  `verifyExplanation` re-certifies any answer with fresh solvers
+- **`reason/induction.zig`**: inductive synthesis — exact SAT encoding of k-term DNF
+  consistency over labeled boolean examples; iterative deepening gives **minimal k**
+  (Occam), hypotheses deductively re-verified on every example; distinct from
+  `circuit/kinduction.zig` (which is deductive invariant checking)
+- Deduction is the shared oracle for both — the triad is now engines, not taxonomy labels
+- **api/v1 → 1.1.0**: `abduce` / `induceDnf` re-exports; capability bits
+  `reason_abduce` / `reason_induce`
+- Taxonomy: `inductive` and `abductive` rows advance `documented` → `fragment`
+- CLI: `abduce-demo` (diagnosis: minimal causes, verified), `induce-demo` (learns xor at k=2)
+- Pre-registered: `exp-1784298692-629536463` (abduction minimality/consistency),
+  `exp-1784298694-561301438` (induction consistency/minimal-k)
+
 ## [0.17.0] — 2026-07-17
 
 ### Universal logic platform (destination, not finished completeness)

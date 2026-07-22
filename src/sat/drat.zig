@@ -20,6 +20,8 @@ pub const Proof = struct {
     allocator: std.mem.Allocator,
     lits: std.ArrayList(Lit) = .empty,
     ranges: std.ArrayList(struct { start: u32, len: u32, kind: LineKind }) = .empty,
+    /// Ordered temporary assumption context for this proof-producing solve.
+    assumptions: std.ArrayList(Lit) = .empty,
 
     pub fn init(allocator: std.mem.Allocator) Proof {
         return .{ .allocator = allocator };
@@ -28,6 +30,7 @@ pub const Proof = struct {
     pub fn deinit(self: *Proof) void {
         self.lits.deinit(self.allocator);
         self.ranges.deinit(self.allocator);
+        self.assumptions.deinit(self.allocator);
         self.* = undefined;
     }
 
@@ -45,6 +48,11 @@ pub const Proof = struct {
 
     pub fn numLines(self: *const Proof) usize {
         return self.ranges.items.len;
+    }
+
+    pub fn setAssumptions(self: *Proof, assumptions: []const Lit) !void {
+        self.assumptions.clearRetainingCapacity();
+        try self.assumptions.appendSlice(self.allocator, assumptions);
     }
 
     pub fn numClauses(self: *const Proof) usize {
@@ -78,6 +86,9 @@ pub const Proof = struct {
         for (0..db.numClauses()) |ci| {
             const cl = db.clauseSlice(ClauseId.fromIndex(@intCast(ci)));
             try live.append(allocator, try allocator.dupe(Lit, cl));
+        }
+        for (self.assumptions.items) |assumption| {
+            try live.append(allocator, try allocator.dupe(Lit, &.{assumption}));
         }
 
         var last_was_empty_add = false;
@@ -114,6 +125,11 @@ pub const Proof = struct {
     }
 
     pub fn writeDimacsLike(self: *const Proof, writer: *std.Io.Writer) !void {
+        if (self.assumptions.items.len > 0) {
+            try writer.writeAll("a ");
+            for (self.assumptions.items) |assumption| try writer.print("{d} ", .{assumption.toDimacs()});
+            try writer.writeAll("0\n");
+        }
         for (0..self.numLines()) |i| {
             if (self.lineKind(i) == .del) try writer.writeAll("d ");
             const cl = self.clauseSlice(i);
@@ -240,4 +256,20 @@ test "del line removes clause from live set" {
     try proof_bad.delClause(&.{b});
     try proof_bad.addClause(&.{});
     try std.testing.expect(!(try proof_bad.verifyRup(std.testing.allocator, &cnf)));
+}
+
+test "rup proof records assumption context" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    const a = Lit.positive(Var.fromIndex(0));
+    try cnf.addClause(&.{a});
+
+    var proof = Proof.init(std.testing.allocator);
+    defer proof.deinit();
+    try proof.setAssumptions(&.{a.not()});
+    try proof.addClause(&.{});
+    try std.testing.expect(try proof.verifyRup(std.testing.allocator, &cnf));
+
+    proof.assumptions.clearRetainingCapacity();
+    try std.testing.expect(!(try proof.verifyRup(std.testing.allocator, &cnf)));
 }

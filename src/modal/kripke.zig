@@ -7,6 +7,7 @@
 const std = @import("std");
 
 pub const FrameClass = enum { k, t, s4 };
+pub const FrameError = error{ EmptyFrame, ShapeMismatch, WorldOutOfRange, PropositionOutOfRange, NotReflexive, NotTransitive };
 
 pub const Formula = union(enum) {
     prop: u32,
@@ -91,7 +92,54 @@ pub const Frame = struct {
             }
         }
     }
+
+    pub fn validate(self: *const Frame, class: FrameClass) FrameError!void {
+        if (self.n_worlds == 0) return error.EmptyFrame;
+        if (self.rel.len != self.n_worlds * self.n_worlds or self.val.len != self.n_worlds)
+            return error.ShapeMismatch;
+        if (class == .t or class == .s4) {
+            var w: u32 = 0;
+            while (w < self.n_worlds) : (w += 1) {
+                if (!self.hasR(w, w)) return error.NotReflexive;
+            }
+        }
+        if (class == .s4) {
+            var i: u32 = 0;
+            while (i < self.n_worlds) : (i += 1) {
+                var j: u32 = 0;
+                while (j < self.n_worlds) : (j += 1) {
+                    if (!self.hasR(i, j)) continue;
+                    var k: u32 = 0;
+                    while (k < self.n_worlds) : (k += 1) {
+                        if (self.hasR(j, k) and !self.hasR(i, k)) return error.NotTransitive;
+                    }
+                }
+            }
+        }
+    }
 };
+
+fn validateFormula(phi: *const Formula) FrameError!void {
+    switch (phi.*) {
+        .prop => |p| if (p >= 32) return error.PropositionOutOfRange,
+        .not, .box, .diamond => |inner| try validateFormula(inner),
+        .and_ => |pair| {
+            try validateFormula(pair.l);
+            try validateFormula(pair.r);
+        },
+        .or_ => |pair| {
+            try validateFormula(pair.l);
+            try validateFormula(pair.r);
+        },
+    }
+}
+
+pub fn evalChecked(fr: *const Frame, class: FrameClass, w: u32, phi: *const Formula) FrameError!bool {
+    try fr.validate(class);
+    if (w >= fr.n_worlds) return error.WorldOutOfRange;
+    try validateFormula(phi);
+    return evalAt(fr, w, phi);
+}
 
 pub fn evalAt(fr: *const Frame, w: u32, phi: *const Formula) bool {
     return switch (phi.*) {
@@ -148,14 +196,32 @@ test "modal diamond true" {
     try std.testing.expect(evalAt(&fr, 0, dp));
 }
 
-test "S4 reflexive T axiom box p -> p on reflexive" {
+test "S4 validates T and 4 axioms on preorder" {
     var arena = Arena.init(std.testing.allocator);
     defer arena.deinit();
-    var fr = try Frame.init(std.testing.allocator, 1);
+    var fr = try Frame.init(std.testing.allocator, 2);
     defer fr.deinit(std.testing.allocator);
     fr.makeReflexive();
+    fr.setR(0, 1, true);
+    fr.makeTransitiveClosure();
     fr.setProp(0, 0, true);
+    fr.setProp(1, 0, true);
     const p = try arena.f(.{ .prop = 0 });
-    // □p → p : if box holds then p
-    try std.testing.expect(evalAt(&fr, 0, p));
+    const boxp = try arena.f(.{ .box = p });
+    const not_boxp = try arena.f(.{ .not = boxp });
+    const t_axiom = try arena.f(.{ .or_ = .{ .l = not_boxp, .r = p } });
+    const box_boxp = try arena.f(.{ .box = boxp });
+    const four_axiom = try arena.f(.{ .or_ = .{ .l = not_boxp, .r = box_boxp } });
+    try std.testing.expect(try evalChecked(&fr, .s4, 0, t_axiom));
+    try std.testing.expect(try evalChecked(&fr, .s4, 0, four_axiom));
+}
+
+test "S4 rejects non-preorder frame" {
+    var arena = Arena.init(std.testing.allocator);
+    defer arena.deinit();
+    var fr = try Frame.init(std.testing.allocator, 2);
+    defer fr.deinit(std.testing.allocator);
+    fr.setR(0, 1, true);
+    const p = try arena.f(.{ .prop = 0 });
+    try std.testing.expectError(error.NotReflexive, evalChecked(&fr, .s4, 0, p));
 }

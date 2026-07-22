@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use logic-zig, cite the repository and the exact release or commit you evaluated."
+title: "logic-zig: an executable museum and comparative laboratory of logic"
+type: software
+authors:
+  - family-names: "SMC17"
+repository-code: "https://github.com/SMC17/logic-zig"
+url: "https://github.com/SMC17/logic-zig"
+license: Apache-2.0
+version: 0.22.0
+date-released: 2026-07-17

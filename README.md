@@ -4,9 +4,16 @@
 [![Zig](https://img.shields.io/badge/Zig-0.16-orange.svg)](https://ziglang.org/)
 [![CI](https://github.com/SMC17/logic-zig/actions/workflows/ci.yml/badge.svg)](https://github.com/SMC17/logic-zig/actions/workflows/ci.yml)
 
-**A Zig-native logic kernel** with a shared **core library** and **flagship spin-offs**
-optimized for different targets (agent multishot, SAT throughput, HWMCC, certificates,
-BV-SMT, bounded CTL).
+**An executable museum and comparative laboratory of logic in Zig.** Each named
+system is intended to receive an explicit syntax, semantics, proof theory,
+automation boundary, test corpus, and checkable evidence. The current SAT and
+model-checking spine supports that expansion; exhibit maturity is derived rather
+than implied by catalog breadth.
+
+Lean is the first external semantic oracle: formal exhibit claims are checked by
+the pinned Lean kernel and an independent checker in CI. Aristotle may generate
+or strengthen Lean proofs, but generated output is never trusted before those
+checks pass.
 
 | | |
 |---|---|
@@ -14,6 +21,13 @@ BV-SMT, bounded CTL).
 | **Hardware / sequential** | Netlists, AIGER (extended B/C/J/F), Yosys JSON, BMC, k-induction, PDR |
 | **Liveness** | Justice path/lasso + **fair multi-justice** round-robin k-liveness (complete reduction) |
 | **FOL** | Unification + finite-domain model finding (brute and SAT-encoded) |
+| **Reasoning modes** | Deduction (SAT/SMT/FOL oracle) · **abduction** (subset-minimal + min-cost via MaxSAT, first-order ALP) · **induction** (minimal-k DNF synthesis, exact Bayesian posterior) — the Peircean triad as engines |
+| **Nonmonotonic** | Reiter defaults · KLM rational closure · ASP stable models · circumscription · Dung argumentation · AGM belief revision |
+| **Analogical** | Boolean analogical proportions (axioms verified), proportion solving, abstaining analogical classifier |
+| **Non-classical** | Intuitionistic (G4ip decision, Glivenko-verified) · many-valued matrices (K3/LP/FDE/Ł3) · multi-agent epistemic S5 with common knowledge & announcements |
+| **Classical roots** | Complete Aristotelian syllogistic decision (15/24 of 256 forms) · description logic EL subsumption |
+| **Substructural & normative** | MLL linear logic prover (weakening/contraction refuted) · deontic SDL (D ⇔ seriality) |
+| **Optimization** | Weighted partial MaxSAT (exact, brute-force-verified) powering cost-ranked explanations |
 
 Proof posture is documented in [`STATUS.md`](STATUS.md): features are marked
 `unit-tested` or residual — no silent overclaims.
@@ -32,8 +46,13 @@ zig build   # umbrella + spin-offs + libipasirlogic.so
 ./zig-out/bin/logic-zig doctor
 ./zig-out/bin/logic-zig api-info   # stable api/v1 + industrial capability matrix
 ./zig-out/bin/logic-zig taxonomy   # universal named-systems registry
+./zig-out/bin/logic-zig museum     # evidence-derived exhibit contracts
+./zig-out/bin/logic-zig check-rup formula.cnf proof.rup
 ./zig-out/bin/logic-zig giants     # discover external industrial provers
 ./zig-out/bin/logic-hwmcc golden
+
+# External semantic oracle
+( cd lean && lake build )
 
 # Flagship spin-offs (each pins a unique tradeoff profile)
 ./zig-out/bin/logic-agent profile
@@ -146,8 +165,14 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/ENGINES.md](docs/ENGI
 | [STATUS.md](STATUS.md) | Proof levels, green checklist, residuals |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Layered design |
 | [docs/ENGINES.md](docs/ENGINES.md) | Engine contracts |
+| [docs/MUSEUM.md](docs/MUSEUM.md) | Exhibit contracts and promotion gates |
+| [docs/exhibits/prop-classical.md](docs/exhibits/prop-classical.md) | Verified classical propositional exhibit |
+| [docs/exhibits/syllogistic.md](docs/exhibits/syllogistic.md) | Verified categorical syllogistic exhibit |
+| [docs/exhibits/finite-matrices.md](docs/exhibits/finite-matrices.md) | Verified K3, LP, FDE, and L3 exhibits |
+| [docs/LEAN_ORACLE.md](docs/LEAN_ORACLE.md) | Lean kernel and Aristotle contribution workflow |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to hack on the tree |
+| [SECURITY.md](SECURITY.md) | Private vulnerability and unsoundness reporting |
 | [LICENSE](LICENSE) | Apache-2.0 |
 
 ---
@@ -176,6 +201,10 @@ We prefer **narrow, testable contracts** over marketing language:
 - PDR `proven` means an inductive frame fixed point (IC3a-oriented feature set, not full ABC).
 
 Known residuals are listed in [`STATUS.md`](STATUS.md).
+
+Lean compilation proves the formal statement accepted by the kernel; it does not
+by itself prove that the Lean statement faithfully represents the Zig API. That
+translation boundary is tested and reviewed explicitly.
 
 ---
 

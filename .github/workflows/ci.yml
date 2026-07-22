@@ -1,5 +1,12 @@
 name: ci
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main]
@@ -10,20 +17,43 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Zig 0.16
-        uses: mlugg/setup-zig@v2
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
         with:
           version: 0.16.0
+      - name: Check Zig formatting
+        run: zig fmt --check src build.zig
+      - name: Build pinned external trust anchors
+        env:
+          CADICAL_TAG: rel-3.0.1
+          DRAT_TRIM_SHA: 2e3b2dc0ecf938addbd779d42877b6ed69d9a985
+          ABC_SHA: bcfdf592289a408cd67ec19260f8a60a37b085b6
+        run: |
+          git clone --branch "$CADICAL_TAG" --depth 1 https://github.com/arminbiere/cadical.git third_party/cadical
+          (cd third_party/cadical && ./configure && make -j2)
+
+          git init third_party/drat-trim
+          git -C third_party/drat-trim remote add origin https://github.com/marijnheule/drat-trim.git
+          git -C third_party/drat-trim fetch --depth 1 origin "$DRAT_TRIM_SHA"
+          git -C third_party/drat-trim checkout --detach FETCH_HEAD
+          make -C third_party/drat-trim -j2
+
+          git init third_party/abc
+          git -C third_party/abc remote add origin https://github.com/berkeley-abc/abc.git
+          git -C third_party/abc fetch --depth 1 origin "$ABC_SHA"
+          git -C third_party/abc checkout --detach FETCH_HEAD
+          make -C third_party/abc -j2 ABC_USE_NO_READLINE=1
       - name: Unit + integration tests
         run: zig build test
       - name: Build umbrella + spin-offs + IPASIR
         run: zig build
-      - name: Doctor + trust report + universal
+      - name: Doctor + fail-closed trust report + universal
         run: |
           ./zig-out/bin/logic-zig doctor
           ./zig-out/bin/logic-zig trust-report
           ./zig-out/bin/logic-zig taxonomy
+          ./zig-out/bin/logic-zig museum
           ./zig-out/bin/logic-zig giants
           ./zig-out/bin/logic-zig edge-suite
       - name: Golden corpus (builtin + AIGER manifest + DRAT)
@@ -47,9 +77,8 @@ jobs:
           ./zig-out/bin/logic-zig sat-scoreboard --dir corpus/bench/sat --limit 20 --conflicts 150000
           ./zig-out/bin/logic-zig sat-scoreboard --dir corpus/bench/sat_comp --limit 15 --conflicts 200000
           ./zig-out/bin/logic-zig sat-scoreboard --dir corpus/bench/sat_hard --limit 8 --conflicts 250000 --industrial
-      - name: ABC delta path (soft if no abc)
-        run: |
-          ./zig-out/bin/logic-zig abc-delta corpus/golden/aiger/stuck0.aag --frames 12 || true
+      - name: ABC delta path
+        run: ./zig-out/bin/logic-zig abc-delta corpus/golden/aiger/stuck0.aag --frames 12
       - name: Agent multishot stress
         run: |
           ./zig-out/bin/logic-agent stress --queries 500 --vars 10
@@ -73,3 +102,22 @@ jobs:
           ./zig-out/bin/logic-hwmcc track corpus/golden/aiger/stuck0.aag --frames 8
           ./zig-out/bin/logic-hwmcc track corpus/golden/aiger/const1_bad.aag --frames 4
           ./zig-out/bin/logic-hwmcc track corpus/golden/aiger/stuck0.aag --frames 12 --cert
+
+  lean-oracle:
+    name: Lean oracle and kernel checker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Reject trust escapes
+        run: |
+          if rg -n '\b(sorry|admit|axiom|unsafe)\b' lean --glob '*.lean'; then
+            echo 'Lean oracle contains a forbidden trust escape.' >&2
+            exit 1
+          fi
+      - name: Build and check Lean oracle
+        uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9 # v1.5.0
+        with:
+          lake-package-directory: lean
+          build: true
+          test: false
+          leanchecker: true
