@@ -49,6 +49,7 @@ pub const golden = @import("track/golden.zig");
 pub const profiles = @import("profile/profiles.zig");
 pub const certificate = @import("cert/certificate.zig");
 pub const ctl = @import("ctl/ctl.zig");
+pub const ltl = @import("ctl/ltl.zig");
 pub const bv = @import("smt/bv.zig");
 pub const portfolio = @import("sat/portfolio.zig");
 pub const abc_interop = @import("bridge/abc_interop.zig");

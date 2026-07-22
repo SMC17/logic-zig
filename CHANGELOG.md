@@ -86,6 +86,12 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - Documented the FOL finite-model finder's honest scope (symbols keyed by
   `(name,arity)`, missing constants → `error.Unbound`, domain cap 4) in its module
   header.
+- Added **bounded Linear Temporal Logic** (`ctl/ltl.zig`): X/F/G/U/R over finite
+  traces, with two independent evaluators — direct structural recursion and a
+  textbook bounded LTL→SAT encoding — cross-checked on thousands of random
+  (trace, formula) pairs, textbook validities asserted (F p ↔ ¬G ¬p duality,
+  p U q → F q, G p → p@0), and a fail-closed `verifyClaim`. Registry `ltl-bounded` added; museum promotion
+  derived to `verified_exhibit` (13th exhibit); `logic.ltl` exported from the root.
 
 ## [0.22.0] — 2026-07-17
 
