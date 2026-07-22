@@ -2,6 +2,7 @@
 //!
 //! Supported fragment (bounded path semantics, frames 0..bound):
 //!   ap(p)  not  and  or  X(φ)  F(φ)  G(φ)  φ U ψ  φ R ψ
+//!        Y(φ)  Z(φ)  φ S ψ  φ B ψ   (past-time fragment: Y/Z previous, S/B since/before)
 //!
 //! Two independent evaluators, cross-checked:
 //!   1. `evalDirect` — recursive structural evaluation over an explicit trace.
@@ -62,7 +63,7 @@ pub const Formula = struct {
     lhs: u32 = 0,
     rhs: u32 = 0,
 
-    pub const Tag = enum { ap, not, and_, or_, next, eventually, globally, until, release };
+    pub const Tag = enum { ap, not, and_, or_, next, eventually, globally, until, release, prev, preweak, since, before };
 };
 
 /// Formula arena. Formulas carry stable ids (index into `items`).
@@ -107,6 +108,18 @@ pub const Builder = struct {
     }
     pub fn release(self: *Builder, a: u32, b: u32) !u32 {
         return self.add(.{ .tag = .release, .lhs = a, .rhs = b });
+    }
+    pub fn prev(self: *Builder, a: u32) !u32 {
+        return self.add(.{ .tag = .prev, .lhs = a });
+    }
+    pub fn preweak(self: *Builder, a: u32) !u32 {
+        return self.add(.{ .tag = .preweak, .lhs = a });
+    }
+    pub fn since(self: *Builder, a: u32, b: u32) !u32 {
+        return self.add(.{ .tag = .since, .lhs = a, .rhs = b });
+    }
+    pub fn before(self: *Builder, a: u32, b: u32) !u32 {
+        return self.add(.{ .tag = .before, .lhs = a, .rhs = b });
     }
 };
 
@@ -153,6 +166,34 @@ pub fn evalDirect(b: *const Builder, tr: *const Trace, frame: u32, f: u32) bool 
             const phi = evalDirect(b, tr, frame, frm.lhs);
             const later = evalDirect(b, tr, frame + 1, f);
             return psi or (phi and later);
+        },
+        .prev => {
+            // Y φ at frame i (i>0) = φ at i-1; at frame 0 = false (strict, bounded).
+            if (frame == 0) return false;
+            return evalDirect(b, tr, frame - 1, frm.lhs);
+        },
+        .preweak => {
+            // Z φ at frame i (i>0) = φ at i-1; at frame 0 = true (weak).
+            if (frame == 0) return true;
+            return evalDirect(b, tr, frame - 1, frm.lhs);
+        },
+        .since => {
+            // S_i = ψ_i ∨ (φ_i ∧ S_{i-1}); S_{-1} = false (bounded, backward recurrence).
+            // Matches the SAT encoding exactly, including the first-frame base case.
+            if (frame >= tr.frames) return false;
+            const psi = evalDirect(b, tr, frame, frm.rhs);
+            const phi = evalDirect(b, tr, frame, frm.lhs);
+            const earlier = if (frame == 0) false else evalDirect(b, tr, frame - 1, f);
+            return psi or (phi and earlier);
+        },
+        .before => {
+            // B_i = ψ_i ∨ (φ_i ∧ B_{i-1}); B_{-1} = false (bounded, backward recurrence).
+            // Matches the SAT encoding exactly, including the first-frame base case.
+            if (frame >= tr.frames) return false;
+            const psi = evalDirect(b, tr, frame, frm.rhs);
+            const phi = evalDirect(b, tr, frame, frm.lhs);
+            const earlier = if (frame == 0) false else evalDirect(b, tr, frame - 1, f);
+            return psi or (phi and earlier);
         },
     }
 }
@@ -289,6 +330,62 @@ pub fn encodeSat(allocator: std.mem.Allocator, b: *const Builder, tr: *const Tra
                         try cnf.addClause(&.{ lv, Lit.negative(c) });
                     }
                 },
+                .prev => {
+                    // Y φ: v <-> (i>0 → φ_{i-1}); at i==0 v forced false (strict).
+                    if (i == 0) {
+                        try cnf.addClause(&.{lnot}); // v forced false
+                    } else {
+                        const av = vof(frm.lhs, i - 1, frames);
+                        try cnf.addClause(&.{ lnot, Lit.positive(av) }); // ¬v ∨ a  → v→a
+                        try cnf.addClause(&.{ lv, Lit.negative(av) }); // v ∨ ¬a  → a→v
+                    }
+                },
+                .preweak => {
+                    // Z φ: v <-> (i>0 → φ_{i-1}); at i==0 v forced true (weak).
+                    if (i == 0) {
+                        try cnf.addClause(&.{lv}); // v forced true
+                    } else {
+                        const av = vof(frm.lhs, i - 1, frames);
+                        try cnf.addClause(&.{ lnot, Lit.positive(av) }); // ¬v ∨ a  → v→a
+                        try cnf.addClause(&.{ lv, Lit.negative(av) }); // v ∨ ¬a  → a→v
+                    }
+                },
+                .since => {
+                    const a = vof(frm.lhs, i, frames);
+                    const c = vof(frm.rhs, i, frames);
+                    const pv = if (i > 0) vof(fid, i - 1, frames) else null;
+                    // v <-> (c ∨ (a ∧ prev)):
+                    //   child→v: (¬c∧¬a)∨v, (¬c∧¬prev)∨v
+                    //   v→child: ¬v∨c∨a, ¬v∨c∨prev
+                    if (pv) |pv2| {
+                        try cnf.addClause(&.{ lv, Lit.negative(c), Lit.negative(a) });
+                        try cnf.addClause(&.{ lv, Lit.negative(c), Lit.negative(pv2) });
+                        try cnf.addClause(&.{ lnot, Lit.positive(c), Lit.positive(a) });
+                        try cnf.addClause(&.{ lnot, Lit.positive(c), Lit.positive(pv2) });
+                    } else {
+                        // first frame: v <-> c (prev absent → false)
+                        try cnf.addClause(&.{ lnot, Lit.positive(c) });
+                        try cnf.addClause(&.{ lv, Lit.negative(c) });
+                    }
+                },
+                .before => {
+                    const a = vof(frm.lhs, i, frames);
+                    const c = vof(frm.rhs, i, frames);
+                    const pv = if (i > 0) vof(fid, i - 1, frames) else null;
+                    // v <-> (c ∧ (a ∨ prev)):
+                    //   child→v: (¬c∨¬a)∨v, (¬c∨¬prev)∨v
+                    //   v→child: ¬v∨c, ¬v∨a∨prev
+                    if (pv) |pv2| {
+                        try cnf.addClause(&.{ lv, Lit.negative(c), Lit.negative(a) });
+                        try cnf.addClause(&.{ lv, Lit.negative(c), Lit.negative(pv2) });
+                        try cnf.addClause(&.{ lnot, Lit.positive(c), Lit.positive(a) });
+                        try cnf.addClause(&.{ lnot, Lit.positive(c), Lit.positive(pv2) });
+                    } else {
+                        // first frame: v <-> c (prev absent → false)
+                        try cnf.addClause(&.{ lnot, Lit.positive(c) });
+                        try cnf.addClause(&.{ lv, Lit.negative(c) });
+                    }
+                },
             }
         }
     }
@@ -368,7 +465,11 @@ pub fn crossCheck(allocator: std.mem.Allocator, seed: u64) !u32 {
         const pup = try b.until(p, p);
         const pup2 = try b.until(p, q);
         const rpq = try b.release(p, q);
-        const formulas = [_]u32{ p, q, notp, pandq, pxorq, xp, fp, gp, pup, pup2, rpq };
+        const yp = try b.prev(p);
+        const zp = try b.preweak(p);
+        const spq = try b.since(p, q);
+        const bpq = try b.before(p, q);
+        const formulas = [_]u32{ p, q, notp, pandq, pxorq, xp, fp, gp, pup, pup2, rpq, yp, zp, spq, bpq };
         for (formulas) |f| {
             const direct = evalDirect(&b, &tr, 0, f);
             const sat = try evalSat(allocator, &b, &tr, f);
@@ -405,6 +506,39 @@ test "ltl: F p equivalent to not G not p (duality, every trace)" {
         const gnotp = try b.globally(notp);
         const neg_gnotp = try b.not_(gnotp);
         try std.testing.expectEqual(evalDirect(&b, &tr, 0, fp), evalDirect(&b, &tr, 0, neg_gnotp));
+    }
+}
+
+test "ltl: PLTL dualities/validities hold on every trace (both evaluators)" {
+    var prng = rng.init(0x50171);
+    const rand = prng.random();
+    var trial: u32 = 0;
+    while (trial < 200) : (trial += 1) {
+        const frames = 1 + rand.intRangeLessThan(u32, 0, 5);
+        const nets = 1;
+        var tr = try Trace.init(std.testing.allocator, frames, nets);
+        defer tr.deinit();
+        var i: u32 = 0;
+        while (i < frames) : (i += 1) tr.set(i, 0, rand.boolean());
+        var b = Builder.init(std.testing.allocator);
+        defer b.deinit();
+        const p = try b.ap(0);
+        const yp = try b.prev(p);
+        const nyp = try b.not_(yp);
+        const zp = try b.preweak(p);
+        // Boundary: Z φ true at frame 0 (weak previous); Y φ false at frame 0 (strict).
+        const zp0 = evalDirect(&b, &tr, 0, zp);
+        if (!zp0) return error.ExpectedWeakPrevTrueAtFrame0;
+        const yp0 = evalDirect(&b, &tr, 0, yp);
+        if (yp0) return error.ExpectedStrictPrevFalseAtFrame0;
+        // Duality Z φ ↔ ¬Y ¬φ, verified by BOTH evaluators (x2 agreement).
+        const d1 = evalDirect(&b, &tr, 0, zp);
+        const d2 = evalDirect(&b, &tr, 0, nyp);
+        try std.testing.expectEqual(d1, d2);
+        const s1 = (try evalSat(std.testing.allocator, &b, &tr, zp)).status == .holds_within_bound;
+        const s2 = (try evalSat(std.testing.allocator, &b, &tr, nyp)).status == .holds_within_bound;
+        try std.testing.expectEqual(s1, s2);
+        try std.testing.expectEqual(d1, s1); // direct == SAT on the duality
     }
 }
 
