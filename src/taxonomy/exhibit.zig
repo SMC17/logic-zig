@@ -88,6 +88,7 @@ const fol_term_tests = [_][]const u8{ "src/fol/term.zig", "src/fol/unify.zig" };
 const fol_resolution_tests = [_][]const u8{"src/fol/resolution.zig"};
 const fol_model_tests = [_][]const u8{ "src/fol/finite_model.zig", "src/fol/finite_model_sat.zig" };
 const pdl_tests = [_][]const u8{"src/modal/pdl.zig"};
+const ltl_tests = [_][]const u8{"src/ctl/ltl.zig"};
 
 fn claim(coverage: Coverage, evidence: EvidenceLevel, spec: []const u8, tests: []const []const u8) Claim {
     return .{ .coverage = coverage, .evidence = evidence, .specification = spec, .tests = tests };
@@ -334,6 +335,23 @@ pub const exhibits = [_]ExhibitManifest{
         .documentation = claim(.complete, .audited, "docs/exhibits/pdl.md", &pdl_tests),
         .interoperability = claim(.absent, .none, "", &none),
     },
+    .{
+        .id = "ltl-bounded",
+        .name = "Bounded Linear Temporal Logic",
+        .formal_identity = "LTL over finite traces of length ≤ bound: X, F, G, U, R on Boolean state sequences",
+        .contract_version = "0.1.0",
+        .decidability = .decidable,
+        .completeness_scope = "Exact evaluation of bounded-LTL formulas on finite traces; two independent semantics (direct structural recursion and textbook bounded LTL→SAT) cross-checked, plus an exhaustive random-oracle and fail-closed claim verifier",
+        .limitations = &.{ "Decides LTL over finite traces only, not ω-regular / full LTL model checking", "No parser: formulas built via the arena", "Bounded semantics: X φ at the last frame is false (off-end)", "No proof objects / deductive calculus" },
+        .syntax = claim(.complete, .unit_tested, "docs/exhibits/ltl.md", &ltl_tests),
+        .semantics = claim(.complete, .unit_tested, "docs/exhibits/ltl.md", &ltl_tests),
+        .calculus = claim(.complete, .unit_tested, "docs/exhibits/ltl.md", &ltl_tests),
+        .automation = claim(.complete, .unit_tested, "docs/exhibits/ltl.md", &ltl_tests),
+        .proof_objects = claim(.complete, .unit_tested, "docs/exhibits/ltl.md", &ltl_tests),
+        .countermodels = claim(.complete, .unit_tested, "docs/exhibits/ltl.md", &ltl_tests),
+        .documentation = claim(.complete, .audited, "docs/exhibits/ltl.md", &ltl_tests),
+        .interoperability = claim(.absent, .none, "", &none),
+    },
 };
 
 pub fn printMuseum() void {
@@ -392,6 +410,16 @@ test "promotion is derived and fail closed" {
         }
     }
     try std.testing.expect(found_pdl);
+
+    // ltl-bounded must be a verified_exhibit (two semantics + cross-check oracle + fail-closed verifier)
+    var found_ltl = false;
+    for (exhibits) |exhibit| {
+        if (std.mem.eql(u8, exhibit.id, "ltl-bounded")) {
+            try std.testing.expectEqual(Promotion.verified_exhibit, exhibit.promotion());
+            found_ltl = true;
+        }
+    }
+    try std.testing.expect(found_ltl);
 
     var bad = exhibits[0];
     bad.syntax = claim(.complete, .none, "", &none);
