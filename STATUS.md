@@ -144,7 +144,7 @@ Taxonomy map: `docs/TAXONOMY_COVERAGE.md`
 | Peircean triad | All three modes real: propositional + first-order (ALP) abduction, SAT-exact + Bayesian induction. Residual: no probabilistic ALP, no ILP over clauses, no MCMC/graphical models |
 | Nonmonotonic family | Defaults, rational closure, ASP, circumscription, argumentation, AGM all shipped as fragments; residual: autoepistemic logic, inheritance networks, truth maintenance, industrial ASP/ICCMA scale |
 | MaxSAT | Exact at explanation scale; **no industrial MaxSAT parity claim** (no core-guided/stratified engine) |
-| Modal / dynamic / temporal | K/S4 finite-frame eval; epistemic S5 + common knowledge + announcements; deontic SDL; **PDL finite-frame semantics `verified_exhibit`**; **bounded LTL (X/F/G/U/R) `verified_exhibit`** (two-semantics + cross-check oracle). Residual: no PDL parser/Segerberg calculus, no converse/intersection/hybrid PDL, no CTL* / full μ-calculus exhibit |
+| Modal / dynamic / temporal | K/S4 finite-frame eval; epistemic S5 + common knowledge + announcements; deontic SDL; **PDL finite-frame semantics `verified_exhibit`**; **bounded LTL (X/F/G/U/R) `verified_exhibit`** (two-semantics + cross-check oracle); **bounded PLTL (Y/Z/S/B past-time) `verified_exhibit`** extends LTL with past operators, same two-semantics + exhaustive oracle. Residual: no PDL parser/Segerberg calculus, no converse/intersection/hybrid PDL, no CTL* / full μ-calculus exhibit |
 | Informal argument analysis | Structure OK; no NLP / full schemes library |
 | Full type theory / proof assistant | Micro checker only |
 | Lean / Aristotle oracle | Initial finite-matrix formalization builds locally; CI and Aristotle result still need public receipts |
