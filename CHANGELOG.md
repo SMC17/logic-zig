@@ -5,39 +5,47 @@ All notable changes to **logic-zig** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/).
 
+## [0.21.0] — 2026-08-04
+
+### Depth attack + project surface
+
+- **`deductive/focusing`**: Andreoli focusing (inversion/focus phases)
+- **`description/shiq`**: SHIQ role hierarchy, inverse, transitive, ≥n/≤n
+- **`probabilistic/markov`**: Markov logic weighted worlds + marginals
+- **`abductive/mus`**: complete deletion-minimal MUS + Berge hitting-set abduction
+- **`substructural/relevance`**: relevance logic R variable-sharing + fusion spine
+- **Docs overhaul**: README (universal platform), GRAPH.md, SECURITY.md, CODE_OF_CONDUCT.md, CONTRIBUTING, STATUS
+- Issue #1 (dependency graph) resolved via GRAPH.md
+
+## [0.20.0] — 2026-08-04
+
+### Remaining taxonomy edges
+
+- Intuitionistic IPC (finite Kripke; LEM countermodel)
+- Linear logic ILL + resource bags
+- Epistemic Kᵢ + deontic O/P
+- Probabilistic independence + Fréchet
+- ALC description logic tableau spine
+- Automated sequent search
+- Industrial (greedy) abduction
+
 ## [0.19.0] — 2026-08-04
 
-### Push the universal edge
+### Universal edge
 
-- **`deductive/sequent`**: LK sequent calculus (prop) — Γ ⊢ Δ, structural + logical rules, checked proof nodes
-- **`paraconsistent/lp`**: Belnap-Dunn four-valued / Logic of Paradox — T/F/B/N; explosion fails by design
-- **`historical/syllogistic`**: Aristotelian categorical syllogistic — 24 valid moods × 4 figures (Barbara…Fresison)
-- **`nonmonotonic/default`**: Reiter default logic — propositional extensions, ≤12 defaults exhaustive
-- Registry: sequent-lk, paraconsistent, syllogistic, default-logic → **fragment**
-- STATUS v0.19.0
-
-### Residual
-
-- No automated sequent proof search / focusing yet
-- Defaults are Reiter-style only (no priorities / ASP)
-- Syllogistic is validity table, not a term-logic prover
+- LK sequent calculus, paraconsistent LP, Aristotelian syllogistic, Reiter defaults
 
 ## [0.18.0] — 2026-08-04
 
-### Modes of reasoning: induction · abduction · fuzzy · natural deduction
+### Modes of reasoning
 
-- **`abductive/abduce`**: propositional abduction via CDCL; ≤16 abducibles
-- **`inductive/induction`**: mathematical induction schema + Peano/List
-- **`fuzzy/fuzzy`**: Gödel / product / Łukasiewicz + Kleene 3-valued
-- **`deductive/natded`**: Fitch-style natural deduction fragment
-- Registry raised to fragment; STATUS v0.18.0
+- Abduction, mathematical induction, fuzzy t-norms, Fitch natural deduction
 
 ## [0.17.0] — 2026-07-17
 
-### Universal logic platform
+### Universal logic platform foundation
 
-- taxonomy registry, informal argument, MLTT micro, modal K, giants discover
-- CLI: `taxonomy`, `giants`, `edge-suite`
+- Taxonomy registry, informal argument, MLTT micro, modal K, giants discover
 
 ## Earlier
 
