@@ -1,6 +1,6 @@
 # logic-zig status
 
-**Version:** 0.21.0  
+**Version:** 0.22.0  
 **North star:** universal logic library in Zig ([`docs/UNIVERSAL.md`](docs/UNIVERSAL.md)) — leave no stone unturned; stand on giants; deepen forever.
 
 ## Climb gates
@@ -16,51 +16,37 @@ zig build test && zig build
 ./zig-out/bin/logic-hwmcc golden
 ```
 
-## Universal platform (v0.21)
+## Platform (v0.22)
 
 | Piece | Maturity | Role |
 |-------|----------|------|
-| `sat/*` CDCL + IPASIR + DRAT | engine | Computational core |
-| `circuit/*` BMC/kind/PDR/klive | engine | Sequential MC |
-| `taxonomy/registry` | engine | Named systems × maturity |
-| `deductive/natded` | fragment | Fitch natural deduction |
-| `deductive/sequent` | fragment | LK sequents |
-| `deductive/sequent_search` | fragment | Backward-chaining search |
-| `deductive/focusing` | fragment | Andreoli focusing phases |
-| `abductive/abduce` | fragment | Exhaustive ≤16 |
-| `abductive/industrial` | fragment | Greedy hitting-set |
-| `abductive/mus` | fragment | Complete MUS + Berge HS |
-| `inductive/induction` | fragment | Math induction + datatypes |
-| `constructive/intuitionistic` | fragment | IPC Kripke; LEM fails |
-| `substructural/linear` | fragment | ILL + resource bags |
-| `modal/kripke` | fragment | Modal K |
-| `modal/epistemic_deontic` | fragment | Kᵢ + O/P |
-| `fuzzy/fuzzy` | fragment | t-norms + Kleene |
-| `paraconsistent/lp` | fragment | Belnap-Dunn / LP |
-| `probabilistic/prob` | fragment | Independence + Fréchet |
-| `probabilistic/markov` | fragment | MLN weighted worlds |
-| `description/alc` | fragment | ALC tableau spine |
-| `description/shiq` | fragment | H+I+Q+trans roles |
-| `historical/syllogistic` | fragment | 24 moods × 4 figures |
-| `nonmonotonic/default` | fragment | Reiter defaults |
-| `informal/argument` | fragment | Argument structure |
-| `type_theory/tt` | skeleton | MLTT micro |
-| `bridge/giants` | external | Peer discovery |
+| CDCL SAT / IPASIR / DRAT | engine | Computational core |
+| BMC / k-ind / PDR / k-liveness | engine | Sequential MC |
+| taxonomy registry | engine | Named systems × maturity |
+| ND / sequent / search / focusing | fragment | Formal deduction |
+| Abduction ladder (≤16 / industrial / MUS) | fragment | Explanations |
+| IPC / linear / relevance | fragment | Constructive + substructural |
+| Modal K + **K/T/S4/S5 finite decision** | fragment | Normal modal |
+| Epistemic / deontic | fragment | Agency modalities |
+| Fuzzy / LP | fragment | Many-valued |
+| Independence + MLN | fragment | Probabilistic |
+| ALC + SHIQ | fragment | Description logics |
+| Syllogistic / defaults | fragment | Historical + nonmonotonic |
+| **HOL micro** (STLC + β) | fragment | Higher-order spine |
+| **Categorical / topos witnesses** | fragment | Algebraic logic |
+| MLTT micro | skeleton | Type theory |
+| Giants interop | external | Peer discovery |
 
-## Residuals (honest — ambition ≠ achievement)
+## Residuals
 
 | Ambition | Now |
 |----------|-----|
-| Full focused LJ/LK + HO unification | Prop polarity + phase drivers |
-| Optimized SHIQ tableau (pairwise blocking) | Role hierarchy + Q AST |
-| Lifted MLN / MC-SAT | Prop ≤12-atom enumeration |
-| Partial MUS / CAMUS industrial scale | Deletion-minimal + Berge ≤16 |
-| Relevance R / HOL / categorical | `documented` only |
-| Industrial parity Kissat/Z3/Vampire | Giants discover + CaDiCaL scoreboard; **no parity claim** |
-| Complete K/T/S4/S5 decision procedures | Finite K + epistemic frames; full modal museum open (issue #5) |
+| Full HOL resolution / Isabelle parity | STLC + β only |
+| Constructed topos / sheaves | Finite categories + axiom witnesses |
+| Modal certificates + Lean frame proofs | Exhaustive ≤4-world decision |
+| Industrial MUS scale | ≤16 abducibles complete |
+| Solver parity claims | Scoreboard only; no parity |
 
-## Dependency graph
-
-See [`GRAPH.md`](GRAPH.md).
+See [`GRAPH.md`](GRAPH.md). Cite via [`CITATION.cff`](CITATION.cff).
 
 https://github.com/SMC17/logic-zig
