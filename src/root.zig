@@ -69,6 +69,9 @@ pub const informal = @import("informal/argument.zig");
 pub const type_theory = @import("type_theory/tt.zig");
 pub const modal = @import("modal/kripke.zig");
 pub const giants = @import("bridge/giants.zig");
+pub const abductive = @import("abductive/abduce.zig");
+pub const inductive = @import("inductive/induction.zig");
+pub const fuzzy = @import("fuzzy/fuzzy.zig");
 
 pub const Lit = lit.Lit;
 pub const Var = lit.Var;
@@ -234,6 +237,9 @@ test {
     _ = type_theory;
     _ = modal;
     _ = giants;
+    _ = abductive;
+    _ = inductive;
+    _ = fuzzy;
 }
 
 test "end-to-end tautology a|!a" {
