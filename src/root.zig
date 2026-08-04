@@ -72,6 +72,7 @@ pub const giants = @import("bridge/giants.zig");
 pub const abductive = @import("abductive/abduce.zig");
 pub const inductive = @import("inductive/induction.zig");
 pub const fuzzy = @import("fuzzy/fuzzy.zig");
+pub const natded = @import("deductive/natded.zig");
 
 pub const Lit = lit.Lit;
 pub const Var = lit.Var;
@@ -240,6 +241,7 @@ test {
     _ = abductive;
     _ = inductive;
     _ = fuzzy;
+    _ = natded;
 }
 
 test "end-to-end tautology a|!a" {
