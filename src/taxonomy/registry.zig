@@ -61,6 +61,7 @@ pub const systems = [_]System{
     // Classical / computational core
     .{ .id = "prop-classical", .name = "Classical propositional logic", .family = .classical_prop, .maturity = .engine, .module = "sat/ir", .notes = "ExprPool + Tseitin + CDCL" },
     .{ .id = "natded", .name = "Natural deduction (Fitch)", .family = .classical_prop, .maturity = .fragment, .module = "deductive/natded", .notes = "assume →I/E ∧I/E ¬E ⊥E; checked proof object" },
+    .{ .id = "sequent-lk", .name = "Sequent calculus LK", .family = .classical_prop, .maturity = .fragment, .module = "deductive/sequent", .notes = "Γ ⊢ Δ rules + checked proof nodes" },
     .{ .id = "sat-cdcl", .name = "CDCL SAT", .family = .computational_sat, .maturity = .engine, .module = "sat/solver", .notes = "2WL VSIDS LBD portfolio preprocess vivify" },
     .{ .id = "sat-ipasir", .name = "IPASIR embedding", .family = .computational_sat, .maturity = .engine, .module = "sat/ipasir", .notes = "partial callbacks documented" },
     .{ .id = "smt-bv", .name = "QF_BV bit-blast", .family = .computational_smt, .maturity = .fragment, .module = "smt/bv", .notes = "not word-level industrial" },
@@ -85,15 +86,15 @@ pub const systems = [_]System{
     .{ .id = "intuitionistic-prop", .name = "Intuitionistic propositional", .family = .constructive, .maturity = .documented, .module = "—", .notes = "planned" },
     .{ .id = "linear-logic", .name = "Linear logic", .family = .substructural, .maturity = .documented, .module = "—", .notes = "planned" },
     .{ .id = "relevance-r", .name = "Relevance logic R", .family = .substructural, .maturity = .documented, .module = "—", .notes = "planned" },
-    .{ .id = "default-logic", .name = "Default / nonmonotonic", .family = .nonmonotonic, .maturity = .documented, .module = "—", .notes = "planned" },
+    .{ .id = "default-logic", .name = "Default / nonmonotonic", .family = .nonmonotonic, .maturity = .fragment, .module = "nonmonotonic/default", .notes = "Reiter extensions ≤12 defaults" },
     .{ .id = "probabilistic", .name = "Probabilistic logic", .family = .probabilistic, .maturity = .documented, .module = "—", .notes = "planned" },
     .{ .id = "inductive", .name = "Inductive logic", .family = .inductive_abductive, .maturity = .fragment, .module = "inductive/induction", .notes = "schema + Peano/list datatypes; k-induction remains in circuit/" },
     .{ .id = "abductive", .name = "Abductive reasoning", .family = .inductive_abductive, .maturity = .fragment, .module = "abductive/abduce", .notes = "propositional minimal explanations via CDCL; ≤16 abducibles" },
     .{ .id = "hol", .name = "Higher-order logic", .family = .higher_order, .maturity = .documented, .module = "—", .notes = "planned; external Lean/HOL peers" },
     .{ .id = "description-al", .name = "Description logic ALC", .family = .description_kr, .maturity = .documented, .module = "—", .notes = "planned" },
-    .{ .id = "syllogistic", .name = "Aristotelian syllogistic", .family = .historical_term, .maturity = .documented, .module = "—", .notes = "planned" },
+    .{ .id = "syllogistic", .name = "Aristotelian syllogistic", .family = .historical_term, .maturity = .fragment, .module = "historical/syllogistic", .notes = "24 valid moods × 4 figures" },
     .{ .id = "fuzzy", .name = "Fuzzy / many-valued", .family = .many_valued, .maturity = .fragment, .module = "fuzzy/fuzzy", .notes = "Gödel/product/Łukasiewicz t-norms + Kleene 3-valued" },
-    .{ .id = "paraconsistent", .name = "Paraconsistent", .family = .many_valued, .maturity = .documented, .module = "—", .notes = "planned" },
+    .{ .id = "paraconsistent", .name = "Paraconsistent LP", .family = .many_valued, .maturity = .fragment, .module = "paraconsistent/lp", .notes = "Belnap-Dunn four-valued; explosion fails" },
     .{ .id = "epistemic", .name = "Epistemic logic", .family = .philosophical, .maturity = .documented, .module = "—", .notes = "planned" },
     .{ .id = "deontic", .name = "Deontic logic", .family = .philosophical, .maturity = .documented, .module = "—", .notes = "planned" },
     .{ .id = "categorical", .name = "Categorical logic / topos", .family = .algebraic_categorical, .maturity = .documented, .module = "—", .notes = "planned" },
@@ -170,4 +171,15 @@ test "registry has natded fragment" {
         if (std.mem.eql(u8, s.id, "natded") and s.maturity == .fragment) has = true;
     }
     try std.testing.expect(has);
+}
+
+test "registry v0.19 fragments" {
+    var n: u32 = 0;
+    for (systems) |s| {
+        if (std.mem.eql(u8, s.id, "sequent-lk") and s.maturity == .fragment) n += 1;
+        if (std.mem.eql(u8, s.id, "paraconsistent") and s.maturity == .fragment) n += 1;
+        if (std.mem.eql(u8, s.id, "syllogistic") and s.maturity == .fragment) n += 1;
+        if (std.mem.eql(u8, s.id, "default-logic") and s.maturity == .fragment) n += 1;
+    }
+    try std.testing.expect(n == 4);
 }
