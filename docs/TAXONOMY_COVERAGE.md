@@ -9,7 +9,7 @@ industrial gaps until we match or surpass them with evidence.
 **Answer: No — not as finished engines.** We **register** the map, ship **depth**
 where we are strong, and **never hide** empty cells. Completeness is a program.
 
-Proof level: **audited map** against the codebase at v0.16+ (update with each major).
+Proof level: **audited map** against the codebase at v0.18+ (update with each major).
 
 ---
 
@@ -41,17 +41,17 @@ Proof level: **audited map** against the codebase at v0.16+ (update with each ma
 
 ## 3. Mode of reasoning
 
-| Mode | Status |
-|------|--------|
-| Deductive (classical computational) | **S** |
-| Inductive / Bayesian / statistical | **—** |
-| Abductive | **—** |
-| Analogical | **—** |
-| Defeasible / nonmonotonic | **—** |
-| Probabilistic logics | **—** |
-| Causal (Pearl, etc.) | **—** |
-| Practical / deontic / decision | **—** |
-| Dialogical / argumentation frameworks | **—** |
+| Mode | Status | Notes |
+|------|--------|-------|
+| Deductive (classical computational) | **S** | |
+| Inductive / Bayesian / statistical | **M** | mathematical induction schema + datatypes (`inductive/`); statistical still open |
+| Abductive | **M** | propositional minimal explanations (`abductive/`) |
+| Analogical | **—** | |
+| Defeasible / nonmonotonic | **—** | |
+| Probabilistic logics | **—** | |
+| Causal (Pearl, etc.) | **—** | |
+| Practical / deontic / decision | **—** | |
+| Dialogical / argumentation frameworks | **—** | |
 
 ---
 
@@ -121,13 +121,13 @@ Proof level: **audited map** against the codebase at v0.16+ (update with each ma
 
 ## 8. Many-valued / fuzzy / quantum / non-classical
 
-| Family | Status |
-|--------|--------|
-| Finite-valued / Łukasiewicz / Gödel | **—** |
-| Fuzzy | **—** |
-| Paraconsistent | **—** |
-| Quantum logic | **—** |
-| Probabilistic logic | **—** |
+| Family | Status | Notes |
+|--------|--------|-------|
+| Finite-valued / Łukasiewicz / Gödel | **M** | Kleene 3-valued + continuous Łukasiewicz/Gödel/product (`fuzzy/`) |
+| Fuzzy | **M** | t-norm families + sat-degree eval |
+| Paraconsistent | **—** | |
+| Quantum logic | **—** | |
+| Probabilistic logic | **—** | |
 
 ---
 
