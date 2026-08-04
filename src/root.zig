@@ -77,6 +77,13 @@ pub const sequent = @import("deductive/sequent.zig");
 pub const paraconsistent = @import("paraconsistent/lp.zig");
 pub const syllogistic = @import("historical/syllogistic.zig");
 pub const default_logic = @import("nonmonotonic/default.zig");
+pub const intuitionistic = @import("constructive/intuitionistic.zig");
+pub const linear = @import("substructural/linear.zig");
+pub const epistemic_deontic = @import("modal/epistemic_deontic.zig");
+pub const probabilistic = @import("probabilistic/prob.zig");
+pub const alc = @import("description/alc.zig");
+pub const sequent_search = @import("deductive/sequent_search.zig");
+pub const abductive_industrial = @import("abductive/industrial.zig");
 
 pub const Lit = lit.Lit;
 pub const Var = lit.Var;
@@ -250,6 +257,13 @@ test {
     _ = paraconsistent;
     _ = syllogistic;
     _ = default_logic;
+    _ = intuitionistic;
+    _ = linear;
+    _ = epistemic_deontic;
+    _ = probabilistic;
+    _ = alc;
+    _ = sequent_search;
+    _ = abductive_industrial;
 }
 
 test "end-to-end tautology a|!a" {
