@@ -87,7 +87,7 @@ pub const systems = [_]System{
     .{ .id = "informal-arg", .name = "Informal argument structure", .family = .informal, .maturity = .fragment, .module = "informal/argument", .notes = "premises conclusion schemes" },
     .{ .id = "intuitionistic-prop", .name = "Intuitionistic propositional", .family = .constructive, .maturity = .fragment, .module = "constructive/intuitionistic", .notes = "finite Kripke; LEM countermodel" },
     .{ .id = "linear-logic", .name = "Linear logic ILL", .family = .substructural, .maturity = .fragment, .module = "substructural/linear", .notes = "⊗ ⊸ & ⊕ ! + resource bags" },
-    .{ .id = "relevance-r", .name = "Relevance logic R", .family = .substructural, .maturity = .documented, .module = "—", .notes = "planned" },
+    .{ .id = "relevance-r", .name = "Relevance logic R", .family = .substructural, .maturity = .fragment, .module = "substructural/relevance", .notes = "variable-sharing + fusion; rejects positive paradox" },
     .{ .id = "default-logic", .name = "Default / nonmonotonic", .family = .nonmonotonic, .maturity = .fragment, .module = "nonmonotonic/default", .notes = "Reiter extensions ≤12 defaults" },
     .{ .id = "probabilistic", .name = "Probabilistic logic", .family = .probabilistic, .maturity = .fragment, .module = "probabilistic/prob", .notes = "independence eval + Fréchet bounds" },
     .{ .id = "markov-logic", .name = "Markov logic networks", .family = .probabilistic, .maturity = .fragment, .module = "probabilistic/markov", .notes = "weighted worlds + marginals ≤12 atoms" },
@@ -174,6 +174,14 @@ test "registry has natded fragment" {
     var has = false;
     for (systems) |s| {
         if (std.mem.eql(u8, s.id, "natded") and s.maturity == .fragment) has = true;
+    }
+    try std.testing.expect(has);
+}
+
+test "registry relevance fragment" {
+    var has = false;
+    for (systems) |s| {
+        if (std.mem.eql(u8, s.id, "relevance-r") and s.maturity == .fragment) has = true;
     }
     try std.testing.expect(has);
 }
