@@ -1,39 +1,49 @@
 # logic-zig status
 
-**Version:** 0.23.0  
+**Version:** 0.24.0  
 **North star:** universal logic library in Zig ([`docs/UNIVERSAL.md`](docs/UNIVERSAL.md)).
 
 ## Climb gates
 
 ```sh
 zig build test && zig build
-./zig-out/bin/logic-zig doctor taxonomy giants edge-suite trust-report api-info
+./zig-out/bin/logic-zig doctor
+./zig-out/bin/logic-zig taxonomy
+./zig-out/bin/logic-zig giants
+./zig-out/bin/logic-zig edge-suite
+./zig-out/bin/logic-zig trust-report
 ./zig-out/bin/logic-hwmcc golden
 ```
 
-## v0.23 depth attack
+## Zig-side residual closure (v0.24)
 
-| Module | Role |
-|--------|------|
-| `modal/cert` | Validity + countermodel **certificates** with independent checkers + mutation test |
-| `description/shiq_tableau` | ALC/SHIQ **tableau with subset blocking** |
-| `probabilistic/lifted_mln` | **Lifted MLN** — FO weighted formulas → exhaustive grounding |
-| `type_theory/hol_resolution` | **HOL resolution loop** — binary resolve + factor; refutes `{P},{¬P}` and chains |
+| Residual | Module | Status |
+|----------|--------|--------|
+| Pairwise blocking + ≥n | `description/pairwise` | **fragment** |
+| HO pattern unification | `type_theory/huet` | **fragment** |
+| WPLL objective | `probabilistic/wpll` | **fragment** |
+| Modal forcing traces | `modal/trace` | **fragment** |
+| KLM + ranked countermodels | `nonmonotonic/klm` | **fragment** |
+| MV fixture schema (Lean differential) | `manyvalued/fixtures` | **fragment** |
+| Lean oracle contract | `docs/LEAN_ORACLE.md` | documented |
 
-## Platform spine (cumulative)
+## What remains outside pure Zig `main`
 
-Engines: CDCL, BMC/k-ind/PDR/klive, IPASIR, DRAT, taxonomy.  
-Fragments: ND, sequent, focusing, abduction ladder, IPC, linear, relevance, K–S5 decision + certs, epistemic/deontic, fuzzy/LP, MLN + lifted, ALC/SHIQ + blocking tableau, HOL micro + resolution, categorical, syllogistic, defaults.
+These need **external processes**, not more library spines:
 
-## Residuals
+| Item | Why |
+|------|-----|
+| Issue **#3** Lean↔Zig fixtures | Requires pinned Lean 4 + `lake build` + CI nanoda; Zig schema is ready |
+| Issue **#5** museum Lean frame proofs | Requires Lean formalization of frame conditions |
+| Issue **#6** upstream contributions | Human upstream PR loop (Aristotle/Lean projects) |
+| PR **#2** museum draft | Rebase onto current `main` + evidence gates |
+| Industrial parity Kissat/Z3/Vampire | Scoreboard only; never claimed |
 
-| Ambition | Now |
-|----------|-----|
-| Modal Lean formalization | Zig certs only |
-| Full SHIQ (Q/H) expansion + pairwise blocking | Subset blocking + ALC rules |
-| KBMC / WPLL lifted inference | Exhaustive ground ≤ domain 4 |
-| Huet HO unification | Rigid-head / prop-HO resolution |
+## Platform (complete for admitted fragments)
 
-Cite: [`CITATION.cff`](CITATION.cff). Graph: [`GRAPH.md`](GRAPH.md).
+**Engines:** CDCL, BMC/k-ind/PDR/klive, IPASIR, DRAT, taxonomy.  
+**Fragments:** ND, sequent, focusing, search, abduction ladder, IPC, linear, relevance, K–S5 + certs + traces, epistemic/deontic, fuzzy/LP + fixtures, MLN + lifted + WPLL, ALC/SHIQ + subset/pairwise blocking, HOL + resolution + pattern unify, categorical, syllogistic, defaults, KLM countermodels.
+
+Cite: [`CITATION.cff`](CITATION.cff). Graph: [`GRAPH.md`](GRAPH.md). Lean: [`docs/LEAN_ORACLE.md`](docs/LEAN_ORACLE.md).
 
 https://github.com/SMC17/logic-zig
