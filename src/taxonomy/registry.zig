@@ -62,6 +62,7 @@ pub const systems = [_]System{
     .{ .id = "prop-classical", .name = "Classical propositional logic", .family = .classical_prop, .maturity = .engine, .module = "sat/ir", .notes = "ExprPool + Tseitin + CDCL" },
     .{ .id = "natded", .name = "Natural deduction (Fitch)", .family = .classical_prop, .maturity = .fragment, .module = "deductive/natded", .notes = "assume →I/E ∧I/E ¬E ⊥E; checked proof object" },
     .{ .id = "sequent-lk", .name = "Sequent calculus LK", .family = .classical_prop, .maturity = .fragment, .module = "deductive/sequent", .notes = "Γ ⊢ Δ rules + checked proof nodes" },
+    .{ .id = "sequent-search", .name = "Automated sequent search", .family = .classical_prop, .maturity = .fragment, .module = "deductive/sequent_search", .notes = "backward-chaining invertible rules, depth-bounded" },
     .{ .id = "sat-cdcl", .name = "CDCL SAT", .family = .computational_sat, .maturity = .engine, .module = "sat/solver", .notes = "2WL VSIDS LBD portfolio preprocess vivify" },
     .{ .id = "sat-ipasir", .name = "IPASIR embedding", .family = .computational_sat, .maturity = .engine, .module = "sat/ipasir", .notes = "partial callbacks documented" },
     .{ .id = "smt-bv", .name = "QF_BV bit-blast", .family = .computational_smt, .maturity = .fragment, .module = "smt/bv", .notes = "not word-level industrial" },
@@ -83,20 +84,21 @@ pub const systems = [_]System{
     .{ .id = "modal-s4", .name = "Modal S4", .family = .modal_temporal, .maturity = .skeleton, .module = "modal/kripke", .notes = "frame conditions" },
     .{ .id = "tt-mltt-micro", .name = "Martin-Löf type theory (micro)", .family = .type_theory, .maturity = .skeleton, .module = "type_theory/tt", .notes = "contexts judgments identity micro" },
     .{ .id = "informal-arg", .name = "Informal argument structure", .family = .informal, .maturity = .fragment, .module = "informal/argument", .notes = "premises conclusion schemes" },
-    .{ .id = "intuitionistic-prop", .name = "Intuitionistic propositional", .family = .constructive, .maturity = .documented, .module = "—", .notes = "planned" },
-    .{ .id = "linear-logic", .name = "Linear logic", .family = .substructural, .maturity = .documented, .module = "—", .notes = "planned" },
+    .{ .id = "intuitionistic-prop", .name = "Intuitionistic propositional", .family = .constructive, .maturity = .fragment, .module = "constructive/intuitionistic", .notes = "finite Kripke; LEM countermodel" },
+    .{ .id = "linear-logic", .name = "Linear logic ILL", .family = .substructural, .maturity = .fragment, .module = "substructural/linear", .notes = "⊗ ⊸ & ⊕ ! + resource bags" },
     .{ .id = "relevance-r", .name = "Relevance logic R", .family = .substructural, .maturity = .documented, .module = "—", .notes = "planned" },
     .{ .id = "default-logic", .name = "Default / nonmonotonic", .family = .nonmonotonic, .maturity = .fragment, .module = "nonmonotonic/default", .notes = "Reiter extensions ≤12 defaults" },
-    .{ .id = "probabilistic", .name = "Probabilistic logic", .family = .probabilistic, .maturity = .documented, .module = "—", .notes = "planned" },
+    .{ .id = "probabilistic", .name = "Probabilistic logic", .family = .probabilistic, .maturity = .fragment, .module = "probabilistic/prob", .notes = "independence eval + Fréchet bounds" },
     .{ .id = "inductive", .name = "Inductive logic", .family = .inductive_abductive, .maturity = .fragment, .module = "inductive/induction", .notes = "schema + Peano/list datatypes; k-induction remains in circuit/" },
     .{ .id = "abductive", .name = "Abductive reasoning", .family = .inductive_abductive, .maturity = .fragment, .module = "abductive/abduce", .notes = "propositional minimal explanations via CDCL; ≤16 abducibles" },
+    .{ .id = "abductive-industrial", .name = "Industrial abduction", .family = .inductive_abductive, .maturity = .fragment, .module = "abductive/industrial", .notes = "greedy hitting-set + prune; scales past 2^n" },
     .{ .id = "hol", .name = "Higher-order logic", .family = .higher_order, .maturity = .documented, .module = "—", .notes = "planned; external Lean/HOL peers" },
-    .{ .id = "description-al", .name = "Description logic ALC", .family = .description_kr, .maturity = .documented, .module = "—", .notes = "planned" },
+    .{ .id = "description-al", .name = "Description logic ALC", .family = .description_kr, .maturity = .fragment, .module = "description/alc", .notes = "concepts + ∧-expansion tableau clash" },
     .{ .id = "syllogistic", .name = "Aristotelian syllogistic", .family = .historical_term, .maturity = .fragment, .module = "historical/syllogistic", .notes = "24 valid moods × 4 figures" },
     .{ .id = "fuzzy", .name = "Fuzzy / many-valued", .family = .many_valued, .maturity = .fragment, .module = "fuzzy/fuzzy", .notes = "Gödel/product/Łukasiewicz t-norms + Kleene 3-valued" },
     .{ .id = "paraconsistent", .name = "Paraconsistent LP", .family = .many_valued, .maturity = .fragment, .module = "paraconsistent/lp", .notes = "Belnap-Dunn four-valued; explosion fails" },
-    .{ .id = "epistemic", .name = "Epistemic logic", .family = .philosophical, .maturity = .documented, .module = "—", .notes = "planned" },
-    .{ .id = "deontic", .name = "Deontic logic", .family = .philosophical, .maturity = .documented, .module = "—", .notes = "planned" },
+    .{ .id = "epistemic", .name = "Epistemic logic", .family = .philosophical, .maturity = .fragment, .module = "modal/epistemic_deontic", .notes = "multi-agent K_i on Kripke" },
+    .{ .id = "deontic", .name = "Deontic logic", .family = .philosophical, .maturity = .fragment, .module = "modal/epistemic_deontic", .notes = "O/P + serial frame check" },
     .{ .id = "categorical", .name = "Categorical logic / topos", .family = .algebraic_categorical, .maturity = .documented, .module = "—", .notes = "planned" },
 
     // Giants (external)
@@ -139,7 +141,6 @@ pub fn printAll() void {
 test "registry non-empty and has engines" {
     try std.testing.expect(systems.len >= 20);
     try std.testing.expect(countByMaturity(.engine) >= 5);
-    try std.testing.expect(countByMaturity(.documented) >= 5);
     try std.testing.expect(countByMaturity(.external) >= 3);
 }
 
@@ -182,4 +183,19 @@ test "registry v0.19 fragments" {
         if (std.mem.eql(u8, s.id, "default-logic") and s.maturity == .fragment) n += 1;
     }
     try std.testing.expect(n == 4);
+}
+
+test "registry v0.20 fragments" {
+    var n: u32 = 0;
+    for (systems) |s| {
+        if (std.mem.eql(u8, s.id, "intuitionistic-prop") and s.maturity == .fragment) n += 1;
+        if (std.mem.eql(u8, s.id, "linear-logic") and s.maturity == .fragment) n += 1;
+        if (std.mem.eql(u8, s.id, "probabilistic") and s.maturity == .fragment) n += 1;
+        if (std.mem.eql(u8, s.id, "description-al") and s.maturity == .fragment) n += 1;
+        if (std.mem.eql(u8, s.id, "epistemic") and s.maturity == .fragment) n += 1;
+        if (std.mem.eql(u8, s.id, "deontic") and s.maturity == .fragment) n += 1;
+        if (std.mem.eql(u8, s.id, "sequent-search") and s.maturity == .fragment) n += 1;
+        if (std.mem.eql(u8, s.id, "abductive-industrial") and s.maturity == .fragment) n += 1;
+    }
+    try std.testing.expect(n == 8);
 }
