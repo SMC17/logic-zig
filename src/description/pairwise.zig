@@ -1,5 +1,5 @@
 //! Pairwise blocking and qualified number-restriction expansion for SHIQ.
-!
+//!
 //! Pairwise blocking (Horrocks/Sattler): node x is blocked by ancestor y when
 //! label(x) ⊆ label(y) and for every R-neighbor x' of x there is an R-neighbor
 //! y' of y with label(x') ⊆ label(y') (and symmetrically for inverses in full SHIQ).
@@ -11,7 +11,6 @@
 const std = @import("std");
 const alc = @import("alc.zig");
 const tab = @import("shiq_tableau.zig");
-const shiq = @import("shiq.zig");
 
 fn labelSubset(small: []const *alc.Concept, big: []const *alc.Concept) bool {
     for (small) |s| {
@@ -30,7 +29,6 @@ fn labelSubset(small: []const *alc.Concept, big: []const *alc.Concept) bool {
 /// Pairwise block: ancestor y blocks x.
 pub fn pairwiseBlocked(t: *const tab.Tableau, x: tab.NodeId, y: tab.NodeId) bool {
     if (!labelSubset(t.nodes.items[x].label.items, t.nodes.items[y].label.items)) return false;
-    // For each edge x --R--> x', need y --R--> y' with label(x') ⊆ label(y')
     for (t.edges.items) |ex| {
         if (ex.from != x) continue;
         var matched = false;
@@ -83,7 +81,7 @@ pub fn expandAtLeast(
     return changed;
 }
 
-/// Clash if ≤n R.C and more than n R-neighbors already typed C (approx: all R-neighbors).
+/// Clash if ≤n R.C and more than n R-neighbors.
 pub fn checkAtMostClash(t: *const tab.Tableau, node: tab.NodeId, n: u32, role: []const u8) bool {
     var count: u32 = 0;
     for (t.edges.items) |e| {
@@ -102,7 +100,6 @@ test "pairwise reduces to subset when no edges" {
     const child = try t.addNode(root);
     try t.addConcept(root, a);
     try t.addConcept(child, a);
-    // child label ⊆ root label, no edges → pairwise holds
     try std.testing.expect(pairwiseBlocked(&t, child, root));
 }
 
