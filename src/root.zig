@@ -89,6 +89,9 @@ pub const shiq = @import("description/shiq.zig");
 pub const markov = @import("probabilistic/markov.zig");
 pub const mus_abduce = @import("abductive/mus.zig");
 pub const relevance = @import("substructural/relevance.zig");
+pub const hol = @import("type_theory/hol.zig");
+pub const categorical = @import("algebraic/categorical.zig");
+pub const modal_normal = @import("modal/normal.zig");
 
 pub const Lit = lit.Lit;
 pub const Var = lit.Var;
@@ -274,6 +277,9 @@ test {
     _ = markov;
     _ = mus_abduce;
     _ = relevance;
+    _ = hol;
+    _ = categorical;
+    _ = modal_normal;
 }
 
 test "end-to-end tautology a|!a" {
