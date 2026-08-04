@@ -96,6 +96,12 @@ pub const modal_cert = @import("modal/cert.zig");
 pub const shiq_tableau = @import("description/shiq_tableau.zig");
 pub const lifted_mln = @import("probabilistic/lifted_mln.zig");
 pub const hol_resolution = @import("type_theory/hol_resolution.zig");
+pub const pairwise = @import("description/pairwise.zig");
+pub const huet = @import("type_theory/huet.zig");
+pub const wpll = @import("probabilistic/wpll.zig");
+pub const modal_trace = @import("modal/trace.zig");
+pub const klm = @import("nonmonotonic/klm.zig");
+pub const mv_fixtures = @import("manyvalued/fixtures.zig");
 
 pub const Lit = lit.Lit;
 pub const Var = lit.Var;
@@ -288,6 +294,12 @@ test {
     _ = shiq_tableau;
     _ = lifted_mln;
     _ = hol_resolution;
+    _ = pairwise;
+    _ = huet;
+    _ = wpll;
+    _ = modal_trace;
+    _ = klm;
+    _ = mv_fixtures;
 }
 
 test "end-to-end tautology a|!a" {
