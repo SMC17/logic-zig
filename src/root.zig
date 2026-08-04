@@ -73,6 +73,10 @@ pub const abductive = @import("abductive/abduce.zig");
 pub const inductive = @import("inductive/induction.zig");
 pub const fuzzy = @import("fuzzy/fuzzy.zig");
 pub const natded = @import("deductive/natded.zig");
+pub const sequent = @import("deductive/sequent.zig");
+pub const paraconsistent = @import("paraconsistent/lp.zig");
+pub const syllogistic = @import("historical/syllogistic.zig");
+pub const default_logic = @import("nonmonotonic/default.zig");
 
 pub const Lit = lit.Lit;
 pub const Var = lit.Var;
@@ -242,6 +246,10 @@ test {
     _ = inductive;
     _ = fuzzy;
     _ = natded;
+    _ = sequent;
+    _ = paraconsistent;
+    _ = syllogistic;
+    _ = default_logic;
 }
 
 test "end-to-end tautology a|!a" {
