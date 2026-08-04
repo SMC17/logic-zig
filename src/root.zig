@@ -92,6 +92,10 @@ pub const relevance = @import("substructural/relevance.zig");
 pub const hol = @import("type_theory/hol.zig");
 pub const categorical = @import("algebraic/categorical.zig");
 pub const modal_normal = @import("modal/normal.zig");
+pub const modal_cert = @import("modal/cert.zig");
+pub const shiq_tableau = @import("description/shiq_tableau.zig");
+pub const lifted_mln = @import("probabilistic/lifted_mln.zig");
+pub const hol_resolution = @import("type_theory/hol_resolution.zig");
 
 pub const Lit = lit.Lit;
 pub const Var = lit.Var;
@@ -280,6 +284,10 @@ test {
     _ = hol;
     _ = categorical;
     _ = modal_normal;
+    _ = modal_cert;
+    _ = shiq_tableau;
+    _ = lifted_mln;
+    _ = hol_resolution;
 }
 
 test "end-to-end tautology a|!a" {
