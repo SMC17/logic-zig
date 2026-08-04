@@ -84,6 +84,10 @@ pub const probabilistic = @import("probabilistic/prob.zig");
 pub const alc = @import("description/alc.zig");
 pub const sequent_search = @import("deductive/sequent_search.zig");
 pub const abductive_industrial = @import("abductive/industrial.zig");
+pub const focusing = @import("deductive/focusing.zig");
+pub const shiq = @import("description/shiq.zig");
+pub const markov = @import("probabilistic/markov.zig");
+pub const mus_abduce = @import("abductive/mus.zig");
 
 pub const Lit = lit.Lit;
 pub const Var = lit.Var;
@@ -264,6 +268,10 @@ test {
     _ = alc;
     _ = sequent_search;
     _ = abductive_industrial;
+    _ = focusing;
+    _ = shiq;
+    _ = markov;
+    _ = mus_abduce;
 }
 
 test "end-to-end tautology a|!a" {
