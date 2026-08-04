@@ -1,6 +1,6 @@
 # logic-zig status
 
-**Version:** 0.19.0  
+**Version:** 0.20.0  
 **North star:** universal logic library in Zig (`docs/UNIVERSAL.md`) — leave no stone unturned; stand on giants; deepen forever.
 
 ## Climb gates
@@ -15,41 +15,29 @@ zig build test && zig build
 ./zig-out/bin/logic-zig api-info
 ```
 
-## Universal platform (v0.19)
+## Universal platform (v0.20)
 
 | Piece | Role |
 |-------|------|
-| `taxonomy.registry` | Named systems × maturity across the master taxonomy |
-| `informal/argument` | Premise/conclusion/schemes structure |
-| `type_theory/tt` | MLTT micro kernel (check) |
-| `modal/kripke` | Finite-frame K / diamond-box |
-| `abductive/abduce` | Propositional minimal explanations via CDCL |
-| `inductive/induction` | Math induction schema + Peano/list datatypes |
-| `fuzzy/fuzzy` | Many-valued / fuzzy t-norms + Kleene |
-| `deductive/natded` | Fitch-style natural deduction |
-| `deductive/sequent` | LK sequent calculus (prop fragment) |
-| `paraconsistent/lp` | Belnap-Dunn / LP four-valued (explosion fails) |
-| `historical/syllogistic` | Aristotelian moods × figures (24 valid) |
-| `nonmonotonic/default` | Reiter default logic extensions (≤12 defaults) |
-| `bridge/giants` | Discover CaDiCaL, Kissat, Z3, ABC, Vampire, Lean, … |
-| `docs/UNIVERSAL.md` | Destination + non-fiction rules |
+| `constructive/intuitionistic` | IPC finite Kripke; LEM fails |
+| `substructural/linear` | ILL connectives + resource accounting |
+| `modal/epistemic_deontic` | Multi-agent K_i + deontic O/P |
+| `probabilistic/prob` | Independence eval + Fréchet bounds |
+| `description/alc` | ALC concepts + tableau clash spine |
+| `deductive/sequent_search` | Backward-chaining LK proof search |
+| `abductive/industrial` | Hitting-set abduction past ≤16 |
+| (+ all v0.18–0.19 spines) | ND, sequent, fuzzy, LP, syllogistic, defaults, … |
 
-## Computational depth (unchanged spine)
-
-SAT/MC/SMT/FOL industrial program: `docs/INDUSTRIAL.md`  
-Taxonomy map: `docs/TAXONOMY_COVERAGE.md`
-
-## Residuals (honest — ambition ≠ achievement)
+## Residuals (honest)
 
 | Ambition | Now |
 |----------|-----|
-| Universal coverage of taxonomy | Registry + many **fragment** spines; industrial depth still SAT/MC-centric |
-| Informal argument analysis | Structure OK; no NLP / full schemes library |
-| Full type theory / proof assistant | Micro checker only |
-| Beat Kissat/ABC/Z3/Vampire | Giants discover + CaDiCaL scoreboard; **no parity claim** |
-| Industrial-scale abduction | ≤16 abducibles exhaustive |
-| Statistical / Bayesian induction | Mathematical induction only |
-| Full sequent proof search | Checked proof objects; no focusing automation yet |
-| Prioritized defaults / ASP | Reiter extensions only |
+| Full IPC proof search | Kripke eval only |
+| Focusing linear logic prover | Resource bag + AST |
+| Dynamic epistemic / STIT | Static multi-agent frames |
+| Markov logic / probabilistic programming | Independence + Fréchet |
+| SHIQ / OWL reasoner | ALC ∧-expansion + clash |
+| Industrial focusing / inverse method | Depth-bounded invertible rules |
+| Complete minimal hitting-set abduction | Greedy cores + prune |
 
 https://github.com/SMC17/logic-zig
