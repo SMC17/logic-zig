@@ -86,12 +86,12 @@ pub const systems = [_]System{
     .{ .id = "relevance-r", .name = "Relevance logic R", .family = .substructural, .maturity = .documented, .module = "—", .notes = "planned" },
     .{ .id = "default-logic", .name = "Default / nonmonotonic", .family = .nonmonotonic, .maturity = .documented, .module = "—", .notes = "planned" },
     .{ .id = "probabilistic", .name = "Probabilistic logic", .family = .probabilistic, .maturity = .documented, .module = "—", .notes = "planned" },
-    .{ .id = "inductive", .name = "Inductive logic", .family = .inductive_abductive, .maturity = .documented, .module = "—", .notes = "planned" },
-    .{ .id = "abductive", .name = "Abductive reasoning", .family = .inductive_abductive, .maturity = .documented, .module = "—", .notes = "planned" },
+    .{ .id = "inductive", .name = "Inductive logic", .family = .inductive_abductive, .maturity = .fragment, .module = "inductive/induction", .notes = "schema + Peano/list datatypes; k-induction remains in circuit/" },
+    .{ .id = "abductive", .name = "Abductive reasoning", .family = .inductive_abductive, .maturity = .fragment, .module = "abductive/abduce", .notes = "propositional minimal explanations via CDCL; ≤16 abducibles" },
     .{ .id = "hol", .name = "Higher-order logic", .family = .higher_order, .maturity = .documented, .module = "—", .notes = "planned; external Lean/HOL peers" },
     .{ .id = "description-al", .name = "Description logic ALC", .family = .description_kr, .maturity = .documented, .module = "—", .notes = "planned" },
     .{ .id = "syllogistic", .name = "Aristotelian syllogistic", .family = .historical_term, .maturity = .documented, .module = "—", .notes = "planned" },
-    .{ .id = "fuzzy", .name = "Fuzzy / many-valued", .family = .many_valued, .maturity = .documented, .module = "—", .notes = "planned" },
+    .{ .id = "fuzzy", .name = "Fuzzy / many-valued", .family = .many_valued, .maturity = .fragment, .module = "fuzzy/fuzzy", .notes = "Gödel/product/Łukasiewicz t-norms + Kleene 3-valued" },
     .{ .id = "paraconsistent", .name = "Paraconsistent", .family = .many_valued, .maturity = .documented, .module = "—", .notes = "planned" },
     .{ .id = "epistemic", .name = "Epistemic logic", .family = .philosophical, .maturity = .documented, .module = "—", .notes = "planned" },
     .{ .id = "deontic", .name = "Deontic logic", .family = .philosophical, .maturity = .documented, .module = "—", .notes = "planned" },
@@ -149,4 +149,16 @@ test "registry has informal and type theory rows" {
         if (std.mem.eql(u8, s.id, "tt-mltt-micro")) has_tt = true;
     }
     try std.testing.expect(has_inf and has_tt);
+}
+
+test "registry has inductive abductive fuzzy fragments" {
+    var has_ind = false;
+    var has_abd = false;
+    var has_fuz = false;
+    for (systems) |s| {
+        if (std.mem.eql(u8, s.id, "inductive") and s.maturity == .fragment) has_ind = true;
+        if (std.mem.eql(u8, s.id, "abductive") and s.maturity == .fragment) has_abd = true;
+        if (std.mem.eql(u8, s.id, "fuzzy") and s.maturity == .fragment) has_fuz = true;
+    }
+    try std.testing.expect(has_ind and has_abd and has_fuz);
 }
