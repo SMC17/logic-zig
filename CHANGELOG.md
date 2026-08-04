@@ -5,6 +5,27 @@ All notable changes to **logic-zig** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/).
 
+## [0.18.0] — 2026-08-04
+
+### Modes of reasoning: induction · abduction · fuzzy · natural deduction
+
+- **`abductive/abduce`**: propositional abduction — minimal explanations H such that
+  T ∪ H ⊨ O and consistent; CDCL oracle; ≤16 abducibles exhaustive fragment
+- **`inductive/induction`**: mathematical induction schema + inductive datatypes
+  (Peano, List); explicit separation from temporal k-induction
+- **`fuzzy/fuzzy`**: many-valued / fuzzy propositional eval — Gödel, product,
+  Łukasiewicz t-norms + Kleene 3-valued
+- **`deductive/natded`**: Fitch-style natural deduction fragment (assume, →I/E,
+  ∧I/E, ¬E, ⊥E) — strengthens formal deduction beyond SAT alone
+- Registry: inductive / abductive / fuzzy raised `documented` → **fragment**
+- STATUS v0.18.0; TAXONOMY_COVERAGE §3 / §8 updated
+
+### Residual
+
+- Industrial-scale abduction (hitting-set / iterative MUS) not yet
+- Statistical / Bayesian induction open
+- ND is a checked proof object, not a full sequent calculus or proof search
+
 ## [0.17.0] — 2026-07-17
 
 ### Universal logic platform (destination, not finished completeness)
