@@ -60,6 +60,7 @@ pub const System = struct {
 pub const systems = [_]System{
     // Classical / computational core
     .{ .id = "prop-classical", .name = "Classical propositional logic", .family = .classical_prop, .maturity = .engine, .module = "sat/ir", .notes = "ExprPool + Tseitin + CDCL" },
+    .{ .id = "natded", .name = "Natural deduction (Fitch)", .family = .classical_prop, .maturity = .fragment, .module = "deductive/natded", .notes = "assume →I/E ∧I/E ¬E ⊥E; checked proof object" },
     .{ .id = "sat-cdcl", .name = "CDCL SAT", .family = .computational_sat, .maturity = .engine, .module = "sat/solver", .notes = "2WL VSIDS LBD portfolio preprocess vivify" },
     .{ .id = "sat-ipasir", .name = "IPASIR embedding", .family = .computational_sat, .maturity = .engine, .module = "sat/ipasir", .notes = "partial callbacks documented" },
     .{ .id = "smt-bv", .name = "QF_BV bit-blast", .family = .computational_smt, .maturity = .fragment, .module = "smt/bv", .notes = "not word-level industrial" },
@@ -161,4 +162,12 @@ test "registry has inductive abductive fuzzy fragments" {
         if (std.mem.eql(u8, s.id, "fuzzy") and s.maturity == .fragment) has_fuz = true;
     }
     try std.testing.expect(has_ind and has_abd and has_fuz);
+}
+
+test "registry has natded fragment" {
+    var has = false;
+    for (systems) |s| {
+        if (std.mem.eql(u8, s.id, "natded") and s.maturity == .fragment) has = true;
+    }
+    try std.testing.expect(has);
 }
