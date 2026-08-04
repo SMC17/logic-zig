@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "logic-zig"
+type: software
+authors:
+  - family-names: Collins
+    given-names: Sean
+    email: seancollins2027@u.northwestern.edu
+repository-code: "https://github.com/SMC17/logic-zig"
+url: "https://github.com/SMC17/logic-zig"
+abstract: >-
+  Universal logic library in pure Zig: industrial SAT/model-checking kernels
+  plus a living taxonomy of classical, constructive, modal, fuzzy, probabilistic,
+  description-logic, and abductive systems with honest maturity tracking.
+keywords:
+  - logic
+  - sat
+  - model-checking
+  - zig
+  - automated-reasoning
+  - nonclassical-logic
+license: Apache-2.0
+version: "0.22.0"
+date-released: "2026-08-04"
