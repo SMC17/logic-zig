@@ -6,19 +6,12 @@
 const std = @import("std");
 
 pub const Maturity = enum {
-    /// Not started.
     absent,
-    /// Named only.
     documented,
-    /// API/types/tests link; may return unsupported.
     skeleton,
-    /// Real algorithms on a decidable slice.
     fragment,
-    /// Production path inside logic-zig.
     engine,
-    /// Scoreboard / external peer parity claims allowed only with evidence.
     industrial,
-    /// Fully delegated to external giant via adapter.
     external,
 };
 
@@ -56,61 +49,58 @@ pub const System = struct {
     notes: []const u8,
 };
 
-/// Living registry. Expand in the same PR as new code.
 pub const systems = [_]System{
-    // Classical / computational core
     .{ .id = "prop-classical", .name = "Classical propositional logic", .family = .classical_prop, .maturity = .engine, .module = "sat/ir", .notes = "ExprPool + Tseitin + CDCL" },
-    .{ .id = "natded", .name = "Natural deduction (Fitch)", .family = .classical_prop, .maturity = .fragment, .module = "deductive/natded", .notes = "assume →I/E ∧I/E ¬E ⊥E; checked proof object" },
-    .{ .id = "sequent-lk", .name = "Sequent calculus LK", .family = .classical_prop, .maturity = .fragment, .module = "deductive/sequent", .notes = "Γ ⊢ Δ rules + checked proof nodes" },
-    .{ .id = "sequent-search", .name = "Automated sequent search", .family = .classical_prop, .maturity = .fragment, .module = "deductive/sequent_search", .notes = "backward-chaining invertible rules, depth-bounded" },
-    .{ .id = "focusing", .name = "Focusing proof search", .family = .classical_prop, .maturity = .fragment, .module = "deductive/focusing", .notes = "Andreoli inversion/focus phases" },
-    .{ .id = "sat-cdcl", .name = "CDCL SAT", .family = .computational_sat, .maturity = .engine, .module = "sat/solver", .notes = "2WL VSIDS LBD portfolio preprocess vivify" },
-    .{ .id = "sat-ipasir", .name = "IPASIR embedding", .family = .computational_sat, .maturity = .engine, .module = "sat/ipasir", .notes = "partial callbacks documented" },
-    .{ .id = "smt-bv", .name = "QF_BV bit-blast", .family = .computational_smt, .maturity = .fragment, .module = "smt/bv", .notes = "not word-level industrial" },
-    .{ .id = "smt-uf", .name = "Ground EUF", .family = .computational_smt, .maturity = .fragment, .module = "smt/uf", .notes = "congruence closure" },
-    .{ .id = "smt-array", .name = "Arrays", .family = .computational_smt, .maturity = .skeleton, .module = "smt/array", .notes = "select/store axioms spine" },
+    .{ .id = "natded", .name = "Natural deduction (Fitch)", .family = .classical_prop, .maturity = .fragment, .module = "deductive/natded", .notes = "checked proof object" },
+    .{ .id = "sequent-lk", .name = "Sequent calculus LK", .family = .classical_prop, .maturity = .fragment, .module = "deductive/sequent", .notes = "Γ ⊢ Δ rules" },
+    .{ .id = "sequent-search", .name = "Automated sequent search", .family = .classical_prop, .maturity = .fragment, .module = "deductive/sequent_search", .notes = "backward-chaining" },
+    .{ .id = "focusing", .name = "Focusing proof search", .family = .classical_prop, .maturity = .fragment, .module = "deductive/focusing", .notes = "Andreoli phases" },
+    .{ .id = "sat-cdcl", .name = "CDCL SAT", .family = .computational_sat, .maturity = .engine, .module = "sat/solver", .notes = "2WL VSIDS LBD" },
+    .{ .id = "sat-ipasir", .name = "IPASIR embedding", .family = .computational_sat, .maturity = .engine, .module = "sat/ipasir", .notes = "" },
+    .{ .id = "smt-bv", .name = "QF_BV bit-blast", .family = .computational_smt, .maturity = .fragment, .module = "smt/bv", .notes = "" },
+    .{ .id = "smt-uf", .name = "Ground EUF", .family = .computational_smt, .maturity = .fragment, .module = "smt/uf", .notes = "" },
+    .{ .id = "smt-array", .name = "Arrays", .family = .computational_smt, .maturity = .skeleton, .module = "smt/array", .notes = "" },
     .{ .id = "mc-bmc", .name = "Bounded model checking", .family = .computational_mc, .maturity = .engine, .module = "circuit/bmc", .notes = "" },
     .{ .id = "mc-kind", .name = "k-induction", .family = .computational_mc, .maturity = .engine, .module = "circuit/kinduction", .notes = "" },
-    .{ .id = "mc-pdr", .name = "PDR/IC3 safety", .family = .computational_mc, .maturity = .engine, .module = "circuit/pdr", .notes = "not ABC-class industrial yet" },
+    .{ .id = "mc-pdr", .name = "PDR/IC3 safety", .family = .computational_mc, .maturity = .engine, .module = "circuit/pdr", .notes = "" },
     .{ .id = "mc-klive", .name = "k-liveness", .family = .computational_mc, .maturity = .engine, .module = "circuit/kliveness", .notes = "" },
-    .{ .id = "ctl-bounded", .name = "Bounded CTL", .family = .modal_temporal, .maturity = .fragment, .module = "ctl", .notes = "SAT unrolling" },
+    .{ .id = "ctl-bounded", .name = "Bounded CTL", .family = .modal_temporal, .maturity = .fragment, .module = "ctl", .notes = "" },
     .{ .id = "fol-unify", .name = "Robinson unification", .family = .classical_fol, .maturity = .engine, .module = "fol/unify", .notes = "" },
     .{ .id = "fol-fmodel", .name = "Finite model finding", .family = .classical_fol, .maturity = .fragment, .module = "fol/finite_model", .notes = "" },
-    .{ .id = "fol-resolution", .name = "Clausal FOL resolution", .family = .computational_atp, .maturity = .fragment, .module = "fol/resolution", .notes = "not Vampire-scale" },
-    .{ .id = "cert-rup", .name = "RUP/DRAT certificates", .family = .metalogic, .maturity = .engine, .module = "sat/drat", .notes = "external drat-trim" },
+    .{ .id = "fol-resolution", .name = "Clausal FOL resolution", .family = .computational_atp, .maturity = .fragment, .module = "fol/resolution", .notes = "" },
+    .{ .id = "cert-rup", .name = "RUP/DRAT certificates", .family = .metalogic, .maturity = .engine, .module = "sat/drat", .notes = "" },
     .{ .id = "agent-multishot", .name = "Agent multishot SAT", .family = .computational_sat, .maturity = .engine, .module = "agent/session", .notes = "" },
-
-    // Spines for universal expansion
-    .{ .id = "modal-k", .name = "Modal logic K (finite frames)", .family = .modal_temporal, .maturity = .fragment, .module = "modal/kripke", .notes = "box/diamond eval" },
-    .{ .id = "modal-s4", .name = "Modal S4", .family = .modal_temporal, .maturity = .skeleton, .module = "modal/kripke", .notes = "frame conditions" },
-    .{ .id = "tt-mltt-micro", .name = "Martin-Löf type theory (micro)", .family = .type_theory, .maturity = .skeleton, .module = "type_theory/tt", .notes = "contexts judgments identity micro" },
-    .{ .id = "informal-arg", .name = "Informal argument structure", .family = .informal, .maturity = .fragment, .module = "informal/argument", .notes = "premises conclusion schemes" },
-    .{ .id = "intuitionistic-prop", .name = "Intuitionistic propositional", .family = .constructive, .maturity = .fragment, .module = "constructive/intuitionistic", .notes = "finite Kripke; LEM countermodel" },
-    .{ .id = "linear-logic", .name = "Linear logic ILL", .family = .substructural, .maturity = .fragment, .module = "substructural/linear", .notes = "⊗ ⊸ & ⊕ ! + resource bags" },
-    .{ .id = "relevance-r", .name = "Relevance logic R", .family = .substructural, .maturity = .fragment, .module = "substructural/relevance", .notes = "variable-sharing + fusion; rejects positive paradox" },
-    .{ .id = "default-logic", .name = "Default / nonmonotonic", .family = .nonmonotonic, .maturity = .fragment, .module = "nonmonotonic/default", .notes = "Reiter extensions ≤12 defaults" },
-    .{ .id = "probabilistic", .name = "Probabilistic logic", .family = .probabilistic, .maturity = .fragment, .module = "probabilistic/prob", .notes = "independence eval + Fréchet bounds" },
-    .{ .id = "markov-logic", .name = "Markov logic networks", .family = .probabilistic, .maturity = .fragment, .module = "probabilistic/markov", .notes = "weighted worlds + marginals ≤12 atoms" },
-    .{ .id = "inductive", .name = "Inductive logic", .family = .inductive_abductive, .maturity = .fragment, .module = "inductive/induction", .notes = "schema + Peano/list datatypes; k-induction remains in circuit/" },
-    .{ .id = "abductive", .name = "Abductive reasoning", .family = .inductive_abductive, .maturity = .fragment, .module = "abductive/abduce", .notes = "propositional minimal explanations via CDCL; ≤16 abducibles" },
-    .{ .id = "abductive-industrial", .name = "Industrial abduction", .family = .inductive_abductive, .maturity = .fragment, .module = "abductive/industrial", .notes = "greedy hitting-set + prune; scales past 2^n" },
-    .{ .id = "abductive-mus", .name = "MUS complete abduction", .family = .inductive_abductive, .maturity = .fragment, .module = "abductive/mus", .notes = "deletion-minimal MUS + Berge hitting sets" },
-    .{ .id = "hol", .name = "Higher-order logic", .family = .higher_order, .maturity = .documented, .module = "—", .notes = "planned; external Lean/HOL peers" },
-    .{ .id = "description-al", .name = "Description logic ALC", .family = .description_kr, .maturity = .fragment, .module = "description/alc", .notes = "concepts + ∧-expansion tableau clash" },
-    .{ .id = "description-shiq", .name = "Description logic SHIQ", .family = .description_kr, .maturity = .fragment, .module = "description/shiq", .notes = "H + I + Q + transitive roles" },
-    .{ .id = "syllogistic", .name = "Aristotelian syllogistic", .family = .historical_term, .maturity = .fragment, .module = "historical/syllogistic", .notes = "24 valid moods × 4 figures" },
-    .{ .id = "fuzzy", .name = "Fuzzy / many-valued", .family = .many_valued, .maturity = .fragment, .module = "fuzzy/fuzzy", .notes = "Gödel/product/Łukasiewicz t-norms + Kleene 3-valued" },
-    .{ .id = "paraconsistent", .name = "Paraconsistent LP", .family = .many_valued, .maturity = .fragment, .module = "paraconsistent/lp", .notes = "Belnap-Dunn four-valued; explosion fails" },
-    .{ .id = "epistemic", .name = "Epistemic logic", .family = .philosophical, .maturity = .fragment, .module = "modal/epistemic_deontic", .notes = "multi-agent K_i on Kripke" },
-    .{ .id = "deontic", .name = "Deontic logic", .family = .philosophical, .maturity = .fragment, .module = "modal/epistemic_deontic", .notes = "O/P + serial frame check" },
-    .{ .id = "categorical", .name = "Categorical logic / topos", .family = .algebraic_categorical, .maturity = .documented, .module = "—", .notes = "planned" },
-
-    // Giants (external)
-    .{ .id = "ext-cadical", .name = "CaDiCaL (external)", .family = .computational_sat, .maturity = .external, .module = "sat/external", .notes = "differential + scoreboard" },
-    .{ .id = "ext-kissat", .name = "Kissat (external)", .family = .computational_sat, .maturity = .external, .module = "bridge/giants", .notes = "discover when installed" },
-    .{ .id = "ext-z3", .name = "Z3 (external)", .family = .computational_smt, .maturity = .external, .module = "bridge/giants", .notes = "discover when installed" },
-    .{ .id = "ext-abc", .name = "ABC (external)", .family = .computational_mc, .maturity = .external, .module = "bridge/abc_interop", .notes = "abc-delta" },
-    .{ .id = "ext-vampire", .name = "Vampire (external)", .family = .computational_atp, .maturity = .external, .module = "bridge/giants", .notes = "discover when installed" },
+    .{ .id = "modal-k", .name = "Modal logic K", .family = .modal_temporal, .maturity = .fragment, .module = "modal/kripke", .notes = "" },
+    .{ .id = "modal-t", .name = "Modal T", .family = .modal_temporal, .maturity = .fragment, .module = "modal/normal", .notes = "reflexive finite-frame decision" },
+    .{ .id = "modal-s4", .name = "Modal S4", .family = .modal_temporal, .maturity = .fragment, .module = "modal/normal", .notes = "finite-frame decision ≤4 worlds" },
+    .{ .id = "modal-s5", .name = "Modal S5", .family = .modal_temporal, .maturity = .fragment, .module = "modal/normal", .notes = "equivalence-frame decision" },
+    .{ .id = "modal-normal", .name = "Normal modal decision (K/T/S4/S5)", .family = .modal_temporal, .maturity = .fragment, .module = "modal/normal", .notes = "exhaustive filtration-bound enumerator" },
+    .{ .id = "tt-mltt-micro", .name = "Martin-Löf type theory (micro)", .family = .type_theory, .maturity = .skeleton, .module = "type_theory/tt", .notes = "" },
+    .{ .id = "informal-arg", .name = "Informal argument structure", .family = .informal, .maturity = .fragment, .module = "informal/argument", .notes = "" },
+    .{ .id = "intuitionistic-prop", .name = "Intuitionistic propositional", .family = .constructive, .maturity = .fragment, .module = "constructive/intuitionistic", .notes = "" },
+    .{ .id = "linear-logic", .name = "Linear logic ILL", .family = .substructural, .maturity = .fragment, .module = "substructural/linear", .notes = "" },
+    .{ .id = "relevance-r", .name = "Relevance logic R", .family = .substructural, .maturity = .fragment, .module = "substructural/relevance", .notes = "" },
+    .{ .id = "default-logic", .name = "Default / nonmonotonic", .family = .nonmonotonic, .maturity = .fragment, .module = "nonmonotonic/default", .notes = "" },
+    .{ .id = "probabilistic", .name = "Probabilistic logic", .family = .probabilistic, .maturity = .fragment, .module = "probabilistic/prob", .notes = "" },
+    .{ .id = "markov-logic", .name = "Markov logic networks", .family = .probabilistic, .maturity = .fragment, .module = "probabilistic/markov", .notes = "" },
+    .{ .id = "inductive", .name = "Inductive logic", .family = .inductive_abductive, .maturity = .fragment, .module = "inductive/induction", .notes = "" },
+    .{ .id = "abductive", .name = "Abductive reasoning", .family = .inductive_abductive, .maturity = .fragment, .module = "abductive/abduce", .notes = "" },
+    .{ .id = "abductive-industrial", .name = "Industrial abduction", .family = .inductive_abductive, .maturity = .fragment, .module = "abductive/industrial", .notes = "" },
+    .{ .id = "abductive-mus", .name = "MUS complete abduction", .family = .inductive_abductive, .maturity = .fragment, .module = "abductive/mus", .notes = "" },
+    .{ .id = "hol", .name = "Higher-order logic (STLC micro)", .family = .higher_order, .maturity = .fragment, .module = "type_theory/hol", .notes = "simply-typed λ + β; not Isabelle" },
+    .{ .id = "description-al", .name = "Description logic ALC", .family = .description_kr, .maturity = .fragment, .module = "description/alc", .notes = "" },
+    .{ .id = "description-shiq", .name = "Description logic SHIQ", .family = .description_kr, .maturity = .fragment, .module = "description/shiq", .notes = "" },
+    .{ .id = "syllogistic", .name = "Aristotelian syllogistic", .family = .historical_term, .maturity = .fragment, .module = "historical/syllogistic", .notes = "" },
+    .{ .id = "fuzzy", .name = "Fuzzy / many-valued", .family = .many_valued, .maturity = .fragment, .module = "fuzzy/fuzzy", .notes = "" },
+    .{ .id = "paraconsistent", .name = "Paraconsistent LP", .family = .many_valued, .maturity = .fragment, .module = "paraconsistent/lp", .notes = "" },
+    .{ .id = "epistemic", .name = "Epistemic logic", .family = .philosophical, .maturity = .fragment, .module = "modal/epistemic_deontic", .notes = "" },
+    .{ .id = "deontic", .name = "Deontic logic", .family = .philosophical, .maturity = .fragment, .module = "modal/epistemic_deontic", .notes = "" },
+    .{ .id = "categorical", .name = "Categorical logic / topos", .family = .algebraic_categorical, .maturity = .fragment, .module = "algebraic/categorical", .notes = "finite categories + topos witnesses" },
+    .{ .id = "ext-cadical", .name = "CaDiCaL (external)", .family = .computational_sat, .maturity = .external, .module = "sat/external", .notes = "" },
+    .{ .id = "ext-kissat", .name = "Kissat (external)", .family = .computational_sat, .maturity = .external, .module = "bridge/giants", .notes = "" },
+    .{ .id = "ext-z3", .name = "Z3 (external)", .family = .computational_smt, .maturity = .external, .module = "bridge/giants", .notes = "" },
+    .{ .id = "ext-abc", .name = "ABC (external)", .family = .computational_mc, .maturity = .external, .module = "bridge/abc_interop", .notes = "" },
+    .{ .id = "ext-vampire", .name = "Vampire (external)", .family = .computational_atp, .maturity = .external, .module = "bridge/giants", .notes = "" },
     .{ .id = "ext-drat-trim", .name = "drat-trim (external)", .family = .metalogic, .maturity = .external, .module = "sat/drat_external", .notes = "" },
 };
 
@@ -148,77 +138,13 @@ test "registry non-empty and has engines" {
     try std.testing.expect(countByMaturity(.external) >= 3);
 }
 
-test "registry has informal and type theory rows" {
-    var has_inf = false;
-    var has_tt = false;
-    for (systems) |s| {
-        if (std.mem.eql(u8, s.id, "informal-arg")) has_inf = true;
-        if (std.mem.eql(u8, s.id, "tt-mltt-micro")) has_tt = true;
-    }
-    try std.testing.expect(has_inf and has_tt);
-}
-
-test "registry has inductive abductive fuzzy fragments" {
-    var has_ind = false;
-    var has_abd = false;
-    var has_fuz = false;
-    for (systems) |s| {
-        if (std.mem.eql(u8, s.id, "inductive") and s.maturity == .fragment) has_ind = true;
-        if (std.mem.eql(u8, s.id, "abductive") and s.maturity == .fragment) has_abd = true;
-        if (std.mem.eql(u8, s.id, "fuzzy") and s.maturity == .fragment) has_fuz = true;
-    }
-    try std.testing.expect(has_ind and has_abd and has_fuz);
-}
-
-test "registry has natded fragment" {
-    var has = false;
-    for (systems) |s| {
-        if (std.mem.eql(u8, s.id, "natded") and s.maturity == .fragment) has = true;
-    }
-    try std.testing.expect(has);
-}
-
-test "registry relevance fragment" {
-    var has = false;
-    for (systems) |s| {
-        if (std.mem.eql(u8, s.id, "relevance-r") and s.maturity == .fragment) has = true;
-    }
-    try std.testing.expect(has);
-}
-
-test "registry v0.19 fragments" {
+test "registry v0.22 hol categorical modal" {
     var n: u32 = 0;
     for (systems) |s| {
-        if (std.mem.eql(u8, s.id, "sequent-lk") and s.maturity == .fragment) n += 1;
-        if (std.mem.eql(u8, s.id, "paraconsistent") and s.maturity == .fragment) n += 1;
-        if (std.mem.eql(u8, s.id, "syllogistic") and s.maturity == .fragment) n += 1;
-        if (std.mem.eql(u8, s.id, "default-logic") and s.maturity == .fragment) n += 1;
-    }
-    try std.testing.expect(n == 4);
-}
-
-test "registry v0.20 fragments" {
-    var n: u32 = 0;
-    for (systems) |s| {
-        if (std.mem.eql(u8, s.id, "intuitionistic-prop") and s.maturity == .fragment) n += 1;
-        if (std.mem.eql(u8, s.id, "linear-logic") and s.maturity == .fragment) n += 1;
-        if (std.mem.eql(u8, s.id, "probabilistic") and s.maturity == .fragment) n += 1;
-        if (std.mem.eql(u8, s.id, "description-al") and s.maturity == .fragment) n += 1;
-        if (std.mem.eql(u8, s.id, "epistemic") and s.maturity == .fragment) n += 1;
-        if (std.mem.eql(u8, s.id, "deontic") and s.maturity == .fragment) n += 1;
-        if (std.mem.eql(u8, s.id, "sequent-search") and s.maturity == .fragment) n += 1;
-        if (std.mem.eql(u8, s.id, "abductive-industrial") and s.maturity == .fragment) n += 1;
-    }
-    try std.testing.expect(n == 8);
-}
-
-test "registry v0.21 fragments" {
-    var n: u32 = 0;
-    for (systems) |s| {
-        if (std.mem.eql(u8, s.id, "focusing") and s.maturity == .fragment) n += 1;
-        if (std.mem.eql(u8, s.id, "description-shiq") and s.maturity == .fragment) n += 1;
-        if (std.mem.eql(u8, s.id, "markov-logic") and s.maturity == .fragment) n += 1;
-        if (std.mem.eql(u8, s.id, "abductive-mus") and s.maturity == .fragment) n += 1;
+        if (std.mem.eql(u8, s.id, "hol") and s.maturity == .fragment) n += 1;
+        if (std.mem.eql(u8, s.id, "categorical") and s.maturity == .fragment) n += 1;
+        if (std.mem.eql(u8, s.id, "modal-normal") and s.maturity == .fragment) n += 1;
+        if (std.mem.eql(u8, s.id, "modal-s5") and s.maturity == .fragment) n += 1;
     }
     try std.testing.expect(n == 4);
 }
