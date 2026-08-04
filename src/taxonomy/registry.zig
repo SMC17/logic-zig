@@ -63,6 +63,7 @@ pub const systems = [_]System{
     .{ .id = "natded", .name = "Natural deduction (Fitch)", .family = .classical_prop, .maturity = .fragment, .module = "deductive/natded", .notes = "assume →I/E ∧I/E ¬E ⊥E; checked proof object" },
     .{ .id = "sequent-lk", .name = "Sequent calculus LK", .family = .classical_prop, .maturity = .fragment, .module = "deductive/sequent", .notes = "Γ ⊢ Δ rules + checked proof nodes" },
     .{ .id = "sequent-search", .name = "Automated sequent search", .family = .classical_prop, .maturity = .fragment, .module = "deductive/sequent_search", .notes = "backward-chaining invertible rules, depth-bounded" },
+    .{ .id = "focusing", .name = "Focusing proof search", .family = .classical_prop, .maturity = .fragment, .module = "deductive/focusing", .notes = "Andreoli inversion/focus phases" },
     .{ .id = "sat-cdcl", .name = "CDCL SAT", .family = .computational_sat, .maturity = .engine, .module = "sat/solver", .notes = "2WL VSIDS LBD portfolio preprocess vivify" },
     .{ .id = "sat-ipasir", .name = "IPASIR embedding", .family = .computational_sat, .maturity = .engine, .module = "sat/ipasir", .notes = "partial callbacks documented" },
     .{ .id = "smt-bv", .name = "QF_BV bit-blast", .family = .computational_smt, .maturity = .fragment, .module = "smt/bv", .notes = "not word-level industrial" },
@@ -89,11 +90,14 @@ pub const systems = [_]System{
     .{ .id = "relevance-r", .name = "Relevance logic R", .family = .substructural, .maturity = .documented, .module = "—", .notes = "planned" },
     .{ .id = "default-logic", .name = "Default / nonmonotonic", .family = .nonmonotonic, .maturity = .fragment, .module = "nonmonotonic/default", .notes = "Reiter extensions ≤12 defaults" },
     .{ .id = "probabilistic", .name = "Probabilistic logic", .family = .probabilistic, .maturity = .fragment, .module = "probabilistic/prob", .notes = "independence eval + Fréchet bounds" },
+    .{ .id = "markov-logic", .name = "Markov logic networks", .family = .probabilistic, .maturity = .fragment, .module = "probabilistic/markov", .notes = "weighted worlds + marginals ≤12 atoms" },
     .{ .id = "inductive", .name = "Inductive logic", .family = .inductive_abductive, .maturity = .fragment, .module = "inductive/induction", .notes = "schema + Peano/list datatypes; k-induction remains in circuit/" },
     .{ .id = "abductive", .name = "Abductive reasoning", .family = .inductive_abductive, .maturity = .fragment, .module = "abductive/abduce", .notes = "propositional minimal explanations via CDCL; ≤16 abducibles" },
     .{ .id = "abductive-industrial", .name = "Industrial abduction", .family = .inductive_abductive, .maturity = .fragment, .module = "abductive/industrial", .notes = "greedy hitting-set + prune; scales past 2^n" },
+    .{ .id = "abductive-mus", .name = "MUS complete abduction", .family = .inductive_abductive, .maturity = .fragment, .module = "abductive/mus", .notes = "deletion-minimal MUS + Berge hitting sets" },
     .{ .id = "hol", .name = "Higher-order logic", .family = .higher_order, .maturity = .documented, .module = "—", .notes = "planned; external Lean/HOL peers" },
     .{ .id = "description-al", .name = "Description logic ALC", .family = .description_kr, .maturity = .fragment, .module = "description/alc", .notes = "concepts + ∧-expansion tableau clash" },
+    .{ .id = "description-shiq", .name = "Description logic SHIQ", .family = .description_kr, .maturity = .fragment, .module = "description/shiq", .notes = "H + I + Q + transitive roles" },
     .{ .id = "syllogistic", .name = "Aristotelian syllogistic", .family = .historical_term, .maturity = .fragment, .module = "historical/syllogistic", .notes = "24 valid moods × 4 figures" },
     .{ .id = "fuzzy", .name = "Fuzzy / many-valued", .family = .many_valued, .maturity = .fragment, .module = "fuzzy/fuzzy", .notes = "Gödel/product/Łukasiewicz t-norms + Kleene 3-valued" },
     .{ .id = "paraconsistent", .name = "Paraconsistent LP", .family = .many_valued, .maturity = .fragment, .module = "paraconsistent/lp", .notes = "Belnap-Dunn four-valued; explosion fails" },
@@ -198,4 +202,15 @@ test "registry v0.20 fragments" {
         if (std.mem.eql(u8, s.id, "abductive-industrial") and s.maturity == .fragment) n += 1;
     }
     try std.testing.expect(n == 8);
+}
+
+test "registry v0.21 fragments" {
+    var n: u32 = 0;
+    for (systems) |s| {
+        if (std.mem.eql(u8, s.id, "focusing") and s.maturity == .fragment) n += 1;
+        if (std.mem.eql(u8, s.id, "description-shiq") and s.maturity == .fragment) n += 1;
+        if (std.mem.eql(u8, s.id, "markov-logic") and s.maturity == .fragment) n += 1;
+        if (std.mem.eql(u8, s.id, "abductive-mus") and s.maturity == .fragment) n += 1;
+    }
+    try std.testing.expect(n == 4);
 }
