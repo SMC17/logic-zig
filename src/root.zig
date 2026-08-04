@@ -88,6 +88,7 @@ pub const focusing = @import("deductive/focusing.zig");
 pub const shiq = @import("description/shiq.zig");
 pub const markov = @import("probabilistic/markov.zig");
 pub const mus_abduce = @import("abductive/mus.zig");
+pub const relevance = @import("substructural/relevance.zig");
 
 pub const Lit = lit.Lit;
 pub const Var = lit.Var;
@@ -272,6 +273,7 @@ test {
     _ = shiq;
     _ = markov;
     _ = mus_abduce;
+    _ = relevance;
 }
 
 test "end-to-end tautology a|!a" {
