@@ -1,0 +1,47 @@
+name: New or expanded logic exhibit
+description: Propose an evidence-gated museum exhibit.
+title: "exhibit: "
+labels: ["exhibit", "needs-specification"]
+body:
+  - type: input
+    id: identity
+    attributes:
+      label: Exact formal system
+      description: Name the calculus, semantics, variant, and version where relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Completeness contract
+      description: Define syntax, semantics, calculus, automation boundary, proof objects, countermodels, and limits.
+    validations:
+      required: true
+  - type: dropdown
+    id: decidability
+    attributes:
+      label: Decidability class
+      options: [Decidable, Semidecidable, Undecidable, Bounded, Unknown]
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Required evidence
+      description: Canonical corpus, exhaustive bound, differential oracle, Lean formalization, proof checker, or interoperability suite.
+    validations:
+      required: true
+  - type: textarea
+    id: references
+    attributes:
+      label: Primary references
+      description: Standards, papers, books, and reference implementations.
+    validations:
+      required: true
+  - type: checkboxes
+    id: honesty
+    attributes:
+      label: Admission rule
+      options:
+        - label: I understand that a registry row remains catalog-only until executable evidence satisfies its contract.
+          required: true

@@ -1,0 +1,49 @@
+name: Correctness or implementation bug
+description: Report a reproducible defect without overstating its impact.
+title: "bug: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: Do not disclose exploitable vulnerabilities here; use private vulnerability reporting.
+  - type: input
+    id: revision
+    attributes:
+      label: Revision
+      description: Release, commit SHA, or branch tested.
+    validations:
+      required: true
+  - type: dropdown
+    id: result-class
+    attributes:
+      label: Result class
+      options:
+        - Incorrect SAT/UNSAT or theorem status
+        - Invalid proof or certificate accepted
+        - Valid proof or certificate rejected
+        - Incorrect model or countermodel
+        - Crash, hang, or resource behavior
+        - Parser or interoperability defect
+        - Documentation mismatch
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include the smallest public-safe input and exact command.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and observed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Independent evidence
+      description: External solver, Lean theorem, brute-force oracle, certificate checker, or reference semantics.

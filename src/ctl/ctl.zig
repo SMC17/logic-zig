@@ -25,7 +25,7 @@ const Var = lit_mod.Var;
 
 pub const CtlOp = enum { ef, eg, af, ag, fair_eg };
 
-pub const CtlStatus = enum { holds, fails, unknown };
+pub const CtlStatus = enum { holds_within_bound, fails_within_bound, unknown };
 
 pub const CtlResult = struct {
     status: CtlStatus,
@@ -84,8 +84,8 @@ pub fn checkEf(allocator: std.mem.Allocator, nl: *const Netlist, prop: NetId, bo
         pp.deinit();
     };
     return switch (r.status) {
-        .sat => .{ .status = .holds, .op = .ef, .bound = bound, .conflicts = r.conflicts },
-        .unsat => .{ .status = .fails, .op = .ef, .bound = bound, .conflicts = r.conflicts },
+        .sat => .{ .status = .holds_within_bound, .op = .ef, .bound = bound, .conflicts = r.conflicts },
+        .unsat => .{ .status = .fails_within_bound, .op = .ef, .bound = bound, .conflicts = r.conflicts },
         .unknown => .{ .status = .unknown, .op = .ef, .bound = bound, .conflicts = r.conflicts },
     };
 }
@@ -105,8 +105,8 @@ pub fn checkEg(allocator: std.mem.Allocator, nl: *const Netlist, prop: NetId, bo
         pp.deinit();
     };
     return switch (r.status) {
-        .sat => .{ .status = .holds, .op = .eg, .bound = bound, .conflicts = r.conflicts },
-        .unsat => .{ .status = .fails, .op = .eg, .bound = bound, .conflicts = r.conflicts },
+        .sat => .{ .status = .holds_within_bound, .op = .eg, .bound = bound, .conflicts = r.conflicts },
+        .unsat => .{ .status = .fails_within_bound, .op = .eg, .bound = bound, .conflicts = r.conflicts },
         .unknown => .{ .status = .unknown, .op = .eg, .bound = bound, .conflicts = r.conflicts },
     };
 }
@@ -132,8 +132,8 @@ pub fn checkAg(allocator: std.mem.Allocator, nl: *const Netlist, prop: NetId, bo
     };
     // If EF¬φ SAT → AG fails; UNSAT → AG holds within bound
     return switch (r.status) {
-        .unsat => .{ .status = .holds, .op = .ag, .bound = bound, .conflicts = r.conflicts },
-        .sat => .{ .status = .fails, .op = .ag, .bound = bound, .conflicts = r.conflicts },
+        .unsat => .{ .status = .holds_within_bound, .op = .ag, .bound = bound, .conflicts = r.conflicts },
+        .sat => .{ .status = .fails_within_bound, .op = .ag, .bound = bound, .conflicts = r.conflicts },
         .unknown => .{ .status = .unknown, .op = .ag, .bound = bound, .conflicts = r.conflicts },
     };
 }
@@ -153,8 +153,8 @@ pub fn checkAf(allocator: std.mem.Allocator, nl: *const Netlist, prop: NetId, bo
         pp.deinit();
     };
     return switch (r.status) {
-        .unsat => .{ .status = .holds, .op = .af, .bound = bound, .conflicts = r.conflicts },
-        .sat => .{ .status = .fails, .op = .af, .bound = bound, .conflicts = r.conflicts },
+        .unsat => .{ .status = .holds_within_bound, .op = .af, .bound = bound, .conflicts = r.conflicts },
+        .sat => .{ .status = .fails_within_bound, .op = .af, .bound = bound, .conflicts = r.conflicts },
         .unknown => .{ .status = .unknown, .op = .af, .bound = bound, .conflicts = r.conflicts },
     };
 }
@@ -168,8 +168,8 @@ pub fn checkFairEg(
     const r = try justice.checkLasso(allocator, nl, justices, nl.fairness.items, bound);
     defer if (r.trace) |t| allocator.free(t);
     return switch (r.status) {
-        .witness => .{ .status = .holds, .op = .fair_eg, .bound = bound, .conflicts = r.conflicts },
-        .no_witness_within_bound => .{ .status = .fails, .op = .fair_eg, .bound = bound, .conflicts = r.conflicts },
+        .witness => .{ .status = .holds_within_bound, .op = .fair_eg, .bound = bound, .conflicts = r.conflicts },
+        .no_witness_within_bound => .{ .status = .fails_within_bound, .op = .fair_eg, .bound = bound, .conflicts = r.conflicts },
         .unknown => .{ .status = .unknown, .op = .fair_eg, .bound = bound, .conflicts = r.conflicts },
     };
 }
@@ -201,7 +201,7 @@ test "ctl AG true on stuck0" {
     try nl.addLatch(d, q, false);
     // AG ¬q : q always 0
     const r = try checkAg(std.testing.allocator, &nl, nq, 4);
-    try std.testing.expect(r.status == .holds);
+    try std.testing.expect(r.status == .holds_within_bound);
 }
 
 test "ctl EF reaches toggle 1" {
@@ -212,7 +212,7 @@ test "ctl EF reaches toggle 1" {
     try nl.addGate(.not, &.{q}, d);
     try nl.addLatch(d, q, false);
     const r0 = try checkEf(std.testing.allocator, &nl, q, 0);
-    try std.testing.expect(r0.status == .fails);
+    try std.testing.expect(r0.status == .fails_within_bound);
     const r1 = try checkEf(std.testing.allocator, &nl, q, 1);
-    try std.testing.expect(r1.status == .holds);
+    try std.testing.expect(r1.status == .holds_within_bound);
 }

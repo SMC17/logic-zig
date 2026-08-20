@@ -307,7 +307,7 @@ pub fn run(allocator: std.mem.Allocator) !EdgeReport {
         defer d.nl.deinit();
         // EF bad within enough steps
         const r = try ctl.check(allocator, &d.nl, .ef, d.bad, 8);
-        pass(&rep, r.status == .holds or r.status == .unknown or r.status == .fails);
+        pass(&rep, r.status == .holds_within_bound or r.status == .unknown or r.status == .fails_within_bound);
         // Linked; AG bounds are covered elsewhere.
         pass(&rep, true);
     }

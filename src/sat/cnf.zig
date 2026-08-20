@@ -133,7 +133,7 @@ test "cnf add and check" {
     const a = Lit.positive(Var.fromIndex(0));
     const b = Lit.positive(Var.fromIndex(1));
     try cnf.addClause(&.{ a, b });
-    try cnf.addClause(&.{ a.not() });
+    try cnf.addClause(&.{a.not()});
     var assign = [_]Value{ .false_, .true_ };
     try std.testing.expect(cnf.checkModel(&assign));
     assign[1] = .false_;

@@ -19,6 +19,8 @@ pub const QueryResult = struct {
     conflicts: u64 = 0,
     core: ?[]i32 = null,
     core_unique: bool = false,
+    core_minimality: solver_mod.PropertyStatus = .unknown,
+    core_uniqueness: solver_mod.PropertyStatus = .unknown,
     model: ?[]Value = null,
     /// When session.proof enabled and UNSAT — owned; free with deinitProof.
     proof: ?drat_mod.Proof = null,
@@ -116,6 +118,8 @@ pub const Session = struct {
             .conflicts = r.conflicts,
             .core = r.assumption_core,
             .core_unique = r.assumption_core_unique,
+            .core_minimality = r.assumption_core_minimality,
+            .core_uniqueness = r.assumption_core_uniqueness,
             .model = r.model,
             .proof = r.proof,
         };
