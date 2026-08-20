@@ -5,11 +5,28 @@ const std = @import("std");
 pub const Maturity = enum { absent, documented, skeleton, fragment, engine, industrial, external };
 
 pub const Family = enum {
-    classical_prop, classical_fol, higher_order, constructive, type_theory,
-    modal_temporal, substructural, many_valued, nonmonotonic, probabilistic,
-    inductive_abductive, informal, metalogic, computational_sat, computational_smt,
-    computational_mc, computational_atp, description_kr, algebraic_categorical,
-    historical_term, applied_domain, philosophical,
+    classical_prop,
+    classical_fol,
+    higher_order,
+    constructive,
+    type_theory,
+    modal_temporal,
+    substructural,
+    many_valued,
+    nonmonotonic,
+    probabilistic,
+    inductive_abductive,
+    informal,
+    metalogic,
+    computational_sat,
+    computational_smt,
+    computational_mc,
+    computational_atp,
+    description_kr,
+    algebraic_categorical,
+    historical_term,
+    applied_domain,
+    philosophical,
 };
 
 pub const System = struct {
