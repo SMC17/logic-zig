@@ -5,6 +5,14 @@ All notable changes to **logic-zig** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Docs
+
+- Visitor README: executable museum / agent-trust kernel (not a SAT-solver pitch).
+  Version badge aligned with STATUS 0.24.0. Lean kernel and fail-closed museum CLI
+  remain named residuals.
+
 ## [0.21.0] — 2026-08-04
 
 ### Depth attack + project surface
