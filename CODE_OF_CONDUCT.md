@@ -1,14 +1,35 @@
 # Code of Conduct
 
-Contributors must keep technical discussion respectful, specific, and focused
-on evidence. Harassment, threats, discrimination, doxxing, sexualized conduct,
-and sustained personal attacks are not accepted in repository spaces.
+## Our pledge
 
-Disagreement about semantics, soundness, benchmarks, scope, or design is welcome.
-Critique claims and artifacts rather than people. Report private conduct concerns
-to the repository owner through their GitHub profile. Reports will be reviewed
-confidentially to the extent practical; proportionate responses may include a
-warning, content removal, temporary restriction, or permanent ban.
+We pledge to make participation in logic-zig a harassment-free experience for
+everyone, regardless of age, body size, visible or invisible disability,
+ethnicity, sex characteristics, gender identity and expression, level of
+experience, education, socio-economic status, nationality, personal appearance,
+race, caste, color, religion, or sexual identity and orientation.
 
-This policy applies to issues, pull requests, discussions, code review, and other
-spaces where someone represents this project.
+## Our standards
+
+Examples of behavior that contributes to a positive environment:
+
+- Demonstrating empathy and kindness
+- Being respectful of differing opinions, viewpoints, and experiences
+- Giving and accepting constructive feedback
+- Accepting responsibility, apologizing, and learning from mistakes
+- Focusing on what is best for the community and the correctness of the code
+
+Examples of unacceptable behavior:
+
+- Trolling, insulting or derogatory comments, and personal or political attacks
+- Public or private harassment
+- Publishing others' private information without explicit permission
+- Other conduct which could reasonably be considered inappropriate in a
+  professional setting
+
+## Enforcement
+
+Report issues to the repository maintainers (`SMC17`). Maintainers will review
+and respond in a way they deem appropriate to the circumstances.
+
+This Code of Conduct is adapted from the [Contributor Covenant](https://www.contributor-covenant.org/),
+version 2.1.

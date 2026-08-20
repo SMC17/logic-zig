@@ -1,74 +1,45 @@
-# Lean and Aristotle Oracle
+# Lean oracle & upstream contribution loop
 
-`logic-zig` uses Lean as an external semantic oracle, not as a substitute for
-the Zig implementation. The first oracle project formalizes the finite matrices
-implemented in `src/logic/manyvalued.zig`.
+This document is the contract for issue **#3** (Lean↔Zig fixtures) and **#6**
+(upstream Lean/Aristotle contributions).
 
-## Trust boundary
+## Non-fiction
 
-The evidence chain is:
+| Claim | Allowed only when |
+|-------|-------------------|
+| “Lean-checked” | `lake build` under pinned toolchain + no `sorryAx` |
+| “Zig matches Lean tables” | Fixture schema replay + mutation test green |
+| “Upstream contribution” | Public issue/PR link; status ≠ accepted until merge |
 
-```text
-Zig exhibit specification
-    -> equivalent Lean definitions and named claims
-    -> Lean kernel checks every proof term
-    -> differential fixtures compare Zig decisions with the formalized contract
-```
+## Fixture schema (v1)
 
-Aristotle may propose formalizations, proofs, refactors, and missing lemmas. Its
-output is untrusted until the pinned Lean toolchain builds it. Generated code
-must not contain `sorry`, `admit`, custom axioms, `unsafe` declarations, or a
-changed theorem statement that makes the proof easier.
+Zig source of truth for many-valued tables:
 
-The oracle toolchain is pinned to the version recommended by the installed
-Aristotle CLI. This pin is intentionally independent of the Zig compiler version.
+- Module: `src/manyvalued/fixtures.zig`
+- Systems: K3, LP, FDE (via `paraconsistent/lp`), Ł3
+- Fields: `neg`, `and_`, `or_`, `designated[]`, `schema_version`
 
-## Local verification
+Lean should export or prove the same tables. Differential gate:
 
-```sh
-cd lean
-lake build
-rg -n '\b(sorry|admit|axiom|unsafe)\b' . --glob '*.lean'
-```
+1. Generate or check fixture blob with provenance.
+2. Zig replays every cell.
+3. Mutated fixture must fail Zig test (`mutateAndReject`).
 
-The second command is a source audit, not a substitute for Lean's kernel.
+## Aristotle boundary
 
-Blocking CI builds the oracle with Lean 4.28, performs that trust-escape audit,
-and runs Lean's bundled `leanchecker` over the compiled environment. This is a
-separate whole-environment checking pass, but it is not an
-implementation-independent checker.
+Generated proofs are **untrusted** until:
 
-Nanoda remains a valuable independent Rust checker. Its current parser does not
-accept the Lean 4.28 export stream, so it is tracked as an additional upstream
-compatibility gate rather than being misreported as passing. Once compatible,
-the nanoda gate should be restored alongside `leanchecker`.
+1. Human statement diff review
+2. Kernel compilation
+3. Independent checking
+4. Zig differential replay
 
-## Aristotle workflow
+## Upstream loop (issue #6)
 
-Install the official CLI and provide its credential through the environment.
-Never pass or commit the key itself.
+1. Identify missing theorem/checker/docs in an upstream project.
+2. Reproduce on upstream default branch.
+3. Minimal upstream-native patch + tests.
+4. Open upstream issue/PR only per their guide.
+5. Track proposed → submitted → reviewed → accepted → released.
 
-```sh
-scripts/aristotle-oracle.sh
-aristotle list --limit 5
-aristotle show PROJECT_ID
-aristotle download PROJECT_ID --destination LOCAL_SCRATCH_PATH
-```
-
-Downloaded projects are reviewed outside the repository, diffed against the
-submitted theorem statements, copied in through a normal branch, and required
-to pass `lake build` plus the Zig gates before merge. Project and task identifiers
-are operational account state and are not committed.
-
-## Expansion order
-
-1. Finite matrices and their separating countervaluations.
-2. Dung extension semantics and exact acceptance.
-3. Stable-model reduct semantics.
-4. Reiter default extensions, AGM remainder sets, and circumscription.
-5. SAT proof-checker semantics and circuit invariant obligations.
-6. Translation/conservativity theorems between museum exhibits.
-
-Lean establishes the mathematical contract. Zig must still provide validated
-IRs, explicit resource behavior, executable evidence, high-performance engines,
-and independent replay appropriate to its own APIs.
+Contribution count is not a metric. Accepted technical value is.

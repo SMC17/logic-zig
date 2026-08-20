@@ -2,29 +2,39 @@
 
 ## Supported versions
 
-Security and correctness fixes target the current `main` branch. Published
-snapshots before 1.0 do not receive a guaranteed backport window.
+| Version | Supported |
+|---------|-----------|
+| 0.21.x (main) | Yes |
+| < 0.21 | Best-effort |
 
 ## Reporting a vulnerability
 
-Do not open a public issue for vulnerabilities that could expose secrets,
-corrupt proof or certificate verification, violate memory safety, or permit
-untrusted input to execute code. Use GitHub private vulnerability reporting for
-this repository. If that surface is unavailable, contact the repository owner
-through their GitHub profile without including exploit details in a public post.
+Please **do not** open a public GitHub issue for security-sensitive reports.
 
-Include the affected revision, input or proof artifact, expected behavior,
-observed behavior, and the smallest reproduction you can safely provide.
+Email the maintainer listed on the GitHub profile for `SMC17`, or open a
+[private security advisory](https://github.com/SMC17/logic-zig/security/advisories/new)
+on this repository.
 
-## Correctness defects
+Include:
 
-Unsound theorem, SAT, SMT, model-checking, or certificate results are treated as
-security-relevant correctness defects. A result reported as `verified`, `proven`,
-`unsat`, or `equivalent` without sufficient evidence should be reported even when
-it does not create a conventional confidentiality or code-execution impact.
+1. Affected version / commit SHA
+2. Reproduction steps (minimal CNF, AIGER, or API snippet)
+3. Impact assessment (soundness bug vs. crash vs. resource exhaustion)
 
-## Scope limits
+## Scope
 
-The repository is pre-1.0 research software. Passing tests do not establish
-adversarial parser hardening, side-channel resistance, formal verification of
-the Zig implementation, or suitability for safety-critical deployment.
+logic-zig is a **logic kernel and research library**, not a networked service.
+Relevant classes of issues include:
+
+- Soundness bugs (solver claims UNSAT/SAT incorrectly on a validated instance)
+- Memory unsafety in Zig code paths (should be impossible in safe Zig; report if found)
+- Path traversal or command injection in CLI file handling
+- Proof checker accepting invalid RUP/DRAT traces
+
+Out of scope: theoretical incompleteness of fragments marked `fragment` in the
+registry, and performance complaints without a correctness angle.
+
+## Response target
+
+We aim to acknowledge reports within 7 days and ship fixes on `main` for
+confirmed soundness issues as soon as a minimal regression test exists.

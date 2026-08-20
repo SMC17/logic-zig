@@ -3,113 +3,123 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Zig](https://img.shields.io/badge/Zig-0.16-orange.svg)](https://ziglang.org/)
 [![CI](https://github.com/SMC17/logic-zig/actions/workflows/ci.yml/badge.svg)](https://github.com/SMC17/logic-zig/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/badge/version-0.24.0-green.svg)](STATUS.md)
 
-**An executable museum and comparative laboratory of logic in Zig.** Each named
-system is intended to receive an explicit syntax, semantics, proof theory,
-automation boundary, test corpus, and checkable evidence. The current SAT and
-model-checking spine supports that expansion; exhibit maturity is derived rather
-than implied by catalog breadth.
+**An executable museum of logic, and a kernel for agent-trust — in Zig.**
 
-Lean is the first external semantic oracle: formal exhibit claims are checked by
-the pinned Lean kernel and an independent checker in CI. Aristotle may generate
-or strengthen Lean proofs, but generated output is never trusted before those
-checks pass.
+This is not another SAT solver. CDCL, model checking, and certificates are the
+substrate. The product is named logical systems with explicit contracts,
+checkable evidence, and fail-closed trust.
 
-| | |
-|---|---|
-| **SAT** | CDCL with VSIDS, LBD reduce, multi-shot assumptions, RUP/DRAT, IPASIR |
-| **Hardware / sequential** | Netlists, AIGER (extended B/C/J/F), Yosys JSON, BMC, k-induction, PDR |
-| **Liveness** | Justice path/lasso + **fair multi-justice** round-robin k-liveness (complete reduction) |
-| **FOL** | Unification + finite-domain model finding (brute and SAT-encoded) |
-| **Reasoning modes** | Deduction (SAT/SMT/FOL oracle) · **abduction** (subset-minimal + min-cost via MaxSAT, first-order ALP) · **induction** (minimal-k DNF synthesis, exact Bayesian posterior) — the Peircean triad as engines |
-| **Nonmonotonic** | Reiter defaults · KLM rational closure · ASP stable models · circumscription · Dung argumentation · AGM belief revision |
-| **Analogical** | Boolean analogical proportions (axioms verified), proportion solving, abstaining analogical classifier |
-| **Non-classical** | Intuitionistic (G4ip decision, Glivenko-verified) · many-valued matrices (K3/LP/FDE/Ł3) · multi-agent epistemic S5 with common knowledge & announcements |
-| **Classical roots** | Complete Aristotelian syllogistic decision (15/24 of 256 forms) · description logic EL subsumption |
-| **Substructural & normative** | MLL linear logic prover (weakening/contraction refuted) · deontic SDL (D ⇔ seriality) |
-| **Optimization** | Weighted partial MaxSAT (exact, brute-force-verified) powering cost-ranked explanations |
+Built for:
 
-Proof posture is documented in [`STATUS.md`](STATUS.md): features are marked
-`unit-tested` or residual — no silent overclaims.
+- **Agent platforms** that must *check* reasoning — incremental SAT, deletion-minimal
+  cores, RUP/DRAT proofs, inductive safety certificates, stable `api/v1`.
+- **Lean / Zig tooling** — fast Zig engines next to a documented Lean semantic-oracle
+  contract. A kernel-checked Lean project is a named residual, not a README claim.
+
+| Surface | What ships on `main` |
+|---------|----------------------|
+| **Trust kernel** | CDCL, IPASIR, BMC / k-induction / PDR, k-liveness, RUP/DRAT, `trust-report` |
+| **Museum spine** | Taxonomy of named systems × maturity; fragments stay fragments |
+| **Agent surface** | `logic-agent` multishot profile, assumption cores, `api/v1` |
+| **Lean oracle** | Contract + Zig fixture schema in [`docs/LEAN_ORACLE.md`](docs/LEAN_ORACLE.md) |
+
+Proof posture: [`STATUS.md`](STATUS.md). Non-fiction rules: [`docs/UNIVERSAL.md`](docs/UNIVERSAL.md).
+Graph: [`GRAPH.md`](GRAPH.md).
 
 ---
 
-## Quick start
+## 90 seconds
 
 ```sh
 # Requires Zig 0.16
 git clone https://github.com/SMC17/logic-zig.git
 cd logic-zig
 zig build test
-zig build   # umbrella + spin-offs + libipasirlogic.so
+zig build
 
-./zig-out/bin/logic-zig doctor
-./zig-out/bin/logic-zig api-info   # stable api/v1 + industrial capability matrix
-./zig-out/bin/logic-zig taxonomy   # universal named-systems registry
-./zig-out/bin/logic-zig museum     # evidence-derived exhibit contracts
-./zig-out/bin/logic-zig check-rup formula.cnf proof.rup
-./zig-out/bin/logic-zig giants     # discover external industrial provers
-./zig-out/bin/logic-hwmcc golden
-
-# External semantic oracle
-( cd lean && lake build )
-
-# Flagship spin-offs (each pins a unique tradeoff profile)
+./zig-out/bin/logic-zig doctor      # smoke: prop, CDCL, AIGER, PDR, k-liveness
+./zig-out/bin/logic-zig taxonomy    # named systems × maturity (the museum index)
+./zig-out/bin/logic-zig api-info    # stable api/v1 + capability bits
+./zig-out/bin/logic-zig trust-report
 ./zig-out/bin/logic-agent profile
-./zig-out/bin/logic-sat profile
-./zig-out/bin/logic-hwmcc profile
-./zig-out/bin/logic-cert klive-demo
-./zig-out/bin/logic-smt demo-add
-./zig-out/bin/logic-ctl demo
 ```
 
-Product matrix and profiles: **[docs/PRODUCTS.md](docs/PRODUCTS.md)**.
+`trust-report` is fail-closed: missing CaDiCaL, DRAT-trim, or ABC is reported and
+blocks `TRUST_OK`. That is the intended agent-trust behavior, not a silent skip.
 
-Optional differential oracle ([CaDiCaL](https://github.com/arminbiere/cadical)):
+Step-by-step: [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md).
+Product matrix: [`docs/PRODUCTS.md`](docs/PRODUCTS.md).
 
 ```sh
-git clone https://github.com/arminbiere/cadical.git third_party/cadical
-( cd third_party/cadical && ./configure && make -j"$(nproc)" )
-# or: export LOGIC_ZIG_EXTERNAL_SOLVER=/path/to/cadical
-./zig-out/bin/logic-zig diff-external --iters 20
+./zig-out/bin/logic-sat profile
+./zig-out/bin/logic-hwmcc golden
+./zig-out/bin/logic-cert suite
+./zig-out/bin/logic-smt demo-add
+./zig-out/bin/logic-ctl demo
+./zig-out/bin/logic-zig giants      # discover optional Kissat/Z3/ABC/Vampire/…
 ```
 
 ---
 
-## Features
+## Who this is for
 
-### CDCL SAT
+### Agent platforms that need checkable reasoning
 
-- 2-watched literals, 1-UIP learning, non-chronological backjump
-- Heap VSIDS, phase saving, restarts, LBD-aware clause database reduce
-- Conflict clause minimization and learned-clause compact
-- Multi-shot incremental solving + **deletion-minimal assumption cores**
-- RUP verification path for unsat proofs
-- C ABI via **IPASIR** (`libipasirlogic.so`, `include/ipasir.h`)
+`logic-agent` pins the incremental / assumption-heavy profile. Integrate through
+`@import("logic").api` rather than scraping CLI output:
 
-### Sequential model checking
+```zig
+const api = @import("logic").api;
+// api.version_string, api.Capability.current()
+// api.satDimacs(allocator, src, .{ .preprocess = true })
+// api.mcAiger(allocator, aig_src, .{ .cert = true })
+```
 
-| Engine | Use |
-|--------|-----|
-| **BMC** | Bounded reachability of bad (multi-property, constraints) |
-| **k-induction** | Inductive safety proofs |
-| **PDR / IC3** | MIC + CTG + ternary weakening, recursive blocking, fixed points |
-| **Justice** | Bounded path / lasso fair witnesses |
-| **k-Liveness** | Thermometer reduction → **infinite** “justice only finitely often” proofs |
+Checkable artifacts on this tree: SAT models re-eval on the CNF, deletion-minimal
+assumption cores, RUP/DRAT unsat proofs, PDR inductive invariants, k-liveness
+certificates. See [`docs/TRUST.md`](docs/TRUST.md) and [`docs/PRODUCTS.md`](docs/PRODUCTS.md).
 
-### Circuits & interchange
+### Lean / Zig tooling
 
-- Netlist IR: AND/OR/XOR/NOT/MUX/const, latches, bad/constraint/justice/fairness
-- **AIGER** ASCII/binary reader (classic + extended headers, symbols)
-- **AIGER writer** with structural hash-consing and constant folding
-- Yosys JSON import (combinational cells + `$dff`)
+Zig owns IR, search, resource behavior, and replay. Lean is the external
+semantic oracle, not a substitute implementation. The in-tree contract and
+many-valued fixture schema live in [`docs/LEAN_ORACLE.md`](docs/LEAN_ORACLE.md).
+Kernel-checked Lean (`lake build`, no `sorry`/`axiom` escapes) and Zig↔Lean
+differential replay are tracked as issues [#3](https://github.com/SMC17/logic-zig/issues/3)
+and [#6](https://github.com/SMC17/logic-zig/issues/6); they are not claimed on
+this README.
 
-### Competition-style tracks
+---
+
+## What this is not
+
+- **Not a SAT-race bid.** Kissat / CaDiCaL / ABC / Z3 / Vampire parity is never
+  claimed without a scoreboard. Giants are discovered, not reimplemented first.
+- **Not a completed museum.** Registry breadth is an index. Completeness is local
+  to a named system and its evidence. Fail-closed exhibit CLI work is a residual
+  ([STATUS.md](STATUS.md)).
+- **Not a new logic family this week.** New rows start at `documented`. Maturity
+  rises only with code + tests in the same change.
+
+---
+
+## Maturity ladder
+
+Every named system in the registry carries an explicit level:
+
+| Level | Meaning |
+|-------|---------|
+| `documented` | Named only |
+| `skeleton` | Types/API link; may return unsupported |
+| `fragment` | Real algorithms on a decidable slice |
+| `engine` | Production path inside logic-zig |
+| `industrial` | Scoreboard evidence vs external peer |
+| `external` | Delegated to a giant via adapter |
 
 ```sh
-./zig-out/bin/logic-zig sat-track instance.cnf
-./zig-out/bin/logic-zig hwmcc-track design.aag --frames 16
-./zig-out/bin/logic-zig hwmcc-track design.aag --justice --lasso --frames 16
+./zig-out/bin/logic-zig taxonomy
 ```
 
 ---
@@ -131,30 +141,42 @@ pub fn main() !void {
     const e = try logic.parse(&pool, "(a -> b) & a & !b");
     const q = try logic.satFormula(a, &pool, e);
     defer if (q.model) |m| a.free(m);
-
     std.debug.print("{s}\n", .{@tagName(q.status)}); // unsat
 }
 ```
 
-Add as a dependency via `build.zig.zon` / `b.dependency` pointing at this repo,
-or vendor `src/` and import the `logic` module as in this tree’s `build.zig`.
+Add via `build.zig.zon` / `b.dependency`, or vendor `src/` and import the `logic` module.
 
 ---
 
-## Architecture
+## Module map (v0.24)
 
-```
-prop ──► ExprPool ──Tseitin──► CNF ──► CDCL ──► model / RUP / cores
-                              multi-shot · IPASIR · Δ CaDiCaL
-
-AIGER / Yosys ──► Netlist ──► BMC · k-induction · PDR
-                     │         justice (path/lasso) · k-liveness
-                     └──► AIGER writer (hash-consed AIG)
-
-FOL ── unify · finite models (enumerate / SAT)
-```
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/ENGINES.md](docs/ENGINES.md).
+| Path | Role |
+|------|------|
+| `src/sat/` | CDCL, preprocess, portfolio, DRAT, IPASIR |
+| `src/circuit/` | Netlist, BMC, k-induction, PDR, justice, k-liveness |
+| `src/cert/` `src/trust/` | Certificates and fail-closed trust report |
+| `src/agent/` | Multishot / assumption sessions |
+| `src/api/` | Stable `api/v1` |
+| `src/fol/` | Terms, unify, finite models, resolution |
+| `src/smt/` | BV, EUF, arrays |
+| `src/deductive/` | Natural deduction, sequents, search, focusing |
+| `src/abductive/` | Exhaustive, industrial, MUS-complete abduction |
+| `src/inductive/` | Mathematical induction schemas + datatypes |
+| `src/constructive/` | Intuitionistic Kripke |
+| `src/substructural/` | Linear ILL, relevance R fragment |
+| `src/modal/` | Kripke K–S5, epistemic/deontic, traces |
+| `src/fuzzy/` | Gödel / product / Łukasiewicz + Kleene |
+| `src/paraconsistent/` | Belnap-Dunn / LP |
+| `src/manyvalued/` | Lean-differential fixture schema |
+| `src/probabilistic/` | Independence, Markov logic, WPLL |
+| `src/description/` | ALC + SHIQ + pairwise blocking |
+| `src/historical/` | Aristotelian syllogistic |
+| `src/nonmonotonic/` | Reiter defaults, KLM |
+| `src/type_theory/` | MLTT micro, HOL fragment, Huet |
+| `src/algebraic/` | Categorical spine |
+| `src/taxonomy/` | Living registry |
+| `src/bridge/` | DIMACS, AIGER, giants discovery |
 
 ---
 
@@ -162,49 +184,38 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/ENGINES.md](docs/ENGI
 
 | Document | Contents |
 |----------|----------|
-| [STATUS.md](STATUS.md) | Proof levels, green checklist, residuals |
+| [STATUS.md](STATUS.md) | Version, platform table, residuals |
+| [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) | Clone → doctor |
+| [docs/TRUST.md](docs/TRUST.md) | Certificates and `TRUST_OK` gates |
+| [docs/LEAN_ORACLE.md](docs/LEAN_ORACLE.md) | Lean oracle contract (kernel work is residual) |
+| [docs/UNIVERSAL.md](docs/UNIVERSAL.md) | North star + non-fiction rules |
+| [docs/TAXONOMY_COVERAGE.md](docs/TAXONOMY_COVERAGE.md) | Honest coverage map |
+| [docs/PRODUCTS.md](docs/PRODUCTS.md) | Spin-off product matrix |
+| [docs/INDUSTRIAL.md](docs/INDUSTRIAL.md) | SAT/MC/SMT/FOL depth program |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Layered design |
 | [docs/ENGINES.md](docs/ENGINES.md) | Engine contracts |
-| [docs/MUSEUM.md](docs/MUSEUM.md) | Exhibit contracts and promotion gates |
-| [docs/exhibits/prop-classical.md](docs/exhibits/prop-classical.md) | Verified classical propositional exhibit |
-| [docs/exhibits/syllogistic.md](docs/exhibits/syllogistic.md) | Verified categorical syllogistic exhibit |
-| [docs/exhibits/finite-matrices.md](docs/exhibits/finite-matrices.md) | Verified K3, LP, FDE, and L3 exhibits |
-| [docs/LEAN_ORACLE.md](docs/LEAN_ORACLE.md) | Lean kernel and Aristotle contribution workflow |
+| [GRAPH.md](GRAPH.md) | Upstream / downstream dependency graph |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | How to hack on the tree |
-| [SECURITY.md](SECURITY.md) | Private vulnerability and unsoundness reporting |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |
+| [SECURITY.md](SECURITY.md) | Vulnerability reporting |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Community standards |
 | [LICENSE](LICENSE) | Apache-2.0 |
-
----
-
-## CLI overview
-
-```text
-logic-zig sat <formula | --file f.cnf> [--proof]
-logic-zig sat-track <f.cnf> [--max-conflicts N] [--portfolio] [--proof] [--quiet]
-logic-zig hwmcc-track <f.aag|aig> [--frames N] [--each] [--justice] [--lasso] [--cert] [--no-kind]
-logic-zig fuzz · miter · unify · eval · cnf · tautology · equiv
-logic-zig bmc-demo · kind-demo · pdr-demo · justice-demo · klive-demo
-logic-zig aiger · aiger-write [--binary] [--extended]
-logic-zig doctor · diff-external · bench-suite · correctness-suite
-```
 
 ---
 
 ## Correctness posture
 
-We prefer **narrow, testable contracts** over marketing language:
+Narrow, testable contracts over marketing language:
 
 - SAT models validate on the CNF; prop models re-evaluate on the AST.
-- Assumption cores are deletion-minimal; `assumption_core_unique` marks a **unique MUS**.
+- Assumption cores are deletion-minimal.
+- Registry maturity is raised only when code + tests land in the same change.
 - Fair k-liveness `proven_infinite` is complete relative to the safety engine on the round-robin reduction.
-- PDR `proven` means an inductive frame fixed point (IC3a-oriented feature set, not full ABC).
+- External parity (Kissat, Z3, Vampire, …) is **never claimed** without scoreboard evidence.
+- Lean output, including any Aristotle-generated proof, is untrusted until the
+  pinned kernel builds it.
 
-Known residuals are listed in [`STATUS.md`](STATUS.md).
-
-Lean compilation proves the formal statement accepted by the kernel; it does not
-by itself prove that the Lean statement faithfully represents the Zig API. That
-translation boundary is tested and reviewed explicitly.
+Known residuals live in [`STATUS.md`](STATUS.md).
 
 ---
 
