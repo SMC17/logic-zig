@@ -1,13 +1,11 @@
 # Contributing to logic-zig
 
-Thank you for interest in improving **logic-zig**. This document is the short path
-from clone → green tests → a reviewable change.
+Thank you for interest in improving **logic-zig**. Short path from clone → green
+tests → a reviewable change.
 
 ## Prerequisites
 
-- [Zig](https://ziglang.org/) **0.16.x** (the version this tree is developed against)
-- Optional: [Lean](https://lean-lang.org/) via `elan`; the oracle project pins its
-  own toolchain in `lean/lean-toolchain`
+- [Zig](https://ziglang.org/) **0.16.x**
 - Optional: [CaDiCaL](https://github.com/arminbiere/cadical) for differential SAT checks
 
 ```sh
@@ -16,52 +14,59 @@ cd logic-zig
 zig build test
 zig build
 ./zig-out/bin/logic-zig doctor
-( cd lean && lake build )
+./zig-out/bin/logic-zig taxonomy
 ```
 
 ## Project rules
 
-1. **Evidence first.** Prefer a failing test before a fix. Load-bearing claims should
-   be unit-tested or clearly marked as sketch / residual in `STATUS.md`.
-2. **Narrow diffs.** Touch only modules needed for the change.
-3. **Zig 0.16 APIs.** Use `ArrayList = .empty`, `std.process.Init`, `Io.Writer.Allocating`,
-   etc. Do not reintroduce removed 0.13/0.14 patterns.
-4. **No secrets.** Never commit wallet addresses, tokens, or private workstation paths.
-5. **Honest residuals.** If a feature is incomplete (e.g. multi-justice completeness),
-   document it in `STATUS.md` rather than over-claiming.
-6. **Generated proofs are untrusted.** Aristotle or any other prover may propose
-   Lean code, but PRs must preserve theorem statements and pass the pinned Lean
-   build without proof placeholders, custom axioms, or unsafe escapes.
+1. **Evidence first.** Prefer a failing test before a fix. Load-bearing claims
+   must be unit-tested or clearly marked residual in `STATUS.md`.
+2. **Registry honesty.** Raising a taxonomy row's maturity requires code + tests
+   in the same change. Never mark `engine` / `industrial` without gates.
+3. **Narrow diffs.** Touch only modules needed for the change.
+4. **Zig 0.16 APIs.** Use `ArrayList = .empty`, `std.process.Init`, etc.
+5. **No secrets.** Never commit tokens, private paths, or credentials.
+6. **Non-fiction rule.** See `docs/UNIVERSAL.md` — no silent overclaims.
 
 ## Layout
 
 | Path | Role |
 |------|------|
 | `src/sat/` | CDCL, DRAT, IPASIR, external solvers |
-| `src/circuit/` | Netlist, BMC, k-induction, PDR, justice, k-liveness, ternary |
-| `src/bridge/` | DIMACS, AIGER read/write |
-| `src/fol/` | Terms, unification, finite models |
-| `src/track/` | SAT / HWMCC competition front-ends |
-| `corpus/` | Small CNF / AIGER / Yosys fixtures |
-| `tests/` | Integration tests |
-| `lean/` | Kernel-checked semantic oracle contracts |
+| `src/circuit/` | Netlist, BMC, k-induction, PDR, justice, k-liveness |
+| `src/bridge/` | DIMACS, AIGER, giants |
+| `src/fol/` | Terms, unification, finite models, resolution |
+| `src/smt/` | BV, EUF, arrays |
+| `src/deductive/` | ND, sequents, search, focusing |
+| `src/abductive/` | Exhaustive / industrial / MUS abduction |
+| `src/inductive/` | Induction schemas |
+| `src/constructive/` | Intuitionistic |
+| `src/substructural/` | Linear logic |
+| `src/modal/` | Kripke, epistemic/deontic |
+| `src/fuzzy/`, `src/paraconsistent/` | Many-valued |
+| `src/probabilistic/` | Independence, Markov logic |
+| `src/description/` | ALC, SHIQ |
+| `src/historical/` | Syllogistic |
+| `src/nonmonotonic/` | Default logic |
+| `src/taxonomy/` | Living registry |
+| `corpus/` | CNF / AIGER fixtures |
 
 ## Submitting changes
 
 1. Branch from `main`.
-2. `zig build test` must pass.
-3. Add or update unit tests next to the module you change.
-4. Update `CHANGELOG.md` under `[Unreleased]` if the change is user-visible.
-5. Open a PR with a short problem statement and proof level (`unit-tested` / `sketch`).
-
-Use the structured issue forms for correctness defects and new exhibits. Report
-proof-verification bypasses privately as described in `SECURITY.md`.
+2. `zig build test` must pass; run `doctor` and `taxonomy` for platform changes.
+3. Co-locate unit tests in the module you change.
+4. Update `CHANGELOG.md` under the next version section if user-visible.
+5. If you add a named system, update `src/taxonomy/registry.zig` and
+   `docs/TAXONOMY_COVERAGE.md` in the same PR.
+6. Open a PR with problem statement + proof level (`unit-tested` / `fragment` / `sketch`).
 
 ## Coding style
 
 - Module-level `//!` docs for public engines.
 - Prefer explicit error sets and `defer` for owned resources.
 - Avoid silent `catch {}` on correctness paths.
+- Allocator-aware; no hidden globals.
 
 ## License
 

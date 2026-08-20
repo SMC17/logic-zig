@@ -9,7 +9,7 @@ industrial gaps until we match or surpass them with evidence.
 **Answer: No — not as finished engines.** We **register** the map, ship **depth**
 where we are strong, and **never hide** empty cells. Completeness is a program.
 
-Proof level: **audited map** against the codebase at v0.16+ (update with each major).
+Proof level: **audited map** against the codebase at v0.18+ (update with each major).
 
 ---
 
@@ -41,17 +41,17 @@ Proof level: **audited map** against the codebase at v0.16+ (update with each ma
 
 ## 3. Mode of reasoning
 
-| Mode | Status |
-|------|--------|
-| Deductive (classical computational) | **S** |
-| Inductive / Bayesian / statistical | **M** — `reason/induction.zig` (SAT-exact minimal-k DNF synthesis) + `reason/bayes.zig` (exact posterior over conjunction class, Occam prior, model-averaged prediction, Laplace succession) |
-| Abductive | **M** — `reason/abduction.zig` (subset-minimal + min-cost via MaxSAT hitting sets) + `reason/alp.zig` (first-order SLD abduction with denials) |
-| Analogical | **M** — `reason/analogy.zig` (Miclet–Prade Boolean proportions, solving, abstaining classifier) |
-| Defeasible / nonmonotonic | **M** — `reason/default_logic.zig` (Reiter) + `reason/klm.zig` (rational closure) + `reason/asp.zig` (stable models) + `reason/circumscription.zig` + `reason/agm.zig` (belief revision) |
-| Probabilistic logics | **M** — `reason/bayes.zig` (finite exact Bayesian; no graphical models / MCMC) |
-| Causal (Pearl, etc.) | **—** |
-| Practical / deontic / decision | **M** — `modal/deontic.zig`: SDL on serial frames |
-| Dialogical / argumentation frameworks | **M** — `reason/argumentation.zig` (Dung AFs: grounded/complete/stable/preferred, credulous & skeptical acceptance) |
+| Mode | Status | Notes |
+|------|--------|-------|
+| Deductive (classical computational) | **S** | |
+| Inductive / Bayesian / statistical | **M** | mathematical induction schema + datatypes (`inductive/`); statistical still open |
+| Abductive | **M** | propositional minimal explanations (`abductive/`) |
+| Analogical | **—** | |
+| Defeasible / nonmonotonic | **—** | |
+| Probabilistic logics | **—** | |
+| Causal (Pearl, etc.) | **—** | |
+| Practical / deontic / decision | **—** | |
+| Dialogical / argumentation frameworks | **—** | |
 
 ---
 
@@ -76,8 +76,8 @@ Proof level: **audited map** against the codebase at v0.16+ (update with each ma
 
 | Family | Status |
 |--------|--------|
-| Intuitionistic / intermediate | **M** — `logic/intuitionistic.zig`: G4ip decision procedure, Glivenko-verified |
-| Linear / relevant / substructural | **M** — `logic/linear.zig`: MLL+units prover (relevance R still —) |
+| Intuitionistic / intermediate | **—** |
+| Linear / relevant / substructural | **—** |
 | Martin-Löf / HoTT / CoC | **—** |
 | Realizability | **—** |
 
@@ -92,7 +92,7 @@ Proof level: **audited map** against the codebase at v0.16+ (update with each ma
 | LTL / CTL (bounded) | **M** | `ctl/*` bounded SAT unrolling |
 | Infinite-trace fairness | **S/M** | k-liveness, justice |
 | Full LTL/CTL* symbolic | **—** | |
-| Epistemic / deontic / dynamic logic | **M** — `modal/epistemic.zig` (S5, common knowledge, announcements) + `modal/deontic.zig` (SDL/KD; dynamic still —) | |
+| Epistemic / deontic / dynamic logic | **—** | |
 | μ-calculus complete | **—** | |
 
 ---
@@ -109,8 +109,8 @@ Proof level: **audited map** against the codebase at v0.16+ (update with each ma
 | Model checking (liveness) | **S/M** | justice, k-live |
 | ATP (resolution) | **M** | FOL CNF resolution |
 | Superposition / paramodulation | **P** | |
-| Logic programming (Prolog/ASP) | **M** | `reason/alp.zig` SLD abduction; `reason/asp.zig` stable models |
-| Description logics / OWL | **M** | `logic/el.zig` EL completion subsumption |
+| Logic programming (Prolog/ASP) | **—** | |
+| Description logics / OWL | **—** | |
 | Program verification / CHC | **P** | via BMC/PDR path |
 | Proof assistants | **—** | |
 | IPASIR embedding | **S** | |
@@ -121,13 +121,13 @@ Proof level: **audited map** against the codebase at v0.16+ (update with each ma
 
 ## 8. Many-valued / fuzzy / quantum / non-classical
 
-| Family | Status |
-|--------|--------|
-| Finite-valued / Łukasiewicz / Gödel | **M** — `logic/manyvalued.zig`: K3, LP, FDE, Ł3 matrices |
-| Fuzzy | **—** (continuum-valued; finite matrices only) |
-| Paraconsistent | **M** — LP/FDE designated-value consequence (explosion fails) |
-| Quantum logic | **—** |
-| Probabilistic logic | **M** — `reason/bayes.zig` finite exact Bayesian |
+| Family | Status | Notes |
+|--------|--------|-------|
+| Finite-valued / Łukasiewicz / Gödel | **M** | Kleene 3-valued + continuous Łukasiewicz/Gödel/product (`fuzzy/`) |
+| Fuzzy | **M** | t-norm families + sat-degree eval |
+| Paraconsistent | **—** | |
+| Quantum logic | **—** | |
+| Probabilistic logic | **—** | |
 
 ---
 
@@ -135,7 +135,7 @@ Proof level: **audited map** against the codebase at v0.16+ (update with each ma
 
 | Family | Status |
 |--------|--------|
-| Aristotelian / syllogistic | **M** — `logic/syllogistic.zig`: complete Venn-region decision, 15 Boolean / 24 import-valid of 256 forms |
+| Aristotelian / syllogistic | **—** |
 | Medieval consequence | **—** |
 | Natural logic / NLI | **—** |
 | Indian / Arabic logical traditions | **—** |
