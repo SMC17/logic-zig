@@ -128,7 +128,7 @@ pub fn kleeneOr(a: Kleene, b: Kleene) Kleene {
 }
 
 test "lukasiewicz t-norm bounds" {
-    try std.testing.expect(tnorm(.lukasiewicz, 0.7, 0.6) == @as(Degree, 0.3));
+    try std.testing.expectApproxEqAbs(@as(Degree, 0.3), tnorm(.lukasiewicz, 0.7, 0.6), 1e-6);
     try std.testing.expect(tnorm(.lukasiewicz, 0.2, 0.3) == @as(Degree, 0));
     try std.testing.expect(implies(.lukasiewicz, 0.3, 0.8) == @as(Degree, 1));
 }

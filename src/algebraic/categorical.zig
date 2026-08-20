@@ -172,5 +172,6 @@ test "topos witness gate" {
         .has_exponentials = true,
     };
     try std.testing.expect(w.isElementaryTopos());
-    try std.testing.expect(!ToposWitness{}.isElementaryTopos());
+    const empty = ToposWitness{};
+    try std.testing.expect(!empty.isElementaryTopos());
 }
