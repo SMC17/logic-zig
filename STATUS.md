@@ -1,7 +1,9 @@
 # logic-zig status
 
 **Version:** 0.24.0  
-**North star:** universal logic library in Zig ([`docs/UNIVERSAL.md`](docs/UNIVERSAL.md)).
+**North star:** executable museum and agent-trust kernel in Zig. SAT/MC is
+substrate; completeness is local to a named system
+([`docs/UNIVERSAL.md`](docs/UNIVERSAL.md)).
 
 ## Climb gates
 
