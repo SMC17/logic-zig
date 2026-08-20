@@ -13,8 +13,8 @@ const markov = @import("markov.zig");
 
 /// Softplus-stable log(σ(z)) helpers.
 fn logSigmoid(z: f64) f64 {
-    if (z >= 0) return -@log1p(@exp(-z));
-    return z - @log1p(@exp(z));
+    if (z >= 0) return -std.math.log1p(@exp(-z));
+    return z - std.math.log1p(@exp(z));
 }
 
 /// Weight difference for atom j: score(x[j]=1) - score(x[j]=0) with others fixed.

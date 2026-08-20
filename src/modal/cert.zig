@@ -80,7 +80,6 @@ fn fingerprint(phi: *const normal.Formula) u64 {
 }
 
 fn forces(n: u32, rel: u32, val: u32, w: u32, phi: *const normal.Formula, n_atoms: u32) bool {
-    _ = n_atoms;
     return switch (phi.*) {
         .atom => |a| (val & (@as(u32, 1) << @intCast(a * n + w))) != 0,
         .not => |x| !forces(n, rel, val, w, x, n_atoms),
