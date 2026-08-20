@@ -25,7 +25,12 @@ write/read). Exit status 0 means the core stack is healthy on your machine.
 ## First commands
 
 ```sh
-# Propositional SAT
+# Museum index + agent-trust surface (not a SAT-solver tour)
+./zig-out/bin/logic-zig taxonomy
+./zig-out/bin/logic-zig api-info
+./zig-out/bin/logic-agent profile
+
+# Propositional SAT (substrate)
 ./zig-out/bin/logic-zig sat 'a | !a'          # tautological shape → sat
 ./zig-out/bin/logic-zig sat 'a & !a'          # unsat
 ./zig-out/bin/logic-zig sat --file corpus/simple_unsat.cnf --proof
