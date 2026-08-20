@@ -260,7 +260,7 @@ pub fn encodeSat(allocator: std.mem.Allocator, b: *const Builder, tr: *const Tra
                         try cnf.addClause(&.{ lnot, Lit.positive(av) });
                         try cnf.addClause(&.{ lv, Lit.negative(av) });
                     } else {
-                        try cnf.addClause(&.{ lnot }); // v forced false
+                        try cnf.addClause(&.{lnot}); // v forced false
                     }
                 },
                 .eventually => {
