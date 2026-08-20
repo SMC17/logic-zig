@@ -283,7 +283,6 @@ test "natded modus ponens" {
     const a1 = try pr.assume(imp);
     const a2 = try pr.assume(p);
     const q_line = try pr.impliesElim(a1, a2);
-    _ = q_line;
     // Discharge p: derive (P→Q) → ((P→Q) wait — discharge innermost first
     // Innermost is P, last formula Q → get P→Q (identity-ish under outer)
     // Actually last is Q, discharge P → (P → Q) under outer (P→Q) assumption.
