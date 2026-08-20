@@ -229,7 +229,7 @@ test "sequent implies-right shape" {
     const node = ProofNode{
         .sequent = conc,
         .rule = .implies_r,
-        .premises = &[_]*const ProofNode{&prem},
+        .premises = &[_]*ProofNode{&prem},
     };
     try std.testing.expect(check(&node));
 }

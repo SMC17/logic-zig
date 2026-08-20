@@ -85,8 +85,8 @@ test "independence product" {
 
 test "frechet and bounds" {
     const iv = frechetAnd(0.7, 0.6);
-    try std.testing.expect(iv.lo == 0.3);
-    try std.testing.expect(iv.hi == 0.6);
+    try std.testing.expectApproxEqAbs(0.3, iv.lo, 1e-12);
+    try std.testing.expectApproxEqAbs(0.6, iv.hi, 1e-12);
 }
 
 test "negation complement" {

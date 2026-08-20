@@ -21,7 +21,6 @@ pub const SearchResult = enum { proved, failed, depth_exceeded };
 /// signed atoms (positive = right-side atom or left-side negation, etc.).
 /// For the spine we reduce formulas to NNF-ish signed literals via a simple
 /// recursive inversion.
-
 pub const Signed = struct {
     atom: []const u8,
     /// true = positive occurrence on the side it sits
@@ -56,7 +55,6 @@ pub fn search(
 }
 
 fn searchDepth(allocator: std.mem.Allocator, goal: sequent.Sequent, depth: u32) !SearchResult {
-    _ = allocator;
     if (goal.isInitial()) return .proved;
     if (depth == 0) return .depth_exceeded;
 
