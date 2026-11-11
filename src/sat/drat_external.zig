@@ -4,6 +4,7 @@
 //! dumps formula + proof, runs checker, parses `s VERIFIED` / exit status.
 
 const std = @import("std");
+const host = @import("../core/host.zig");
 const cnf_mod = @import("cnf.zig");
 const drat_mod = @import("drat.zig");
 const dimacs_mod = @import("../bridge/dimacs.zig");
@@ -11,43 +12,15 @@ const solver_mod = @import("solver.zig");
 
 const Cnf = cnf_mod.Cnf;
 
-fn pathExists(path: []const u8) bool {
-    if (path.len == 0 or path.len >= 400) return false;
-    var buf: [512]u8 = undefined;
-    @memcpy(buf[0..path.len], path);
-    buf[path.len] = 0;
-    const fd = std.os.linux.open(@ptrCast(&buf), .{ .ACCMODE = .RDONLY }, 0);
-    if (@as(isize, @bitCast(fd)) < 0) return false;
-    _ = std.os.linux.close(@intCast(fd));
-    return true;
-}
+const pathExists = host.executableExists;
 
-fn readEnv(allocator: std.mem.Allocator, key_prefix: []const u8) ?[]const u8 {
-    const fd = std.os.linux.open("/proc/self/environ", .{ .ACCMODE = .RDONLY }, 0);
-    if (@as(isize, @bitCast(fd)) < 0) return null;
-    defer _ = std.os.linux.close(@intCast(fd));
-    var buf: [8192]u8 = undefined;
-    const n = std.os.linux.read(@intCast(fd), &buf, buf.len);
-    if (@as(isize, @bitCast(n)) <= 0) return null;
-    const data = buf[0..@intCast(n)];
-    var start: usize = 0;
-    while (start < data.len) {
-        const end = std.mem.indexOfScalarPos(u8, data, start, 0) orelse data.len;
-        const entry = data[start..end];
-        if (std.mem.startsWith(u8, entry, key_prefix)) {
-            const val = entry[key_prefix.len..];
-            if (val.len > 0 and pathExists(val)) {
-                return allocator.dupe(u8, val) catch null;
-            }
-        }
-        start = end + 1;
-    }
-    return null;
+fn readEnv(allocator: std.mem.Allocator, key: []const u8) ?[]const u8 {
+    return host.envPath(allocator, key);
 }
 
 /// Caller frees path if non-null.
 pub fn findDratTrim(allocator: std.mem.Allocator) !?[]const u8 {
-    if (readEnv(allocator, "LOGIC_ZIG_DRAT_TRIM=")) |p| return p;
+    if (readEnv(allocator, "LOGIC_ZIG_DRAT_TRIM")) |p| return p;
     const rel = [_][]const u8{
         "third_party/drat-trim/drat-trim",
         "../third_party/drat-trim/drat-trim",
@@ -56,14 +29,8 @@ pub fn findDratTrim(allocator: std.mem.Allocator) !?[]const u8 {
     for (rel) |r| {
         if (pathExists(r)) return try allocator.dupe(u8, r);
     }
-    // next to exe
-    var buf: [std.fs.max_path_bytes]u8 = undefined;
-    const n = std.os.linux.readlink("/proc/self/exe", &buf, buf.len);
-    const ni: isize = @bitCast(n);
-    if (ni > 0) {
-        const path = buf[0..@intCast(ni)];
-        const slash = std.mem.lastIndexOfScalar(u8, path, '/') orelse return null;
-        const dir = path[0..slash];
+    if (host.executableDir(allocator)) |dir| {
+        defer allocator.free(dir);
         const cand = try std.fmt.allocPrint(allocator, "{s}/../third_party/drat-trim/drat-trim", .{dir});
         if (pathExists(cand)) return cand;
         allocator.free(cand);
@@ -71,16 +38,7 @@ pub fn findDratTrim(allocator: std.mem.Allocator) !?[]const u8 {
     return null;
 }
 
-fn writeFile(path: []const u8, body: []const u8) !void {
-    var path_z: [512]u8 = undefined;
-    if (path.len >= path_z.len) return error.PathTooLong;
-    @memcpy(path_z[0..path.len], path);
-    path_z[path.len] = 0;
-    const fd = std.os.linux.open(@ptrCast(&path_z), .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, 0o644);
-    if (@as(isize, @bitCast(fd)) < 0) return error.OpenFailed;
-    _ = std.os.linux.write(@intCast(fd), body.ptr, body.len);
-    _ = std.os.linux.close(@intCast(fd));
-}
+const writeFile = host.writeFile;
 
 pub const CheckResult = enum {
     verified,
@@ -114,15 +72,15 @@ pub fn checkProofExternal(
 
     // unique temp paths
     var ts_buf: [32]u8 = undefined;
-    var ts: std.os.linux.timespec = undefined;
-    _ = std.os.linux.clock_gettime(std.os.linux.CLOCK.MONOTONIC, &ts);
-    const tag = try std.fmt.bufPrint(&ts_buf, "{d}", .{@as(u64, @intCast(ts.sec)) ^ @as(u64, @intCast(ts.nsec))});
+    const tag = try std.fmt.bufPrint(&ts_buf, "{d}", .{host.monoNs()});
     var cnf_path_buf: [96]u8 = undefined;
     var pr_path_buf: [96]u8 = undefined;
     const cnf_path = try std.fmt.bufPrint(&cnf_path_buf, "/tmp/logic-zig-{s}.cnf", .{tag});
     const pr_path = try std.fmt.bufPrint(&pr_path_buf, "/tmp/logic-zig-{s}.drat", .{tag});
-    try writeFile(cnf_path, cnf_body);
-    try writeFile(pr_path, pr_body);
+    try writeFile(io, cnf_path, cnf_body);
+    defer std.Io.Dir.cwd().deleteFile(io, cnf_path) catch {};
+    try writeFile(io, pr_path, pr_body);
+    defer std.Io.Dir.cwd().deleteFile(io, pr_path) catch {};
 
     const result = std.process.run(allocator, io, .{
         .argv = &.{ checker, cnf_path, pr_path },

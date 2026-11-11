@@ -1,0 +1,34 @@
+name: portable-core
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+      - name: Native unit and integration tests
+        run: zig build test --summary all
+      - name: Build every executable and the shared library
+        run: zig build
+      - name: Core smoke and portable exports
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./zig-out/bin/logic-zig doctor
+          ./zig-out/bin/logic-zig giants
+          ./zig-out/bin/logic-zig sat --file corpus/bench/sat/simple_unsat.cnf --proof --dump-proof proof.drat
+          test -s proof.drat
+          ./zig-out/bin/logic-zig aiger-write corpus/and2.aag out.aag
+          ./zig-out/bin/logic-zig aiger out.aag
