@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SAT competition programs use 10/20 for successful SAT/UNSAT outcomes.
+# SAT programs use 10/20 for SAT/UNSAT; HWMCC uses 1 for a counterexample.
 set -euo pipefail
 expected="$1"
 shift
