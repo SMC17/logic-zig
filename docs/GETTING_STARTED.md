@@ -19,8 +19,42 @@ zig build
 ./zig-out/bin/logic-zig doctor
 ```
 
+The native core CI runs on Linux and macOS. These checks do not install
+independent solvers or certify their presence. No Windows runtime claim is made.
+
 `doctor` runs a short end-to-end smoke suite (prop, CDCL, AIGER, PDR, k-liveness,
 write/read). Exit status 0 means the core stack is healthy on your machine.
+
+## Independent trust checks
+
+`doctor` is a core smoke test. `trust-report` is stricter: it requires actual
+DRAT verification, CaDiCaL differential runs, ABC discovery, and positive
+results on each internal evidence axis. Missing or inconclusive checks block
+`TRUST_OK`.
+
+To build the pinned optional tools in a clean checkout (requires Git, Make,
+and C/C++ compilers; downloads upstream source):
+
+```sh
+scripts/build-checkers.sh
+./zig-out/bin/logic-zig trust-report
+```
+
+The setup script refuses to overwrite an existing checker directory. Existing
+installations can be selected with `LOGIC_ZIG_EXTERNAL_SOLVER`,
+`LOGIC_ZIG_DRAT_TRIM`, and `LOGIC_ZIG_ABC`, each set to an executable file path.
+ABC discovery establishes availability; it is not independent verification of
+every model-checking result.
+
+SAT competition commands use exit status **10 for SAT** and **20 for UNSAT**.
+The CI helper checks the specific expected status; it does not ignore errors:
+
+```sh
+scripts/expect-status.sh 20 ./zig-out/bin/logic-sat check-drat corpus/bench/sat/simple_unsat.cnf
+```
+
+`check-drat` requires a verified proof for its UNSAT success status. A missing,
+failed, or unusable checker is an error, not successful proof verification.
 
 ## First commands
 

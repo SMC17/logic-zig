@@ -41,6 +41,18 @@ These need **external processes**, not more library spines:
 | PR **#2** museum draft | Rebase onto current `main` + evidence gates |
 | Industrial parity Kissat/Z3/Vampire | Scoreboard only; never claimed |
 
+## Host portability and trust gates
+
+Host discovery, monotonic timing, proof/export writes, and file-size checks use
+Zig 0.16 platform-aware APIs. Native core CI covers Linux and macOS; Windows
+runtime behavior remains unverified. The core smoke suite is distinct from the
+independent-checker trust gate.
+
+`TRUST_OK` requires positive DRAT verification, completed CaDiCaL differential
+checks, ABC availability, and positive results on every internal evidence axis.
+No missing checker or zero-run axis counts as successful evidence. See
+[`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) for pinned checker setup.
+
 ## Platform (complete for admitted fragments)
 
 **Engines:** CDCL, BMC/k-ind/PDR/klive, IPASIR, DRAT, taxonomy.  

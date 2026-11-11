@@ -142,7 +142,7 @@ pub fn differential(allocator: std.mem.Allocator, io: std.Io, cnf: *const Cnf) !
     const match = switch (ext.status) {
         .sat => r.status == .sat,
         .unsat => r.status == .unsat,
-        else => true,
+        else => false,
     };
     return .{ .external = ext.status, .internal = r.status, .match = match };
 }
@@ -176,6 +176,9 @@ pub fn fuzzExternal(
             try cnf.addClause(&cl);
         }
         const d = try differential(allocator, io, &cnf);
+        if (d.external == .unavailable) {
+            return .{ .ran = i, .mismatches = mismatches, .unavailable = true, .solver = probe };
+        }
         if (!d.match) mismatches += 1;
     }
     return .{ .ran = iters, .mismatches = mismatches, .unavailable = false, .solver = probe };

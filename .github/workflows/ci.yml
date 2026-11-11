@@ -15,6 +15,8 @@ jobs:
         uses: mlugg/setup-zig@v2
         with:
           version: 0.16.0
+      - name: Build pinned independent checkers
+        run: scripts/build-checkers.sh
       - name: Unit + integration tests
         run: zig build test
       - name: Build umbrella + spin-offs + IPASIR
@@ -30,7 +32,7 @@ jobs:
         run: ./zig-out/bin/logic-hwmcc golden
       - name: DRAT-trim unit + fuzz
         run: |
-          ./zig-out/bin/logic-sat check-drat corpus/bench/sat/simple_unsat.cnf
+          scripts/expect-status.sh 20 ./zig-out/bin/logic-sat check-drat corpus/bench/sat/simple_unsat.cnf
           ./zig-out/bin/logic-sat drat-fuzz --iters 20 --vars 5
       - name: Portfolio hard smoke (small suite)
         run: ./zig-out/bin/logic-sat hard --dir corpus/bench/sat --limit 12 --conflicts 100000
@@ -38,10 +40,10 @@ jobs:
         run: ./zig-out/bin/logic-sat hard --dir corpus/bench/sat_hard --limit 3 --conflicts 150000
       - name: SAT competition track (s/v + portfolio + proof)
         run: |
-          ./zig-out/bin/logic-zig sat-track corpus/bench/sat/simple_unsat.cnf --proof
-          ./zig-out/bin/logic-zig sat-track corpus/bench/sat/simple_sat.cnf --max-conflicts 100000
-          ./zig-out/bin/logic-zig sat-track corpus/bench/sat_comp/false.cnf --portfolio --budget 100000 --proof
-          ./zig-out/bin/logic-zig sat-track corpus/bench/sat_comp/ph3.cnf --portfolio --budget 200000
+          scripts/expect-status.sh 20 ./zig-out/bin/logic-zig sat-track corpus/bench/sat/simple_unsat.cnf --proof
+          scripts/expect-status.sh 10 ./zig-out/bin/logic-zig sat-track corpus/bench/sat/simple_sat.cnf --max-conflicts 100000
+          scripts/expect-status.sh 20 ./zig-out/bin/logic-zig sat-track corpus/bench/sat_comp/false.cnf --portfolio --budget 100000 --proof
+          scripts/expect-status.sh 20 ./zig-out/bin/logic-zig sat-track corpus/bench/sat_comp/ph3.cnf --portfolio --budget 200000
       - name: Industrial SAT scoreboard vs CaDiCaL
         run: |
           ./zig-out/bin/logic-zig sat-scoreboard --dir corpus/bench/sat --limit 20 --conflicts 150000
@@ -64,7 +66,7 @@ jobs:
       - name: Spin-off smoke
         run: |
           ./zig-out/bin/logic-agent session-demo
-          ./zig-out/bin/logic-sat portfolio corpus/bench/sat/simple_unsat.cnf --proof
+          scripts/expect-status.sh 20 ./zig-out/bin/logic-sat portfolio corpus/bench/sat/simple_unsat.cnf --proof
           ./zig-out/bin/logic-cert pdr-demo
           ./zig-out/bin/logic-cert suite
           ./zig-out/bin/logic-smt demo-add
