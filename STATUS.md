@@ -44,7 +44,7 @@ These need **external processes**, not more library spines:
 ## Host portability and trust gates
 
 Host discovery, monotonic timing, proof/export writes, and file-size checks use
-Zig 0.16 platform-aware APIs. Native core CI covers Linux and macOS; Windows
+Zig 0.16 platform-aware APIs. Native core CI is configured for Linux and macOS; Windows
 runtime behavior remains unverified. The core smoke suite is distinct from the
 independent-checker trust gate.
 
@@ -53,7 +53,16 @@ checks, ABC availability, and positive results on every internal evidence axis.
 No missing checker or zero-run axis counts as successful evidence. See
 [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) for pinned checker setup.
 
-## Platform (complete for admitted fragments)
+### Native verification, 11 November 2026
+
+On macOS ARM64 with Zig 0.16.0: `zig build test --summary all` passes
+391/391 tests; build, doctor, proof export, and AIGER round-trip pass.
+Pinned independent tools produce `TRUST_OK`: 5 DRAT verifications,
+25 CaDiCaL comparisons with no mismatches, ABC available, and all internal
+evidence axes passing. The Linux x86-64 cross-build also passes; this is
+compile evidence, not a Linux runtime result. No performance parity is claimed.
+
+## Engine and fragment coverage
 
 **Engines:** CDCL, BMC/k-ind/PDR/klive, IPASIR, DRAT, taxonomy.  
 **Fragments:** ND, sequent, focusing, search, abduction ladder, IPC, linear, relevance, K–S5 + certs + traces, epistemic/deontic, fuzzy/LP + fixtures, MLN + lifted + WPLL, ALC/SHIQ + subset/pairwise blocking, HOL + resolution + pattern unify, categorical, syllogistic, defaults, KLM countermodels.
