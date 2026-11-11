@@ -30,6 +30,8 @@ Graph: [`GRAPH.md`](GRAPH.md).
 
 ---
 
+Choose one task: [self-serve reasoning labs](docs/SELF_SERVE_LABS.md).
+
 ## 90 seconds
 
 ```sh
