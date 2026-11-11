@@ -37,6 +37,19 @@ pub const TrustReport = struct {
     smt_ok: u32 = 0,
     smt_fail: u32 = 0,
     all_pass: bool = false,
+
+    /// Missing or inconclusive checks cannot establish trust, even when every
+    /// failure counter is zero. Each required axis must have positive evidence.
+    pub fn passes(self: TrustReport) bool {
+        return self.drat_available and self.drat_verified > 0 and self.drat_failed == 0 and
+            self.cadical_available and self.cadical_ran > 0 and self.cadical_mismatches == 0 and
+            self.abc_available and
+            self.pdr_certs_ok > 0 and self.pdr_certs_fail == 0 and
+            self.sequential_ok > 0 and self.sequential_fail == 0 and
+            self.klive_ok > 0 and self.klive_fail == 0 and
+            self.agent_ok > 0 and self.agent_fail == 0 and
+            self.smt_ok > 0 and self.smt_fail == 0;
+    }
 };
 
 fn unitUnsat(allocator: std.mem.Allocator) !@import("../sat/cnf.zig").Cnf {
@@ -60,14 +73,14 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io) !TrustReport {
             var cnf = try unitUnsat(allocator);
             defer cnf.deinit();
             const r = try drat_external.solveAndCheckExternal(allocator, io, &cnf);
-            if (r.check == .verified) rep.drat_verified += 1 else if (r.check == .failed) rep.drat_failed += 1;
+            if (r.check == .verified) rep.drat_verified += 1 else rep.drat_failed += 1;
         }
         // empty clause
         {
             var cnf = try dimacs.parse(allocator, "p cnf 0 1\n0\n");
             defer cnf.deinit();
             const r = try drat_external.solveAndCheckExternal(allocator, io, &cnf);
-            if (r.check == .verified) rep.drat_verified += 1 else if (r.check == .failed) rep.drat_failed += 1;
+            if (r.check == .verified) rep.drat_verified += 1 else rep.drat_failed += 1;
         }
         // portfolio of known unsat from corpus if present
         const paths = [_][]const u8{
@@ -82,7 +95,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io) !TrustReport {
             defer cnf.deinit();
             const r = try drat_external.solveAndCheckExternal(allocator, io, &cnf);
             if (r.status != .unsat) continue;
-            if (r.check == .verified) rep.drat_verified += 1 else if (r.check == .failed) rep.drat_failed += 1;
+            if (r.check == .verified) rep.drat_verified += 1 else rep.drat_failed += 1;
         }
     }
 
@@ -272,10 +285,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io) !TrustReport {
         if (r.status == .unsat) rep.smt_ok += 1 else rep.smt_fail += 1;
     }
 
-    rep.all_pass = rep.drat_failed == 0 and rep.cadical_mismatches == 0 and
-        rep.pdr_certs_fail == 0 and rep.sequential_fail == 0 and rep.klive_fail == 0 and
-        rep.agent_fail == 0 and rep.smt_fail == 0 and
-        (rep.pdr_certs_ok + rep.sequential_ok + rep.klive_ok + rep.agent_ok + rep.smt_ok) > 0;
+    rep.all_pass = rep.passes();
 
     return rep;
 }
@@ -310,4 +320,37 @@ test "trust report constructs without io-dependent crash in unit" {
     var i = inv.?;
     defer i.deinit();
     try std.testing.expect(try i.verify(std.testing.allocator, &d.nl));
+}
+
+test "trust requires positive evidence from every axis" {
+    var rep: TrustReport = .{};
+    try std.testing.expect(!rep.passes());
+    rep = .{
+        .drat_available = true,
+        .drat_verified = 1,
+        .cadical_available = true,
+        .cadical_ran = 1,
+        .abc_available = true,
+        .pdr_certs_ok = 1,
+        .sequential_ok = 1,
+        .klive_ok = 1,
+        .agent_ok = 1,
+        .smt_ok = 1,
+    };
+    try std.testing.expect(rep.passes());
+    inline for (.{ "drat_available", "cadical_available", "abc_available" }) |field| {
+        var missing = rep;
+        @field(missing, field) = false;
+        try std.testing.expect(!missing.passes());
+    }
+    inline for (.{ "drat_verified", "cadical_ran", "pdr_certs_ok", "sequential_ok", "klive_ok", "agent_ok", "smt_ok" }) |field| {
+        var missing = rep;
+        @field(missing, field) = 0;
+        try std.testing.expect(!missing.passes());
+    }
+    inline for (.{ "drat_failed", "cadical_mismatches", "pdr_certs_fail", "sequential_fail", "klive_fail", "agent_fail", "smt_fail" }) |field| {
+        var failed = rep;
+        @field(failed, field) = 1;
+        try std.testing.expect(!failed.passes());
+    }
 }

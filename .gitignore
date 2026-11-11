@@ -8,6 +8,7 @@ zig-out/
 
 # Optional external solvers (clone locally; not required to build/test)
 third_party/
+/abc.history
 
 # Editor / OS
 .DS_Store

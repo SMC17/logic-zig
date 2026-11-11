@@ -4,9 +4,10 @@
 //! 1. env LOGIC_ZIG_EXTERNAL_SOLVER
 //! 2. relative `third_party/cadical/build/cadical` from cwd
 //! 3. relative `../third_party/cadical/build/cadical`
-//! 4. path next to the running binary (`/proc/self/exe` dirname + relative)
+//! 4. path next to the running binary (platform executable directory + relative)
 
 const std = @import("std");
+const host = @import("../core/host.zig");
 const cnf_mod = @import("cnf.zig");
 const solver_mod = @import("solver.zig");
 const dimacs_mod = @import("../bridge/dimacs.zig");
@@ -25,30 +26,13 @@ pub const DiffResult = struct {
     solver_path: ?[]const u8 = null,
 };
 
-fn pathExists(path: []const u8) bool {
-    if (path.len == 0 or path.len >= 400) return false;
-    var buf: [512]u8 = undefined;
-    @memcpy(buf[0..path.len], path);
-    buf[path.len] = 0;
-    const fd = std.os.linux.open(@ptrCast(&buf), .{ .ACCMODE = .RDONLY }, 0);
-    if (@as(isize, @bitCast(fd)) < 0) return false;
-    _ = std.os.linux.close(@intCast(fd));
-    return true;
-}
+const pathExists = host.executableExists;
 
-fn readSelfExeDir(allocator: std.mem.Allocator) ?[]u8 {
-    var buf: [std.fs.max_path_bytes]u8 = undefined;
-    const n = std.os.linux.readlink("/proc/self/exe", &buf, buf.len);
-    const ni: isize = @bitCast(n);
-    if (ni < 0) return null;
-    const path = buf[0..@intCast(ni)];
-    const slash = std.mem.lastIndexOfScalar(u8, path, '/') orelse return null;
-    return allocator.dupe(u8, path[0..slash]) catch null;
-}
+const readSelfExeDir = host.executableDir;
 
 /// Caller frees returned path if non-null.
 pub fn findSolver(allocator: std.mem.Allocator) !?[]const u8 {
-    // 1) env via /proc/self/environ parse (no libc getenv)
+    // 1) environment inherited at process startup
     if (readEnvSolver(allocator)) |p| return p;
 
     const rel = [_][]const u8{
@@ -79,27 +63,7 @@ pub fn findSolver(allocator: std.mem.Allocator) !?[]const u8 {
 }
 
 fn readEnvSolver(allocator: std.mem.Allocator) ?[]const u8 {
-    const fd = std.os.linux.open("/proc/self/environ", .{ .ACCMODE = .RDONLY }, 0);
-    if (@as(isize, @bitCast(fd)) < 0) return null;
-    defer _ = std.os.linux.close(@intCast(fd));
-    var buf: [8192]u8 = undefined;
-    const n = std.os.linux.read(@intCast(fd), &buf, buf.len);
-    if (@as(isize, @bitCast(n)) <= 0) return null;
-    const data = buf[0..@intCast(n)];
-    const key = "LOGIC_ZIG_EXTERNAL_SOLVER=";
-    var start: usize = 0;
-    while (start < data.len) {
-        const end = std.mem.indexOfScalarPos(u8, data, start, 0) orelse data.len;
-        const entry = data[start..end];
-        if (std.mem.startsWith(u8, entry, key)) {
-            const val = entry[key.len..];
-            if (val.len > 0 and pathExists(val)) {
-                return allocator.dupe(u8, val) catch null;
-            }
-        }
-        start = end + 1;
-    }
-    return null;
+    return host.envPath(allocator, "LOGIC_ZIG_EXTERNAL_SOLVER");
 }
 
 fn solveExternalWithIo(allocator: std.mem.Allocator, io: std.Io, cnf: *const Cnf) !struct { status: ExternalStatus, path: ?[]const u8 } {
@@ -126,17 +90,10 @@ fn solveExternalWithIo(allocator: std.mem.Allocator, io: std.Io, cnf: *const Cnf
     const body = try aw.toOwnedSlice();
     defer allocator.free(body);
 
-    const tmp_path = "/tmp/logic-zig-diff.cnf";
-    {
-        const path_z = tmp_path ++ "\x00";
-        const fd = std.os.linux.open(@ptrCast(path_z.ptr), .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, 0o644);
-        if (@as(isize, @bitCast(fd)) < 0) {
-            allocator.free(solver);
-            return .{ .status = .unknown, .path = null };
-        }
-        _ = std.os.linux.write(@intCast(fd), body.ptr, body.len);
-        _ = std.os.linux.close(@intCast(fd));
-    }
+    var tmp_buf: [96]u8 = undefined;
+    const tmp_path = try std.fmt.bufPrint(&tmp_buf, "/tmp/logic-zig-diff-{d}.cnf", .{host.monoNs()});
+    try host.writeFile(io, tmp_path, body);
+    defer std.Io.Dir.cwd().deleteFile(io, tmp_path) catch {};
 
     const result = std.process.run(allocator, io, .{
         .argv = &.{ solver, tmp_path },
@@ -185,7 +142,7 @@ pub fn differential(allocator: std.mem.Allocator, io: std.Io, cnf: *const Cnf) !
     const match = switch (ext.status) {
         .sat => r.status == .sat,
         .unsat => r.status == .unsat,
-        else => true,
+        else => false,
     };
     return .{ .external = ext.status, .internal = r.status, .match = match };
 }
@@ -219,6 +176,9 @@ pub fn fuzzExternal(
             try cnf.addClause(&cl);
         }
         const d = try differential(allocator, io, &cnf);
+        if (d.external == .unavailable) {
+            return .{ .ran = i, .mismatches = mismatches, .unavailable = true, .solver = probe };
+        }
         if (!d.match) mismatches += 1;
     }
     return .{ .ran = iters, .mismatches = mismatches, .unavailable = false, .solver = probe };

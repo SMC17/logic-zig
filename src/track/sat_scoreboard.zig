@@ -6,6 +6,7 @@
 //! CLI: `logic-zig sat-scoreboard [--dir DIR] [--limit N] [--conflicts N] [--portfolio]`
 
 const std = @import("std");
+const host = @import("../core/host.zig");
 const dimacs = @import("../bridge/dimacs.zig");
 const solver = @import("../sat/solver.zig");
 const portfolio = @import("../sat/portfolio.zig");
@@ -51,11 +52,7 @@ pub const Scoreboard = struct {
     }
 };
 
-fn monoNs() u64 {
-    var ts: std.os.linux.timespec = undefined;
-    _ = std.os.linux.clock_gettime(std.os.linux.CLOCK.MONOTONIC, &ts);
-    return @as(u64, @intCast(ts.sec)) * std.time.ns_per_s + @as(u64, @intCast(ts.nsec));
-}
+const monoNs = host.monoNs;
 
 pub const ScoreOpts = struct {
     suite_dir: []const u8 = "corpus/bench/sat_comp",

@@ -4,6 +4,7 @@
 //! Never claim parity without scoreboard evidence.
 
 const std = @import("std");
+const host = @import("../core/host.zig");
 
 pub const Giant = enum {
     cadical,
@@ -22,16 +23,7 @@ pub const Found = struct {
     path: []const u8,
 };
 
-fn pathExists(path: []const u8) bool {
-    if (path.len == 0 or path.len >= 400) return false;
-    var buf: [512]u8 = undefined;
-    @memcpy(buf[0..path.len], path);
-    buf[path.len] = 0;
-    const fd = std.os.linux.open(@ptrCast(&buf), .{ .ACCMODE = .RDONLY }, 0);
-    if (@as(isize, @bitCast(fd)) < 0) return false;
-    _ = std.os.linux.close(@intCast(fd));
-    return true;
-}
+const pathExists = host.executableExists;
 
 const Candidate = struct {
     giant: Giant,
