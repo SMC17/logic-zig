@@ -41,3 +41,6 @@ measurements above come from the native local runtimes, not hosted CI.
 If this fails, open an issue with the toolchain, operating system, input,
 command, expected status and actual output. Do not include secrets or private
 workstation files.
+
+On Linux, [record the checked task in zag](RECORDED_PROOF_DEMO.md) and verify
+the command history and stored output objects.
