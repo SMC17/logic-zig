@@ -49,6 +49,8 @@ zig build
 `trust-report` is fail-closed: missing CaDiCaL, DRAT-trim, or ABC is reported and
 blocks `TRUST_OK`. That is the intended agent-trust behavior, not a silent skip.
 
+Try an independent proof check: [`portable trust demo`](docs/PORTABLE_TRUST_DEMO.md).
+
 Step-by-step: [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md).
 Product matrix: [`docs/PRODUCTS.md`](docs/PRODUCTS.md).
 
