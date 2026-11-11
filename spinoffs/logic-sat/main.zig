@@ -93,7 +93,7 @@ pub fn main(init: std.process.Init) !void {
                 @tagName(r.check),
                 r.proof_lines,
             });
-            if (r.status == .unsat and r.check == .failed) std.process.exit(1);
+            if (r.status == .unsat and r.check != .verified) std.process.exit(1);
             std.process.exit(if (r.status == .sat) 10 else if (r.status == .unsat) 20 else 0);
         }
 
