@@ -7,6 +7,11 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Packaging
+
+- Add seven-CLI clean-source packs, task-oriented entry points, checksums and a gated native preview workflow. External proof checkers remain a separate installation.
+
+
 ### Fixed
 
 - Host discovery, monotonic timing, proof/export writes, and file-size checks
