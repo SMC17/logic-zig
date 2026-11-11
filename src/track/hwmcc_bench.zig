@@ -3,6 +3,7 @@
 //! Reports wall time and status; compares safety engines for regressions.
 
 const std = @import("std");
+const host = @import("../core/host.zig");
 const aiger = @import("../bridge/aiger.zig");
 const pdr = @import("../circuit/pdr.zig");
 const bmc = @import("../circuit/bmc.zig");
@@ -11,11 +12,7 @@ const netlist_mod = @import("../circuit/netlist.zig");
 
 const Netlist = netlist_mod.Netlist;
 
-fn monoNs() u64 {
-    var ts: std.os.linux.timespec = undefined;
-    _ = std.os.linux.clock_gettime(std.os.linux.CLOCK.MONOTONIC, &ts);
-    return @as(u64, @intCast(ts.sec)) * std.time.ns_per_s + @as(u64, @intCast(ts.nsec));
-}
+const monoNs = host.monoNs;
 
 pub const CaseResult = struct {
     name: []const u8,

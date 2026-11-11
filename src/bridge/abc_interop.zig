@@ -1,7 +1,7 @@
 //! Optional ABC interop — invoke `abc` if present for differential / baseline.
 //!
 //! Does not vendor ABC. Discovery order:
-//! 1. `LOGIC_ZIG_ABC` (absolute path, via `/proc/self/environ`)
+//! 1. `LOGIC_ZIG_ABC` (path from the inherited environment)
 //! 2. `third_party/abc/abc` (local build)
 //! 3. `/usr/bin/abc`, `/usr/local/bin/abc`
 //!
@@ -18,6 +18,7 @@
 //! AIGER file and parse a coarse status for Δ vs internal engines.
 
 const std = @import("std");
+const host = @import("../core/host.zig");
 
 pub const AbcStatus = enum {
     unavailable,
@@ -52,37 +53,10 @@ pub const SafetyResult = struct {
     }
 };
 
-fn pathExists(path: []const u8) bool {
-    var buf: [512]u8 = undefined;
-    if (path.len >= buf.len) return false;
-    @memcpy(buf[0..path.len], path);
-    buf[path.len] = 0;
-    const fd = std.os.linux.open(@ptrCast(&buf), .{ .ACCMODE = .RDONLY }, 0);
-    if (@as(isize, @bitCast(fd)) < 0) return false;
-    _ = std.os.linux.close(@intCast(fd));
-    return true;
-}
+const pathExists = host.executableExists;
 
 fn readEnvAbc(allocator: std.mem.Allocator) ?[]const u8 {
-    const fd = std.os.linux.open("/proc/self/environ", .{ .ACCMODE = .RDONLY }, 0);
-    if (@as(isize, @bitCast(fd)) < 0) return null;
-    defer _ = std.os.linux.close(@intCast(fd));
-    var buf: [8192]u8 = undefined;
-    const n = std.os.linux.read(@intCast(fd), &buf, buf.len);
-    if (@as(isize, @bitCast(n)) <= 0) return null;
-    const data = buf[0..@intCast(n)];
-    const key = "LOGIC_ZIG_ABC=";
-    var start: usize = 0;
-    while (start < data.len) {
-        const end = std.mem.indexOfScalarPos(u8, data, start, 0) orelse data.len;
-        const entry = data[start..end];
-        if (std.mem.startsWith(u8, entry, key)) {
-            const val = entry[key.len..];
-            if (val.len > 0 and pathExists(val)) return allocator.dupe(u8, val) catch null;
-        }
-        start = end + 1;
-    }
-    return null;
+    return host.envPath(allocator, "LOGIC_ZIG_ABC");
 }
 
 pub fn findAbc(allocator: std.mem.Allocator) !?[]u8 {
