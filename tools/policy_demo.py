@@ -34,6 +34,7 @@ def run_demo(output, checker):
         'measured_at': dt.datetime.now(dt.timezone.utc).isoformat(),
         'platform': {'system': platform.system(), 'machine': platform.machine()},
         'scope': 'two explicit propositional encodings; no action authorization or general agent-safety claim',
+        'source_commit': None, 'source_dirty': None,
         'steps': [],
     }
     logic = ROOT / 'zig-out/bin/logic-zig'
@@ -54,10 +55,13 @@ def run_demo(output, checker):
         return result
 
     try:
-        receipt['source_commit'] = subprocess.check_output(
-            ['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
-        receipt['source_dirty'] = bool(subprocess.check_output(
-            ['git', 'status', '--porcelain'], cwd=ROOT, text=True).strip())
+        # Source packs intentionally omit Git metadata. Keep its absence explicit
+        # rather than inventing a revision or preventing proof replay from a pack.
+        if (ROOT / '.git').exists():
+            receipt['source_commit'] = subprocess.check_output(
+                ['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+            receipt['source_dirty'] = bool(subprocess.check_output(
+                ['git', 'status', '--porcelain'], cwd=ROOT, text=True).strip())
         receipt['tools'] = {name: {'sha256': sha256(path)} for name, path in (
             ('logic-zig', logic), ('logic-sat', sat), ('drat-trim', checker))}
         receipt['runner_sha256'] = sha256(Path(__file__))
