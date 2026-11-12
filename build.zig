@@ -107,4 +107,16 @@ pub fn build(b: *std.Build) void {
         }),
     });
     b.installArtifact(ipasir_ex);
+
+    // A runnable external-consumer workflow, kept separate from the seven CLIs.
+    const protocol_mod = b.createModule(.{
+        .root_source_file = b.path("examples/release_protocol.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "logic", .module = mod }},
+    });
+    const protocol = b.addExecutable(.{ .name = "protocol-demo", .root_module = protocol_mod });
+    b.installArtifact(protocol);
+    const example_tests = b.addTest(.{ .root_module = protocol_mod });
+    test_step.dependOn(&b.addRunArtifact(example_tests).step);
 }

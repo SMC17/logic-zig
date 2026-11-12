@@ -1,5 +1,9 @@
 # Agent-native formal (logic-agent)
 
+Run named queries from JSON with `logic-agent run examples/workflows/deployment.json`.
+It returns checked assignments or named conflict cores, and preserves unknown
+results. See [real use cases](USE_CASES.md) and the [workflow contract](WORKFLOWS.md).
+
 For a complete worked task, start with the
 [deployment policy example](../examples/policy/README.md): explicit inputs,
 an exported proof, an independent check and refusal after the input changes.
@@ -14,8 +18,9 @@ authorizing an action. Exact counters and boundaries: [trust contract](TRUST.md)
 
 ## Why this flagship
 
-LLM agents and tool runtimes issue **many small SAT queries** with shared structure.
-Spawning CaDiCaL per call loses to a **warm multishot engine**.
+LLM agents and tool runtimes can issue many related SAT queries. A session keeps
+one engine and its learned clauses across them. Measure the actual workload;
+the bundled warm/cold comparison does not establish a universal speedup.
 
 ## API (Zig)
 

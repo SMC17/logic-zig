@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "title": "A depleted search budget preserves unknown",
+  "variables": ["choice"],
+  "clauses": [],
+  "max_conflicts": 0,
+  "queries": [{"id": "no_search_budget", "assumptions": []}]
+}

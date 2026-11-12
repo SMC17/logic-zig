@@ -994,8 +994,9 @@ pub const Solver = struct {
     }
 
     /// Multi-shot solve with assumptions (kept as decision levels 1..a).
-    /// On UNSAT, fills `assumption_core` with a **deletion-minimal** unsat core
-    /// and sets `assumption_core_unique` when it is the unique MUS of the set.
+    /// On UNSAT, deletion-filters `assumption_core`. Under finite budgets,
+    /// unknown probes may leave a non-minimal candidate; use isDeletionMinimalCore
+    /// before claiming minimality. Uniqueness requires positive SAT probes.
     pub fn solveAssumptions(self: *Solver, assumptions: []const Lit) !SolveResult {
         var r = try self.solveAssumptionsRaw(assumptions);
         if (r.status == .unsat and assumptions.len > 0) {
@@ -1007,10 +1008,11 @@ pub const Solver = struct {
     }
 
     pub const MusResult = struct {
-        /// Deletion-minimal unsat core (DIMACS lits), owned.
+        /// Deletion-filtered core (DIMACS lits), owned; unknown probes can retain
+        /// unnecessary assumptions under a finite search budget.
         core: []i32,
-        /// True iff this is the **unique** MUS of the assumption set:
-        /// ∀a∈MUS. assumptions\{a} is SAT.
+        /// True only when probes establish the unique MUS of the assumption set:
+        /// ∀a∈MUS. assumptions\{a} is SAT. False includes inconclusive probes.
         unique: bool,
     };
 
@@ -1038,7 +1040,7 @@ pub const Solver = struct {
                 var pp = p.*;
                 pp.deinit();
             };
-            if (r.status == .unsat) {
+            if (r.status != .sat) {
                 unique = false;
                 break;
             }
@@ -1099,7 +1101,7 @@ pub const Solver = struct {
                 var pp = p.*;
                 pp.deinit();
             };
-            if (r.status == .unsat) return false;
+            if (r.status != .sat) return false;
         }
         return true;
     }
@@ -1348,6 +1350,23 @@ pub const Solver = struct {
         };
     }
 };
+
+test "unknown probes cannot establish core minimality or uniqueness" {
+    var cnf = Cnf.init(std.testing.allocator);
+    defer cnf.deinit();
+    const a = Lit.positive(Var.fromIndex(0));
+    const b = Lit.positive(Var.fromIndex(1));
+    try cnf.addClause(&.{ a, b });
+    var engine = try Solver.init(std.testing.allocator, &cnf, .{ .max_conflicts = 0 });
+    defer engine.deinit();
+    const assumptions = [_]Lit{ a.not(), b.not() };
+    const result = try engine.solveAssumptions(&assumptions);
+    defer if (result.assumption_core) |core| std.testing.allocator.free(core);
+    defer if (result.model) |model| std.testing.allocator.free(model);
+    try std.testing.expectEqual(SolveStatus.unsat, result.status);
+    try std.testing.expect(!result.assumption_core_unique);
+    try std.testing.expect(!try engine.isDeletionMinimalCore(&assumptions));
+}
 
 test "assumption core is deletion-minimal" {
     var cnf = Cnf.init(std.testing.allocator);

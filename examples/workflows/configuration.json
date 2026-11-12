@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "title": "Find conflicting production and access-control settings",
+  "variables": ["production", "debug", "public_access", "authentication", "audit_log", "payments"],
+  "clauses": [
+    ["!production", "!debug"],
+    ["!production", "authentication"],
+    ["!public_access", "authentication"],
+    ["!payments", "audit_log"]
+  ],
+  "queries": [
+    {"id": "insecure_public_access", "assumptions": ["public_access", "!authentication"]},
+    {"id": "debug_in_production", "assumptions": ["production", "debug"]},
+    {"id": "valid_production", "assumptions": ["production", "!debug", "authentication", "audit_log", "payments", "public_access"]},
+    {"id": "explain_payments_conflict", "assumptions": ["payments", "!audit_log", "!debug"]}
+  ]
+}

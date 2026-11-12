@@ -12,6 +12,7 @@ pub fn main(init: std.process.Init) !void {
     const cmd = iter.next() orelse {
         std.debug.print(
             \\logic-agent — multishot SAT + assumptions (profile=agent)
+            \\  logic-agent run <workflow.json>        # named clauses, models and checked cores
             \\  logic-agent multishot [--queries N] [--vars V]
             \\  logic-agent session-demo
             \\  logic-agent stress [--queries N] [--vars V]
@@ -23,6 +24,20 @@ pub fn main(init: std.process.Init) !void {
         return;
     };
     const prof = logic.profiles.get(.agent);
+    if (std.mem.eql(u8, cmd, "run")) {
+        const path = iter.next() orelse return workflowError(io, error.MissingWorkflowPath);
+        if (iter.next() != null) return workflowError(io, error.UnexpectedArgument);
+        const source = std.Io.Dir.cwd().readFileAlloc(io, path, gpa, .limited(16 << 20)) catch |err| return workflowError(io, err);
+        defer gpa.free(source);
+        var report = logic.agent_workflow.run(gpa, source) catch |err| return workflowError(io, err);
+        defer report.deinit();
+        var buffer: [4096]u8 = undefined;
+        var stdout = std.Io.File.stdout().writer(io, &buffer);
+        try report.writeJson(&stdout.interface);
+        try stdout.interface.flush();
+        if (!report.complete) std.process.exit(1);
+        return;
+    }
     if (std.mem.eql(u8, cmd, "profile")) {
         std.debug.print("profile={s}\n{s}\nmax_conflicts={d}\n", .{
             prof.name,
@@ -132,5 +147,18 @@ pub fn main(init: std.process.Init) !void {
         return;
     }
     std.debug.print("unknown: {s}\n", .{cmd});
+    std.process.exit(2);
+}
+
+fn workflowError(io: std.Io, err: anyerror) !void {
+    var buffer: [1024]u8 = undefined;
+    var stdout = std.Io.File.stdout().writer(io, &buffer);
+    try std.json.Stringify.value(.{
+        .schema_version = @as(u32, 1),
+        .status = "WORKFLOW_ERROR",
+        .error_code = @errorName(err),
+    }, .{}, &stdout.interface);
+    try stdout.interface.writeAll("\n");
+    try stdout.interface.flush();
     std.process.exit(2);
 }

@@ -143,14 +143,22 @@ fn parseAscii(allocator: std.mem.Allocator, data: []const u8) AigerError!Netlist
     while (i < h.L) : (i += 1) {
         const line = lines.next() orelse return error.InvalidFormat;
         var it = std.mem.tokenizeAny(u8, std.mem.trim(u8, line, " \t\r"), " \t");
-        const next_lit = try parseU(it.next() orelse return error.InvalidFormat);
+        const first = try parseU(it.next() orelse return error.InvalidFormat);
+        const second = if (it.next()) |t| try parseU(t) else null;
         const qv = h.I + 1 + i;
-        const d = try litToNet(&nl, sk.pos, sk.c0, sk.c1, next_lit);
-        var init_val: ?bool = false;
-        if (it.next()) |t| {
-            const iv = try parseU(t);
-            init_val = if (iv == 0) false else if (iv == 1) true else null;
+        var next_lit = first;
+        var init_literal = second orelse 0;
+        if (it.next()) |third| {
+            // Standard canonical ASCII: current next init. Keep reading the
+            // repository's historical compact next/init fixtures separately.
+            if (first != qv * 2) return error.Unsupported;
+            next_lit = second orelse return error.InvalidFormat;
+            init_literal = try parseU(third);
+            if (init_literal != 0 and init_literal != 1 and init_literal != first) return error.InvalidFormat;
+            if (it.next() != null) return error.InvalidFormat;
         }
+        const d = try litToNet(&nl, sk.pos, sk.c0, sk.c1, next_lit);
+        const init_val: ?bool = if (init_literal == 0) false else if (init_literal == 1) true else null;
         try nl.addLatch(d, sk.pos[qv], init_val);
     }
 

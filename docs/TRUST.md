@@ -9,13 +9,17 @@ It does not authorize an agent action or certify an arbitrary future result.
 | Result | Certificate | Re-check |
 |--------|-------------|----------|
 | UNSAT | RUP/DRAT log | Internal `verifyRup`; independent `drat-trim` when explicitly requested |
-| Safety proven (PDR/kind) | Inductive clauses | Initial-state inclusion, exclusion of bad states, inductiveness |
+| Safety proven (PDR/kind) | Inductive clauses | Initial-state inclusion, exclusion of bad states beyond Init, transition preservation; each obligation must be UNSAT |
 | Fair multi-justice finite | k-liveness / kind on thermometer | Named reduction and fixture status; retain engine limits |
 | SAT | Model | `Cnf.checkModel` |
 
 A certificate checked by another path in the same implementation is distinct
 from a check by an independent tool. Neither establishes that a human's policy
 was encoded correctly. Try the [deployment policy example](../examples/policy/README.md).
+The [release-protocol workflow](USE_CASES.md#release-protocol-distinguish-a-bounded-check-from-a-safety-proof)
+exports a supplied invariant, replays it from disk, and rejects it against a
+changed transition system. The [workflow contract](WORKFLOWS.md) describes the
+single-property checker and its scope.
 
 ## Commands and exit statuses
 
