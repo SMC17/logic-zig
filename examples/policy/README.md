@@ -40,6 +40,10 @@ actual command outcomes. It records the runner hash as well. Hashes detect
 changes relative to that receipt; they do not establish the identity or
 honesty of whoever produced it.
 
+From an extracted source pack, `source_commit` and `source_dirty` are `null`
+because Git metadata is absent. Retain the pack's own commit and checksums
+alongside this receipt; the runner does not invent source provenance.
+
 Replay the proof independently of the runner, from the evidence directory:
 
 ```sh
