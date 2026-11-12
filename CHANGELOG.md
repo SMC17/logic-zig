@@ -7,6 +7,17 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Trust evidence
+
+- Require an exact DRAT checker success status and exit 0. Reject negative,
+  conflicting, diagnostic-only and failed-checker output. Patch the pinned
+  checker build's incorrect exit status on an input containing an empty clause.
+- Refuse `sat --check-drat` when independent checking is unavailable; reject
+  formula-mode requests that previously silently ignored that option.
+- Add `trust-report --json` with versioned counters, scope and derived status.
+- Add a deployment policy example with independent proof replay, rejection
+  after changing the input, and a local receipt binding artifacts to hashes.
+
 ### Packaging
 
 - Add seven-CLI clean-source packs, task-oriented entry points, checksums and a gated native preview workflow. External proof checkers remain a separate installation.
