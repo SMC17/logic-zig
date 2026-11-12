@@ -32,6 +32,10 @@ Graph: [`GRAPH.md`](GRAPH.md).
 
 Choose one task: [self-serve reasoning labs](docs/SELF_SERVE_LABS.md).
 
+Start with a concrete policy question: [can deployment happen without approval?](examples/policy/README.md)
+Export a proof, check it independently, then see that proof rejected after
+the policy changes. The runner saves inputs, proof, logs and a receipt.
+
 ## 90 seconds
 
 ```sh
@@ -52,6 +56,8 @@ zig build
 blocks `TRUST_OK`. That is the intended agent-trust behavior, not a silent skip.
 
 Try an independent proof check: [`portable trust demo`](docs/PORTABLE_TRUST_DEMO.md).
+For agent integrations, `logic-zig trust-report --json` emits versioned evidence
+on stdout and exits nonzero on refusal. See the [trust contract](docs/TRUST.md).
 
 Step-by-step: [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md).
 Product matrix: [`docs/PRODUCTS.md`](docs/PRODUCTS.md).

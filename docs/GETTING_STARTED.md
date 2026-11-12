@@ -40,6 +40,10 @@ scripts/build-checkers.sh
 ./zig-out/bin/logic-zig trust-report
 ```
 
+The script applies the committed DRAT-trim empty-clause exit-status fix after
+checking out its pinned revision. The [trust contract](TRUST.md) explains why
+both an exact positive checker status and exit 0 are required.
+
 The setup script refuses to overwrite an existing checker directory. Existing
 installations can be selected with `LOGIC_ZIG_EXTERNAL_SOLVER`,
 `LOGIC_ZIG_DRAT_TRIM`, and `LOGIC_ZIG_ABC`, each set to an executable file path.

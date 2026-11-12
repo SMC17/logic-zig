@@ -1,5 +1,17 @@
 # Agent-native formal (logic-agent)
 
+For a complete worked task, start with the
+[deployment policy example](../examples/policy/README.md): explicit inputs,
+an exported proof, an independent check and refusal after the input changes.
+
+## Machine-readable trust evidence
+
+`logic-zig trust-report --json` writes schema-versioned evidence to stdout and
+exits 1 on refusal. Require process success, `schema_version == 1`,
+`status == "TRUST_OK"`, and `passed == true`. This checks a finite fixture suite;
+an application must still validate the particular input and proof before
+authorizing an action. Exact counters and boundaries: [trust contract](TRUST.md).
+
 ## Why this flagship
 
 LLM agents and tool runtimes issue **many small SAT queries** with shared structure.

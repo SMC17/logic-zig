@@ -32,7 +32,8 @@ python3 tools/selfserve.py selfserve.json --repo . --out ../logic-zig-pack
 ```
 
 The tool extracts committed HEAD into a fresh directory. It runs the unit suite
-and selected tasks there, strips binary debug symbols, then writes source,
+and refusal regressions for missing and misleading checkers, then selected tasks
+there, strips binary debug symbols, and writes source,
 seven CLIs, command logs, result.json, TRY.md and SHA256SUMS. A failure, timeout
 or missing unit-test evidence prevents PASS. Untracked checker installs cannot
 make this acceptance task pass.

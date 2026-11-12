@@ -22,7 +22,7 @@ const usage =
     \\  logic-zig edge-suite                    # cross-domain adversarial edges
     \\  logic-zig taxonomy                      # universal named-systems registry
     \\  logic-zig giants                        # discover Kissat/Z3/ABC/Vampire/…
-    \\  logic-zig trust-report                  # DRAT + CaDiCaL + PDR certs + sequential
+    \\  logic-zig trust-report [--json]         # positive evidence; JSON on stdout
     \\  logic-zig sat-scoreboard [--dir DIR] [--limit N] [--conflicts N] [--portfolio] [--industrial]
     \\  logic-zig abc-delta <file.aag> [--frames N]   # internal MC vs ABC when present
     \\  logic-zig diff-external [--iters N]
@@ -75,6 +75,7 @@ pub fn main(init: std.process.Init) !void {
             }
         }
         const arg = formula_or_path orelse return fail("missing formula or path");
+        if (check_drat and !file_mode) return fail("--check-drat requires --file path.cnf");
         if (file_mode) {
             try cmdSatFile(gpa, io, arg, proof, dump_proof, check_drat);
         } else {
@@ -225,9 +226,20 @@ pub fn main(init: std.process.Init) !void {
         return;
     }
     if (std.mem.eql(u8, cmd, "trust-report")) {
+        var json = false;
+        while (iter.next()) |arg| {
+            if (std.mem.eql(u8, arg, "--json") and !json) {
+                json = true;
+            } else return fail("trust-report accepts only --json");
+        }
         const rep = try logic.trust_report.run(gpa, io);
-        logic.trust_report.print(&rep);
-        if (!rep.all_pass) std.process.exit(1);
+        if (json) {
+            var buffer: [4096]u8 = undefined;
+            var stdout = std.Io.File.stdout().writer(io, &buffer);
+            try logic.trust_report.writeJson(&rep, &stdout.interface);
+            try stdout.interface.flush();
+        } else logic.trust_report.print(&rep);
+        if (!rep.passes()) std.process.exit(1);
         return;
     }
     if (std.mem.eql(u8, cmd, "sat-track")) {
@@ -570,11 +582,14 @@ fn cmdSatFile(
                 if (check_drat) {
                     const chk = try logic.drat_external.checkProofExternal(gpa, io, &cnf, &p);
                     std.debug.print("external_drat={s}\n", .{@tagName(chk)});
-                    if (chk == .failed or chk == .internal_error) std.process.exit(1);
+                    if (chk != .verified) std.process.exit(1);
                 }
-            }
+            } else if (check_drat) return fail("UNSAT result has no proof to check");
         },
-        .unknown => std.debug.print("UNKNOWN\n", .{}),
+        .unknown => {
+            std.debug.print("UNKNOWN\n", .{});
+            if (check_drat) std.process.exit(1);
+        },
     }
     std.debug.print("conflicts={d} learned={d}\n", .{ r.conflicts, r.learned });
 }

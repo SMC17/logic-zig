@@ -18,6 +18,14 @@ scripts/expect-status.sh 20 ./zig-out/bin/logic-sat check-drat corpus/bench/sat/
 ./zig-out/bin/logic-zig trust-report
 ```
 
+The pinned DRAT-trim build includes a committed fix for its empty-clause success
+exit status. See the [checker contract](TRUST.md). Existing unpatched checker
+installs can refuse this fixture; use a fresh build rather than ignoring errors.
+
+For a saved JSON report, run `./zig-out/bin/logic-zig trust-report --json > ../trust-report.json`
+and retain its exit status. To export and replay a proof for a concrete policy
+question, use the [deployment example](../examples/policy/README.md).
+
 `check-drat` uses SAT competition status 20 for a verified UNSAT result. The
 wrapper asserts that exact status. `trust-report` must finish with `TRUST_OK`
 after positive evidence on every required axis. A missing checker or an

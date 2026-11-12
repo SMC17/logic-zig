@@ -22,7 +22,7 @@
         "--summary",
         "all"
       ],
-      "minimum_tests": 391,
+      "minimum_tests": 393,
       "timeout_seconds": 300
     },
     {
@@ -33,6 +33,15 @@
         "-Doptimize=ReleaseSafe"
       ],
       "timeout_seconds": 300
+    },
+    {
+      "name": "reject misleading or missing trust evidence",
+      "argv": [
+        "python3",
+        "tests/host_gate_smoke.py"
+      ],
+      "contains": "JSON reports refusal",
+      "timeout_seconds": 360
     },
     {
       "name": "doctor",

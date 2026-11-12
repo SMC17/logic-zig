@@ -308,7 +308,46 @@ pub fn print(r: *const TrustReport) void {
     std.debug.print("klive: ok={d} fail={d}\n", .{ r.klive_ok, r.klive_fail });
     std.debug.print("agent: ok={d} fail={d}\n", .{ r.agent_ok, r.agent_fail });
     std.debug.print("smt_uf: ok={d} fail={d}\n", .{ r.smt_ok, r.smt_fail });
-    std.debug.print("TRUST_{s}\n", .{if (r.all_pass) "OK" else "FAIL"});
+    std.debug.print("TRUST_{s}\n", .{if (r.passes()) "OK" else "FAIL"});
+}
+
+/// Versioned machine-readable evidence. Status is always derived from counters;
+/// a caller cannot turn missing evidence into success by setting all_pass.
+pub fn writeJson(r: *const TrustReport, writer: *std.Io.Writer) !void {
+    const passed = r.passes();
+    try std.json.Stringify.value(.{
+        .schema_version = @as(u32, 1),
+        .status = if (passed) @as([]const u8, "TRUST_OK") else "TRUST_FAIL",
+        .passed = passed,
+        .scope = "finite fixture suite; not certification of arbitrary inputs or agent actions",
+        .checks = .{
+            .drat = .{ .available = r.drat_available, .verified = r.drat_verified, .failed = r.drat_failed },
+            .cadical = .{ .available = r.cadical_available, .ran = r.cadical_ran, .mismatches = r.cadical_mismatches },
+            .abc = .{ .available = r.abc_available, .scope = "availability only" },
+            .pdr_certs = .{ .ok = r.pdr_certs_ok, .fail = r.pdr_certs_fail },
+            .sequential = .{ .ok = r.sequential_ok, .fail = r.sequential_fail },
+            .klive = .{ .ok = r.klive_ok, .fail = r.klive_fail },
+            .agent = .{ .ok = r.agent_ok, .fail = r.agent_fail },
+            .smt_uf = .{ .ok = r.smt_ok, .fail = r.smt_fail },
+        },
+    }, .{ .whitespace = .indent_2 }, writer);
+    try writer.writeAll("\n");
+}
+
+test "JSON trust status derives from evidence instead of cached all_pass" {
+    var report: TrustReport = .{ .all_pass = true };
+    var output: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer output.deinit();
+    try writeJson(&report, &output.writer);
+    const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, output.written(), .{});
+    defer parsed.deinit();
+    const object = parsed.value.object;
+    try std.testing.expectEqual(@as(i64, 1), object.get("schema_version").?.integer);
+    try std.testing.expectEqualStrings("TRUST_FAIL", object.get("status").?.string);
+    try std.testing.expect(!object.get("passed").?.bool);
+    const checks = object.get("checks").?.object;
+    try std.testing.expectEqual(@as(i64, 0), checks.get("drat").?.object.get("verified").?.integer);
+    try std.testing.expect(!checks.get("abc").?.object.get("available").?.bool);
 }
 
 test "trust report constructs without io-dependent crash in unit" {
