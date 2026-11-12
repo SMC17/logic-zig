@@ -22,7 +22,7 @@
         "--summary",
         "all"
       ],
-      "minimum_tests": 393,
+      "minimum_tests": 403,
       "timeout_seconds": 300
     },
     {
@@ -42,6 +42,15 @@
       ],
       "contains": "JSON reports refusal",
       "timeout_seconds": 360
+    },
+    {
+      "name": "reasoning workflows and saved certificate replay",
+      "argv": [
+        "python3",
+        "tests/workflow_smoke.py"
+      ],
+      "contains": "WORKFLOWS_OK",
+      "timeout_seconds": 240
     },
     {
       "name": "doctor",
@@ -83,7 +92,8 @@
         "zig-out/bin/logic-cert",
         "zig-out/bin/logic-smt",
         "zig-out/bin/logic-ctl",
-        "zig-out/bin/logic-agent"
+        "zig-out/bin/logic-agent",
+        "zig-out/bin/protocol-demo"
       ]
     }
   ],
@@ -94,7 +104,8 @@
     "zig-out/bin/logic-cert",
     "zig-out/bin/logic-smt",
     "zig-out/bin/logic-ctl",
-    "zig-out/bin/logic-agent"
+    "zig-out/bin/logic-agent",
+    "zig-out/bin/protocol-demo"
   ],
   "limitations": [
     "Finite local fixture checks; no general solver-correctness or performance claim.",

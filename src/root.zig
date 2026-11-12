@@ -53,6 +53,7 @@ pub const portfolio = @import("sat/portfolio.zig");
 pub const abc_interop = @import("bridge/abc_interop.zig");
 pub const btor2 = @import("bridge/btor2.zig");
 pub const agent_session = @import("agent/session.zig");
+pub const agent_workflow = @import("agent/workflow.zig");
 pub const portfolio_bench = @import("track/portfolio_bench.zig");
 pub const designs = @import("circuit/designs.zig");
 pub const trust_report = @import("trust/report.zig");
@@ -251,6 +252,7 @@ test {
     _ = abc_interop;
     _ = btor2;
     _ = agent_session;
+    _ = agent_workflow;
     _ = portfolio_bench;
     _ = designs;
     _ = trust_report;

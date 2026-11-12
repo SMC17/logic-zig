@@ -17,11 +17,12 @@ const Netlist = netlist_mod.Netlist;
 const NetId = netlist_mod.NetId;
 
 pub const InductiveInvariant = struct {
+    pub const Source = enum { pdr, kinduction, supplied, empty };
     allocator: std.mem.Allocator,
     clauses: [][]Lit,
     bad: NetId,
     frames_used: u32 = 0,
-    source: enum { pdr, kinduction, empty } = .empty,
+    source: Source = .empty,
 
     pub fn deinit(self: *InductiveInvariant) void {
         for (self.clauses) |c| self.allocator.free(c);
@@ -29,22 +30,30 @@ pub const InductiveInvariant = struct {
         self.* = undefined;
     }
 
-    /// Init∧I∧bad unsat; Init⇒I (each clause).
+    pub const VerifyOptions = struct {
+        max_conflicts: u64 = 200_000,
+    };
+
+    /// I excludes bad states, Init implies I, and I is preserved by transitions.
     pub fn verify(self: *const InductiveInvariant, allocator: std.mem.Allocator, nl: *const Netlist) !bool {
+        return self.verifyWithOptions(allocator, nl, .{});
+    }
+
+    pub fn verifyWithOptions(self: *const InductiveInvariant, allocator: std.mem.Allocator, nl: *const Netlist, opts: VerifyOptions) !bool {
+        if (self.bad.index() >= nl.num_nets) return false;
+        for (self.clauses) |cl| {
+            for (cl) |l| if (l.variable().index() >= nl.num_nets) return false;
+        }
         {
             var cnf = Cnf.init(allocator);
             defer cnf.deinit();
             cnf.ensureVars(nl.num_nets);
             try blast.blastFrame(&cnf, nl, 0);
-            for (nl.latches.items) |lat| {
-                if (lat.init) |iv| {
-                    const q = Lit.positive(Var.fromIndex(lat.q.index()));
-                    if (iv) try cnf.addClause(&.{q}) else try cnf.addClause(&.{q.not()});
-                }
-            }
+            // Exclusion must hold in every state admitted by I, not only Init.
+            for (nl.constraints.items) |c| try cnf.addClause(&.{Lit.positive(Var.fromIndex(c.index()))});
             for (self.clauses) |cl| try cnf.addClause(cl);
             try cnf.addClause(&.{Lit.positive(Var.fromIndex(self.bad.index()))});
-            const r = try solver_mod.solveCnf(allocator, &cnf, .{ .max_conflicts = 100_000 });
+            const r = try solver_mod.solveCnf(allocator, &cnf, .{ .max_conflicts = opts.max_conflicts });
             defer if (r.model) |m| allocator.free(m);
             defer if (r.proof) |*p| {
                 var pp = p.*;
@@ -57,6 +66,7 @@ pub const InductiveInvariant = struct {
             defer cnf.deinit();
             cnf.ensureVars(nl.num_nets);
             try blast.blastFrame(&cnf, nl, 0);
+            for (nl.constraints.items) |c| try cnf.addClause(&.{Lit.positive(Var.fromIndex(c.index()))});
             for (nl.latches.items) |lat| {
                 if (lat.init) |iv| {
                     const q = Lit.positive(Var.fromIndex(lat.q.index()));
@@ -64,22 +74,27 @@ pub const InductiveInvariant = struct {
                 }
             }
             for (cl) |l| try cnf.addClause(&.{l.not()});
-            const r = try solver_mod.solveCnf(allocator, &cnf, .{ .max_conflicts = 50_000 });
+            const r = try solver_mod.solveCnf(allocator, &cnf, .{ .max_conflicts = opts.max_conflicts });
             defer if (r.model) |m| allocator.free(m);
             defer if (r.proof) |*p| {
                 var pp = p.*;
                 pp.deinit();
             };
-            if (r.status == .sat) return false;
+            if (r.status != .unsat) return false;
         }
-        // Relative inductiveness: I ∧ T ∧ ¬I' unsat (best-effort when clauses non-empty)
-        if (self.clauses.len > 0 and nl.latches.items.len > 0) {
+        // Relative inductiveness: I ∧ T ∧ ¬I' must be UNSAT. Combinational
+        // systems still need this check when their primary inputs can change.
+        if (self.clauses.len > 0) {
             var cnf = Cnf.init(allocator);
             defer cnf.deinit();
             const nn = nl.num_nets;
             cnf.ensureVars(nn * 2);
             try blast.blastFrameNn(&cnf, nl, 0, nn);
             try blast.blastFrameNn(&cnf, nl, 1, nn);
+            for (nl.constraints.items) |c| {
+                try cnf.addClause(&.{Lit.positive(Var.fromIndex(c.index()))});
+                try cnf.addClause(&.{Lit.positive(Var.fromIndex(nn + c.index()))});
+            }
             for (nl.latches.items) |lat| {
                 const qn = Lit.positive(Var.fromIndex(nn + lat.q.index()));
                 const d = Lit.positive(Var.fromIndex(lat.d.index()));
@@ -116,13 +131,13 @@ pub const InductiveInvariant = struct {
                 try break_or.append(allocator, al);
             }
             if (break_or.items.len > 0) try cnf.addClause(break_or.items);
-            const r = try solver_mod.solveCnf(allocator, &cnf, .{ .max_conflicts = 200_000 });
+            const r = try solver_mod.solveCnf(allocator, &cnf, .{ .max_conflicts = opts.max_conflicts });
             defer if (r.model) |m| allocator.free(m);
             defer if (r.proof) |*p| {
                 var pp = p.*;
                 pp.deinit();
             };
-            if (r.status == .sat) return false;
+            if (r.status != .unsat) return false;
         }
         return true;
     }
@@ -142,6 +157,57 @@ pub const InductiveInvariant = struct {
             try w.print("0\n", .{});
         }
         return try aw.toOwnedSlice();
+    }
+
+    /// Read the exact exported format. Literal zero terminates each clause;
+    /// extra tokens, missing clauses and malformed headers are refused.
+    pub fn parseText(allocator: std.mem.Allocator, text: []const u8) !InductiveInvariant {
+        var lines = std.mem.tokenizeAny(u8, text, "\r\n");
+        if (!std.mem.eql(u8, lines.next() orelse return error.InvalidCertificate, "kind=inductive_invariant")) return error.InvalidCertificate;
+        const source = std.meta.stringToEnum(Source, try header(&lines, "source=")) orelse return error.InvalidCertificate;
+        const frames = std.fmt.parseInt(u32, try header(&lines, "frames="), 10) catch return error.InvalidCertificate;
+        const count = std.fmt.parseInt(u32, try header(&lines, "clauses="), 10) catch return error.InvalidCertificate;
+        const bad = std.fmt.parseInt(u32, try header(&lines, "bad="), 10) catch return error.InvalidCertificate;
+        var clauses: std.ArrayList([]Lit) = .empty;
+        errdefer {
+            for (clauses.items) |clause| allocator.free(clause);
+            clauses.deinit(allocator);
+        }
+        for (0..count) |_| {
+            const line = lines.next() orelse return error.InvalidCertificate;
+            var tokens = std.mem.tokenizeAny(u8, line, " \t");
+            var literals: std.ArrayList(Lit) = .empty;
+            defer literals.deinit(allocator);
+            var terminated = false;
+            while (tokens.next()) |token| {
+                const dimension = std.fmt.parseInt(i32, token, 10) catch return error.InvalidCertificate;
+                if (dimension == 0) {
+                    terminated = true;
+                    if (tokens.next() != null) return error.InvalidCertificate;
+                    break;
+                }
+                if (dimension == std.math.minInt(i32)) return error.InvalidCertificate;
+                try literals.append(allocator, Lit.fromDimacs(dimension));
+            }
+            if (!terminated) return error.InvalidCertificate;
+            const owned = try literals.toOwnedSlice(allocator);
+            errdefer allocator.free(owned);
+            try clauses.append(allocator, owned);
+        }
+        if (lines.next() != null) return error.InvalidCertificate;
+        return .{
+            .allocator = allocator,
+            .clauses = try clauses.toOwnedSlice(allocator),
+            .bad = NetId.fromIndex(bad),
+            .frames_used = frames,
+            .source = source,
+        };
+    }
+
+    fn header(lines: *std.mem.TokenIterator(u8, .any), prefix: []const u8) ![]const u8 {
+        const line = lines.next() orelse return error.InvalidCertificate;
+        if (!std.mem.startsWith(u8, line, prefix)) return error.InvalidCertificate;
+        return line[prefix.len..];
     }
 };
 
@@ -270,6 +336,56 @@ test "pdr cert stuck0 verifies" {
     const text = try i.writeText(std.testing.allocator);
     defer std.testing.allocator.free(text);
     try std.testing.expect(std.mem.indexOf(u8, text, "inductive_invariant") != null);
+}
+
+test "initial safety does not make an empty invariant a safety certificate" {
+    var nl = Netlist.init(std.testing.allocator);
+    defer nl.deinit();
+    const q = try nl.allocNetNamed("q");
+    const d = try nl.allocNetNamed("d");
+    try nl.addConst(d, true);
+    try nl.addLatch(d, q, false);
+    var candidate = InductiveInvariant{
+        .allocator = std.testing.allocator,
+        .clauses = try std.testing.allocator.alloc([]Lit, 0),
+        .bad = q,
+    };
+    defer candidate.deinit();
+    try std.testing.expect(!try candidate.verify(std.testing.allocator, &nl));
+}
+
+test "invariant verification refuses unknown implication and invalid variables" {
+    var nl = Netlist.init(std.testing.allocator);
+    defer nl.deinit();
+    const q = try nl.allocNetNamed("q");
+    const bad = try nl.allocNetNamed("bad");
+    try nl.addConst(bad, false);
+    try nl.addLatch(q, q, false);
+    const clauses = try std.testing.allocator.alloc([]Lit, 1);
+    clauses[0] = try std.testing.allocator.dupe(Lit, &.{Lit.positive(Var.fromIndex(q.index()))});
+    var candidate = InductiveInvariant{
+        .allocator = std.testing.allocator,
+        .clauses = clauses,
+        .bad = bad,
+    };
+    defer candidate.deinit();
+    // Safety exclusion is trivially UNSAT, but Init => q is false. With a zero
+    // search budget its satisfiable counterexample is UNKNOWN, never evidence.
+    try std.testing.expect(!try candidate.verifyWithOptions(std.testing.allocator, &nl, .{ .max_conflicts = 0 }));
+    clauses[0][0] = Lit.positive(Var.fromIndex(nl.num_nets));
+    try std.testing.expect(!try candidate.verify(std.testing.allocator, &nl));
+}
+
+test "invariant text round-trips and rejects truncated or trailing evidence" {
+    const text = "kind=inductive_invariant\nsource=pdr\nframes=2\nclauses=1\nbad=0\n-1 0\n";
+    var candidate = try InductiveInvariant.parseText(std.testing.allocator, text);
+    defer candidate.deinit();
+    const written = try candidate.writeText(std.testing.allocator);
+    defer std.testing.allocator.free(written);
+    try std.testing.expectEqualStrings(text, written);
+    try std.testing.expectError(error.InvalidCertificate, InductiveInvariant.parseText(std.testing.allocator, text ++ "0\n"));
+    try std.testing.expectError(error.InvalidCertificate, InductiveInvariant.parseText(std.testing.allocator, "kind=inductive_invariant\nsource=pdr\nframes=2\nclauses=1\nbad=0\n-1\n"));
+    try std.testing.expectError(error.InvalidCertificate, InductiveInvariant.parseText(std.testing.allocator, "kind=inductive_invariant\nsource=pdr\nframes=2\nclauses=1\nbad=0\n-2147483648 0\n"));
 }
 
 test "unsat proof cert" {

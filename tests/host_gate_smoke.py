@@ -13,6 +13,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 LOGIC = ROOT / 'zig-out/bin/logic-zig'
 SAT = ROOT / 'zig-out/bin/logic-sat'
+CERT = ROOT / 'zig-out/bin/logic-cert'
 CNF = ROOT / 'corpus/bench/sat/simple_unsat.cnf'
 
 
@@ -29,6 +30,8 @@ with tempfile.TemporaryDirectory(prefix='logic-host-gates-') as directory:
     env = os.environ.copy()
     env.pop('LOGIC_ZIG_DRAT_TRIM', None)
     expect([SAT, 'check-drat', CNF], 1, 'external_drat=unavailable',
+           cwd=cwd, env=env)
+    expect([CERT, 'check-drat', CNF], 1, 'external_drat=unavailable',
            cwd=cwd, env=env)
     expect([LOGIC, 'sat', '--file', CNF, '--check-drat'], 1,
            'external_drat=unavailable', cwd=cwd, env=env)
