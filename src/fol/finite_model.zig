@@ -2,6 +2,19 @@
 //!
 //! Supports unary/binary predicates and unary/binary total functions on
 //! domain {0..d-1}, with an explicit search-space budget.
+//!
+//! Known limitations (honest scope — this is a bounded finite-model finder,
+//! not a complete FOL semantic engine):
+//! - Symbols (constants/predicates/functions) are keyed by printed `(name,arity)`,
+//!   not by `TermId`. Two syntactically distinct symbols that share a name and
+//!   arity therefore cannot coexist; this is an intentional finite-domain
+//!   simplification, not a general FOL term interpreter.
+//! - Missing constants evaluate to `error.Unbound` (not silently to 0); missing
+//!   predicate/function applications are rejected rather than defaulted.
+//! - Domain is capped at 4 (exhaustive enumeration budget); larger domains are
+//!   `error.DomainTooLarge`.
+//! - Quantifier bindings save/restore correctly (shadowing is sound), but the
+//!   search is brute-force over all interpretations up to `max_models`.
 
 const std = @import("std");
 const term_mod = @import("term.zig");
@@ -107,15 +120,15 @@ fn flatIndex(domain: u32, args: []const u32) usize {
     return idx;
 }
 
-const Env = std.StringHashMapUnmanaged(u32);
+const Env = std.AutoHashMapUnmanaged(TermId, u32);
 
 fn evalTerm(pool: *const TermPool, interp: *const Interpretation, env: *const Env, t: TermId) ?u32 {
     switch (pool.tag(t)) {
-        .variable => return env.get(pool.nameOf(t)),
-        .constant => return interp.consts.get(pool.nameOf(t)) orelse 0,
+        .variable => return env.get(t),
+        .constant => return interp.consts.get(pool.nameOf(t)),
         .func => {
             const args = pool.argsOf(t);
-            if (args.len == 0) return interp.consts.get(pool.nameOf(t)) orelse 0;
+            if (args.len == 0) return interp.consts.get(pool.nameOf(t));
             var buf: [8]u32 = undefined;
             if (args.len > buf.len) return null;
             for (args, 0..) |a, i| {
@@ -162,22 +175,32 @@ pub fn evalFormula(
         },
         .forall => {
             const v = fpool.binderVar(f);
-            const vname = pool.nameOf(v);
             const body = fpool.binderBody(f);
+            const previous = env.get(v);
+            defer if (previous) |old| {
+                env.put(fpool.allocator, v, old) catch unreachable;
+            } else {
+                _ = env.remove(v);
+            };
             var e: u32 = 0;
             while (e < interp.domain) : (e += 1) {
-                try env.put(fpool.allocator, vname, e);
+                try env.put(fpool.allocator, v, e);
                 if (!try evalFormula(fpool, interp, env, body)) return false;
             }
             return true;
         },
         .exists => {
             const v = fpool.binderVar(f);
-            const vname = pool.nameOf(v);
             const body = fpool.binderBody(f);
+            const previous = env.get(v);
+            defer if (previous) |old| {
+                env.put(fpool.allocator, v, old) catch unreachable;
+            } else {
+                _ = env.remove(v);
+            };
             var e: u32 = 0;
             while (e < interp.domain) : (e += 1) {
-                try env.put(fpool.allocator, vname, e);
+                try env.put(fpool.allocator, v, e);
                 if (try evalFormula(fpool, interp, env, body)) return true;
             }
             return false;
@@ -185,7 +208,11 @@ pub fn evalFormula(
     };
 }
 
+pub const ModelStatus = enum { model_found, no_model_at_domain, unknown, unsupported };
+
 pub const ModelResult = struct {
+    status: ModelStatus,
+    /// Compatibility convenience; true iff status == model_found.
     sat: bool,
     model: ?Interpretation = null,
     explored: u64 = 0,
@@ -264,9 +291,9 @@ pub fn findModel(
         var env: Env = .{};
         defer env.deinit(allocator);
         const ok = try evalFormula(fpool, &interp, &env, sentence);
-        if (ok) return .{ .sat = true, .model = interp, .explored = 1 };
+        if (ok) return .{ .status = .model_found, .sat = true, .model = interp, .explored = 1 };
         interp.deinit();
-        return .{ .sat = false, .explored = 1 };
+        return .{ .status = .no_model_at_domain, .sat = false, .explored = 1 };
     }
 
     // Enumerate odometer-style.
@@ -309,13 +336,13 @@ pub fn findModel(
             continue;
         };
         if (ok) {
-            return .{ .sat = true, .model = interp, .explored = explored };
+            return .{ .status = .model_found, .sat = true, .model = interp, .explored = explored };
         }
         interp.deinit();
 
         if (!odometerInc(digits, digit_radices.items)) break;
     }
-    return .{ .sat = false, .explored = explored };
+    return .{ .status = .no_model_at_domain, .sat = false, .explored = explored };
 }
 
 fn odometerInc(digits: []u32, radices: []const u32) bool {

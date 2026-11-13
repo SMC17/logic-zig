@@ -88,6 +88,17 @@ pub fn build(b: *std.Build) void {
     const run_integration = b.addRunArtifact(integration_tests);
     test_step.dependOn(&run_integration.step);
 
+    const ipasir_abi = b.addExecutable(.{
+        .name = "ipasir-abi-test",
+        .root_module = b.createModule(.{ .target = target, .optimize = optimize }),
+    });
+    ipasir_abi.root_module.link_libc = true;
+    ipasir_abi.root_module.addIncludePath(b.path("include"));
+    ipasir_abi.root_module.addCSourceFile(.{ .file = b.path("tests/ipasir_abi.c"), .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Werror" } });
+    ipasir_abi.root_module.linkLibrary(ipasir_lib);
+    const run_ipasir_abi = b.addRunArtifact(ipasir_abi);
+    test_step.dependOn(&run_ipasir_abi.step);
+
     const lib_step = b.step("lib", "Build IPASIR shared library");
     lib_step.dependOn(&b.addInstallArtifact(ipasir_lib, .{}).step);
 

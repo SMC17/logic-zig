@@ -17,11 +17,14 @@ const aiger = @import("../bridge/aiger.zig");
 const lit_mod = @import("../core/lit.zig");
 const agent_session = @import("../agent/session.zig");
 const smt_mod = @import("../smt/smt.zig");
+const rup_checker = @import("../proof/rup_checker.zig");
 
 pub const TrustReport = struct {
     drat_available: bool = false,
     drat_verified: u32 = 0,
     drat_failed: u32 = 0,
+    serialized_rup_ok: u32 = 0,
+    serialized_rup_fail: u32 = 0,
     cadical_available: bool = false,
     cadical_mismatches: u32 = 0,
     cadical_ran: u32 = 0,
@@ -42,6 +45,7 @@ pub const TrustReport = struct {
     /// failure counter is zero. Each required axis must have positive evidence.
     pub fn passes(self: TrustReport) bool {
         return self.drat_available and self.drat_verified > 0 and self.drat_failed == 0 and
+            self.serialized_rup_ok > 0 and self.serialized_rup_fail == 0 and
             self.cadical_available and self.cadical_ran > 0 and self.cadical_mismatches == 0 and
             self.abc_available and
             self.pdr_certs_ok > 0 and self.pdr_certs_fail == 0 and
@@ -63,6 +67,24 @@ fn unitUnsat(allocator: std.mem.Allocator) !@import("../sat/cnf.zig").Cnf {
 /// Full trust report (I/O for external tools).
 pub fn run(allocator: std.mem.Allocator, io: std.Io) !TrustReport {
     var rep: TrustReport = .{};
+
+    // Producer -> bytes -> checker with no producer/search imports.
+    {
+        const source = "p cnf 2 4\n1 2 0\n1 -2 0\n-1 2 0\n-1 -2 0\n";
+        var cnf = try dimacs.parse(allocator, source);
+        defer cnf.deinit();
+        var solved = try solver_mod.solveCnf(allocator, &cnf, .{ .proof = true });
+        defer if (solved.proof) |*proof| proof.deinit();
+        if (solved.status == .unsat and solved.proof != null) {
+            var output: std.Io.Writer.Allocating = .init(allocator);
+            defer output.deinit();
+            try solved.proof.?.writeDimacsLike(&output.writer);
+            const bytes = try output.toOwnedSlice();
+            defer allocator.free(bytes);
+            const checked = rup_checker.verify(allocator, source, bytes) catch .invalid;
+            if (checked == .verified) rep.serialized_rup_ok += 1 else rep.serialized_rup_fail += 1;
+        } else rep.serialized_rup_fail += 1;
+    }
 
     // --- DRAT-trim ---
     if (try drat_external.findDratTrim(allocator)) |p| {
@@ -126,7 +148,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io) !TrustReport {
                 var ii = i.*;
                 ii.deinit();
             }
-            if (try i.verify(allocator, &d.nl)) rep.pdr_certs_ok += 1 else rep.pdr_certs_fail += 1;
+            if (try i.verify(allocator, &d.nl) == .verified) rep.pdr_certs_ok += 1 else rep.pdr_certs_fail += 1;
         } else rep.pdr_certs_fail += 1;
     }
     {
@@ -139,7 +161,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io) !TrustReport {
                 var ii = i.*;
                 ii.deinit();
             }
-            if (try i.verify(allocator, &d.nl)) rep.pdr_certs_ok += 1 else rep.pdr_certs_fail += 1;
+            if (try i.verify(allocator, &d.nl) == .verified) rep.pdr_certs_ok += 1 else rep.pdr_certs_fail += 1;
         } else rep.pdr_certs_fail += 1;
     }
 
@@ -252,7 +274,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io) !TrustReport {
                             var ii = i.*;
                             ii.deinit();
                         }
-                        if (try i.verify(allocator, &nl)) rep.pdr_certs_ok += 1 else rep.pdr_certs_fail += 1;
+                        if (try i.verify(allocator, &nl) == .verified) rep.pdr_certs_ok += 1 else rep.pdr_certs_fail += 1;
                     }
                 }
             }
@@ -297,6 +319,7 @@ pub fn print(r: *const TrustReport) void {
         r.drat_verified,
         r.drat_failed,
     });
+    std.debug.print("serialized_rup: verified={d} failed={d}\n", .{ r.serialized_rup_ok, r.serialized_rup_fail });
     std.debug.print("cadical: available={} ran={d} mismatches={d}\n", .{
         r.cadical_available,
         r.cadical_ran,
@@ -319,7 +342,7 @@ test "trust report constructs without io-dependent crash in unit" {
     try std.testing.expect(inv != null);
     var i = inv.?;
     defer i.deinit();
-    try std.testing.expect(try i.verify(std.testing.allocator, &d.nl));
+    try std.testing.expectEqual(certificate.VerificationStatus.verified, try i.verify(std.testing.allocator, &d.nl));
 }
 
 test "trust requires positive evidence from every axis" {
@@ -328,6 +351,7 @@ test "trust requires positive evidence from every axis" {
     rep = .{
         .drat_available = true,
         .drat_verified = 1,
+        .serialized_rup_ok = 1,
         .cadical_available = true,
         .cadical_ran = 1,
         .abc_available = true,
@@ -343,12 +367,12 @@ test "trust requires positive evidence from every axis" {
         @field(missing, field) = false;
         try std.testing.expect(!missing.passes());
     }
-    inline for (.{ "drat_verified", "cadical_ran", "pdr_certs_ok", "sequential_ok", "klive_ok", "agent_ok", "smt_ok" }) |field| {
+    inline for (.{ "drat_verified", "serialized_rup_ok", "cadical_ran", "pdr_certs_ok", "sequential_ok", "klive_ok", "agent_ok", "smt_ok" }) |field| {
         var missing = rep;
         @field(missing, field) = 0;
         try std.testing.expect(!missing.passes());
     }
-    inline for (.{ "drat_failed", "cadical_mismatches", "pdr_certs_fail", "sequential_fail", "klive_fail", "agent_fail", "smt_fail" }) |field| {
+    inline for (.{ "drat_failed", "serialized_rup_fail", "cadical_mismatches", "pdr_certs_fail", "sequential_fail", "klive_fail", "agent_fail", "smt_fail" }) |field| {
         var failed = rep;
         @field(failed, field) = 1;
         try std.testing.expect(!failed.passes());
