@@ -4,9 +4,9 @@ Part of the **Proofs and tools** system in [SMC17](https://github.com/SMC17). Cu
 
 The issues are the source of truth; this file is a snapshot of them taken 2026-11-12. Anything not listed here is not promised.
 
-## Unsorted
+## Next
 
-Open, not yet prioritised.
+Priority P2: wanted, not yet scheduled.
 
 - [#6](https://github.com/SMC17/logic-zig/issues/6) upstream: convert oracle and checker work into Lean and Aristotle contributions
 - [#5](https://github.com/SMC17/logic-zig/issues/5) exhibit: complete modal K, T, S4, and S5 decision procedures
