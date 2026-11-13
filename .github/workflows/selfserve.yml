@@ -1,7 +1,7 @@
 name: Self-serve acceptance and preview
 on:
   pull_request:
-    paths: ['src/**', 'examples/**', 'build.zig*', 'selfserve.json', 'tools/selfserve.py', '.github/workflows/selfserve.yml']
+    paths: ['src/**', 'examples/**', 'tests/**', 'scripts/**', 'build.zig*', 'selfserve.json', 'tools/**', '.github/workflows/selfserve.yml']
   push:
     branches: [main]
     tags: ['selfserve-*']

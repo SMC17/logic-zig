@@ -261,7 +261,7 @@ fn lowerNetlist(allocator: std.mem.Allocator, nl: *const Netlist, opts: WriteOpt
 
     for (nl.latches.items) |lat| {
         const next = try b.getOrCreateNet(lat.d);
-        const init: u32 = if (lat.init) |iv| (if (iv) @as(u32, 1) else 0) else 0;
+        const init: u32 = if (lat.init) |iv| (if (iv) @as(u32, 1) else 0) else try b.getOrCreateNet(lat.q);
         try b.latches.append(allocator, .{ .next = next, .init = init });
     }
     for (nl.outputs.items) |o| {
@@ -354,7 +354,9 @@ pub fn write(allocator: std.mem.Allocator, nl: *const Netlist, opts: WriteOption
         try w.print("aag {d} {d} {d} {d} {d}\n", .{ M, I, L, O, A });
     }
     for (b.inputs.items) |il| try w.print("{d}\n", .{il});
-    for (b.latches.items) |lat| try w.print("{d} {d}\n", .{ lat.next, lat.init });
+    // ASCII carries the current-state literal explicitly. The previous compact
+    // next/init rows were a private dialect, not portable AIGER latch records.
+    for (b.latches.items, 0..) |lat, i| try w.print("{d} {d} {d}\n", .{ (I + 1 + i) * 2, lat.next, lat.init });
     for (b.outputs.items) |ol| try w.print("{d}\n", .{ol});
     for (b.ands.items) |ag| {
         var rhs0 = ag.rhs0;
@@ -442,19 +444,24 @@ test "aiger write binary read roundtrip" {
 
 test "aiger write latch roundtrip" {
     const aiger = @import("aiger.zig");
-    var nl = Netlist.init(std.testing.allocator);
-    defer nl.deinit();
-    const q = try nl.allocNetNamed("q");
-    const d = try nl.allocNetNamed("d");
-    try nl.addGate(.not, &.{q}, d);
-    try nl.addLatch(d, q, false);
-    try nl.addOutput(q);
+    for ([_]?bool{ false, true, null }) |initial| {
+        var nl = Netlist.init(std.testing.allocator);
+        defer nl.deinit();
+        const q = try nl.allocNetNamed("q");
+        const d = try nl.allocNetNamed("d");
+        try nl.addGate(.not, &.{q}, d);
+        try nl.addLatch(d, q, initial);
+        try nl.addOutput(q);
 
-    const bytes = try writeAsciiSimple(std.testing.allocator, &nl);
-    defer std.testing.allocator.free(bytes);
-    var nl2 = try aiger.parse(std.testing.allocator, bytes);
-    defer nl2.deinit();
-    try std.testing.expect(nl2.latches.items.len == 1);
+        const bytes = try write(std.testing.allocator, &nl, .{ .outputs_as_bad = false });
+        defer std.testing.allocator.free(bytes);
+        const expected = if (initial) |iv| (if (iv) "2 3 1\n" else "2 3 0\n") else "2 3 2\n";
+        try std.testing.expect(std.mem.indexOf(u8, bytes, expected) != null);
+        var nl2 = try aiger.parse(std.testing.allocator, bytes);
+        defer nl2.deinit();
+        try std.testing.expectEqual(@as(usize, 1), nl2.latches.items.len);
+        try std.testing.expectEqual(initial, nl2.latches.items[0].init);
+    }
 }
 
 test "aiger write hash-cons shares common AND" {

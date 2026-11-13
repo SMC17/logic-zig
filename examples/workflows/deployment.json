@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "title": "Deployment requires approval, passing tests and a rollback plan",
+  "variables": ["deploy", "approved", "tests_passed", "rollback_ready"],
+  "clauses": [
+    ["!deploy", "approved"],
+    ["!deploy", "tests_passed"],
+    ["!deploy", "rollback_ready"]
+  ],
+  "queries": [
+    {"id": "missing_approval", "assumptions": ["deploy", "!approved", "tests_passed", "rollback_ready"]},
+    {"id": "ready_to_deploy", "assumptions": ["deploy", "approved", "tests_passed", "rollback_ready"]},
+    {"id": "missing_rollback", "assumptions": ["deploy", "approved", "tests_passed", "!rollback_ready"]},
+    {"id": "idle_without_approval", "assumptions": ["!deploy", "!approved"]}
+  ]
+}

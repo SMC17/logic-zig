@@ -11,6 +11,8 @@ separate claims of production maturity. No model service or API key is needed.
 | Try bit-vector arithmetic | `logic-smt demo-add` | The bit-blasted addition fixture computes its expected outcome |
 | Explore branching-time properties | `logic-ctl demo` | The bounded CTL fixture runs, not full symbolic CTL completeness |
 | Connect a checked task to a recorded workspace | [zag example](RECORDED_PROOF_DEMO.md) | Recorded command/output integrity, distinct from solver truth |
+| Explain constraints and construct an assignment | [Named workflows](USE_CASES.md) | Checked models and assumption cores for the encoded requests |
+| Replay temporal evidence | `protocol-demo`, `logic-cert verify-invariant` | A checked saved certificate and a counterexample after changing the transition |
 
 ## Build and package
 
@@ -32,8 +34,9 @@ python3 tools/selfserve.py selfserve.json --repo . --out ../logic-zig-pack
 ```
 
 The tool extracts committed HEAD into a fresh directory. It runs the unit suite
-and selected tasks there, strips binary debug symbols, then writes source,
-seven CLIs, command logs, result.json, TRY.md and SHA256SUMS. A failure, timeout
+and refusal regressions for missing and misleading checkers, then selected tasks
+there, strips binary debug symbols, and writes source,
+seven CLIs plus `protocol-demo`, command logs, result.json, TRY.md and SHA256SUMS. A failure, timeout
 or missing unit-test evidence prevents PASS. Untracked checker installs cannot
 make this acceptance task pass.
 

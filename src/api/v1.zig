@@ -26,8 +26,8 @@ const agent_session = @import("../agent/session.zig");
 
 /// API major.minor — bump minor for additive; major requires new module path.
 pub const version_major: u32 = 1;
-pub const version_minor: u32 = 0;
-pub const version_string = "1.0.0";
+pub const version_minor: u32 = 1;
+pub const version_string = "1.1.0";
 
 /// Feature bits — consumers can feature-detect without parsing docs.
 pub const Capability = packed struct(u32) {
@@ -253,11 +253,12 @@ pub const CtlOp = ctl_mod.CtlOp;
 pub const checkCtl = ctl_mod.check;
 pub const FolResolution = resolution.Prover;
 pub const Session = agent_session.Session;
+pub const AgentWorkflow = @import("../agent/workflow.zig");
 
 test "api v1 version and caps" {
     const line = try versionLine(std.testing.allocator);
     defer std.testing.allocator.free(line);
-    try std.testing.expect(std.mem.indexOf(u8, line, "1.0.0") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "1.1.0") != null);
     const caps = Capability.current();
     try std.testing.expect(caps.sat_cdcl);
     try std.testing.expect(caps.fol_resolution);
@@ -277,6 +278,16 @@ test "api v1 sat unsat" {
         pp.deinit();
     };
     try std.testing.expect(r.status == .unsat);
+}
+
+test "api v1 exposes the owned named workflow runner" {
+    var report = try AgentWorkflow.run(std.testing.allocator,
+        \\{"schema_version":1,"variables":["approved"],"clauses":[],"queries":[{"id":"q","assumptions":["approved"]}]}
+    );
+    defer report.deinit();
+    try std.testing.expect(report.complete);
+    try std.testing.expect(report.results[0].model_verified);
+    try std.testing.expect(report.results[0].model.?[0].value);
 }
 
 test "api v1 sat sat" {

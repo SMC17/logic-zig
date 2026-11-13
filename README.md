@@ -30,7 +30,36 @@ Graph: [`GRAPH.md`](GRAPH.md).
 
 ---
 
+## Try real reasoning workflows
+
+Check a deployment request, explain conflicting configuration, assign work
+without double-booking, or find a release-protocol counterexample. The examples
+run locally with Zig 0.16.0 and Python 3:
+
+| Question | What you get |
+|----------|--------------|
+| Can this request satisfy deployment rules? | A checked assignment or a named conflict core |
+| Which configuration settings disagree? | A checked, deletion-minimal assumption explanation |
+| Can two people cover these tasks? | A feasible assignment or the conflicting requests |
+| Can this release protocol reach a bad state? | A replayable counterexample, or checked safety evidence for the guarded model |
+
+```sh
+zig build -Doptimize=ReleaseSafe
+./zig-out/bin/logic-agent run examples/workflows/deployment.json
+python3 tools/workflow_demo.py --out ../logic-workflow-evidence
+```
+
+The walkthrough saves inputs, answers, a counterexample trace and replayable
+certificate, with receipts and checksums. Its Boolean answers are checked by
+a separate exhaustive Python oracle. Optional upstream AIGER/ABC checks prove
+the guarded protocol and refute the changed one. Start with [use cases and expected results](docs/USE_CASES.md),
+then [write your own workflow or integrate from Zig](docs/WORKFLOWS.md).
+
 Choose one task: [self-serve reasoning labs](docs/SELF_SERVE_LABS.md).
+
+Start with a concrete policy question: [can deployment happen without approval?](examples/policy/README.md)
+Export a proof, check it independently, then see that proof rejected after
+the policy changes. The runner saves inputs, proof, logs and a receipt.
 
 ## 90 seconds
 
@@ -52,6 +81,8 @@ zig build
 blocks `TRUST_OK`. That is the intended agent-trust behavior, not a silent skip.
 
 Try an independent proof check: [`portable trust demo`](docs/PORTABLE_TRUST_DEMO.md).
+For agent integrations, `logic-zig trust-report --json` emits versioned evidence
+on stdout and exits nonzero on refusal. See the [trust contract](docs/TRUST.md).
 
 Step-by-step: [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md).
 Product matrix: [`docs/PRODUCTS.md`](docs/PRODUCTS.md).

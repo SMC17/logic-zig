@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "title": "Assign a reviewer and a release executor without double-booking",
+  "variables": ["a_reviews", "b_reviews", "a_releases", "b_releases"],
+  "clauses": [
+    ["a_reviews", "b_reviews"],
+    ["!a_reviews", "!b_reviews"],
+    ["a_releases", "b_releases"],
+    ["!a_releases", "!b_releases"],
+    ["!a_reviews", "!a_releases"],
+    ["!b_reviews", "!b_releases"]
+  ],
+  "queries": [
+    {"id": "find_assignment", "assumptions": []},
+    {"id": "double_book_a", "assumptions": ["a_reviews", "a_releases"]},
+    {"id": "delegate_release", "assumptions": ["a_reviews", "b_releases"]},
+    {"id": "no_reviewer", "assumptions": ["!a_reviews", "!b_reviews"]}
+  ]
+}

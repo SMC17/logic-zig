@@ -48,6 +48,29 @@ pub const CheckResult = enum {
     internal_error,
 };
 
+/// drat-trim's protocol is an exact status line, not a diagnostic substring.
+/// In particular, "s NOT VERIFIED" and a crashed checker establish no evidence.
+fn verifiedOutput(term: std.process.Child.Term, stdout: []const u8, stderr: []const u8) bool {
+    switch (term) {
+        .exited => |code| if (code != 0) return false,
+        else => return false,
+    }
+    var verified = false;
+    for ([_][]const u8{ stdout, stderr }) |output| {
+        var lines = std.mem.tokenizeAny(u8, output, "\r\n");
+        while (lines.next()) |raw| {
+            const line = std.mem.trim(u8, raw, " \t");
+            if (std.mem.eql(u8, line, "s VERIFIED")) {
+                verified = true;
+            } else if (std.mem.startsWith(u8, line, "s ")) {
+                // Conflicting statuses, including timeout or incomplete derivation.
+                return false;
+            }
+        }
+    }
+    return verified;
+}
+
 /// Write CNF + DRAT proof files and run external drat-trim.
 pub fn checkProofExternal(
     allocator: std.mem.Allocator,
@@ -90,24 +113,7 @@ pub fn checkProofExternal(
     defer allocator.free(result.stdout);
     defer allocator.free(result.stderr);
 
-    const out = result.stdout;
-    const err = result.stderr;
-    if (std.mem.indexOf(u8, out, "s VERIFIED") != null or
-        std.mem.indexOf(u8, err, "s VERIFIED") != null or
-        std.mem.indexOf(u8, out, "VERIFIED") != null)
-    {
-        return .verified;
-    }
-    // exit 0 sometimes means verified
-    switch (result.term) {
-        .exited => |code| {
-            if (code == 0 and (std.mem.indexOf(u8, out, "VERIFIED") != null or
-                std.mem.indexOf(u8, err, "VERIFIED") != null))
-                return .verified;
-        },
-        else => {},
-    }
-    return .failed;
+    return if (verifiedOutput(result.term, result.stdout, result.stderr)) .verified else .failed;
 }
 
 /// Solve with proof logging and verify externally.
@@ -182,6 +188,23 @@ pub fn fuzzExternalDrat(
 }
 
 const lit_mod = @import("../core/lit.zig");
+
+test "external proof evidence requires an exact positive status and successful exit" {
+    const ok: std.process.Child.Term = .{ .exited = 0 };
+    try std.testing.expect(verifiedOutput(ok, "c checking\r\ns VERIFIED\r\nc done\n", ""));
+    try std.testing.expect(verifiedOutput(ok, "", "s VERIFIED\n"));
+    for ([_][]const u8{
+        "",                           "VERIFIED",           "s NOT VERIFIED\n", "c VERIFIED derivation\n",
+        "prefix s VERIFIED\n",        "s VERIFIED later\n", "s TIMEOUT\n",      "s VERIFIED\ns NOT VERIFIED\n",
+        "s DERIVATION\ns VERIFIED\n",
+    }) |output| {
+        try std.testing.expect(!verifiedOutput(ok, output, ""));
+        try std.testing.expect(!verifiedOutput(ok, "", output));
+    }
+    try std.testing.expect(!verifiedOutput(ok, "s VERIFIED\n", "s NOT VERIFIED\n"));
+    try std.testing.expect(!verifiedOutput(.{ .exited = 1 }, "s VERIFIED\n", ""));
+    try std.testing.expect(!verifiedOutput(.{ .signal = .KILL }, "s VERIFIED\n", ""));
+}
 
 test "find drat-trim or skip" {
     const p = try findDratTrim(std.testing.allocator);

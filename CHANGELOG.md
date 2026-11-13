@@ -7,6 +7,33 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Reasoning workflows
+
+- Add `logic-agent run <workflow.json>` and api/v1 1.1.0 `AgentWorkflow` for
+  named constraints, reusable assumption queries, validated models, freshly
+  checked conflict cores, input hashes and explicit unknown outcomes.
+- Add deployment, configuration and staffing examples with an exhaustive
+  Python oracle, plus a release-protocol example with a replayed counterexample.
+- Add invariant text parsing and `logic-cert verify-invariant` to check saved
+  model/certificate pairs in a separate process.
+- Add a fact-bound deployment-decision example and optional upstream AIGER/ABC
+  checks of the saved protocol models. Classic ASCII latch export now writes
+  explicit current/next/init records and preserves unconstrained initial values.
+- Require invariants to exclude bad states beyond Init and require UNSAT for
+  every checking obligation. Unknown probes cannot establish assumption-core
+  uniqueness or minimality. `logic-cert check-drat` now refuses absent checking.
+
+### Trust evidence
+
+- Require an exact DRAT checker success status and exit 0. Reject negative,
+  conflicting, diagnostic-only and failed-checker output. Patch the pinned
+  checker build's incorrect exit status on an input containing an empty clause.
+- Refuse `sat --check-drat` when independent checking is unavailable; reject
+  formula-mode requests that previously silently ignored that option.
+- Add `trust-report --json` with versioned counters, scope and derived status.
+- Add a deployment policy example with independent proof replay, rejection
+  after changing the input, and a local receipt binding artifacts to hashes.
+
 ### Packaging
 
 - Add seven-CLI clean-source packs, task-oriented entry points, checksums and a gated native preview workflow. External proof checkers remain a separate installation.

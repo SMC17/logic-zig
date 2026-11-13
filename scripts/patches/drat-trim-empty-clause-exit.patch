@@ -1,0 +1,11 @@
+diff --git a/drat-trim.c b/drat-trim.c
+--- a/drat-trim.c
++++ b/drat-trim.c
+@@ -1478,6 +1478,6 @@ int main (int argc, char** argv) {
+   int sts = ERROR;
+   if       (parseReturnValue == ERROR)          printf ("\rs MEMORY ALLOCATION ERROR\n");
+-  else if  (parseReturnValue == UNSAT)          printf ("\rc trivial UNSAT\ns VERIFIED\n");
++  else if  (parseReturnValue == UNSAT)          { sts = UNSAT; printf ("\rc trivial UNSAT\ns VERIFIED\n"); }
+   else if  ((sts = verify (&S, -1, -1)) == UNSAT) printf ("\rs VERIFIED\n");
+   else if  (sts == DERIVATION)                  printf ("\rs DERIVATION\n");
+   else printf ("\ns NOT VERIFIED\n")  ;

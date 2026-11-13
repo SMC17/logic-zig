@@ -18,12 +18,42 @@ pub fn main(init: std.process.Init) !void {
             \\  logic-cert designs
             \\  logic-cert suite          # multi-design cert battery
             \\  logic-cert check-drat <file.cnf>
+            \\  logic-cert verify-invariant <model.aag> <invariant.txt>
             \\  logic-cert profile
             \\
         , .{});
         return;
     };
     const prof = logic.profiles.get(.cert);
+    if (std.mem.eql(u8, cmd, "verify-invariant")) {
+        const model_path = iter.next() orelse std.process.exit(2);
+        const cert_path = iter.next() orelse std.process.exit(2);
+        if (iter.next() != null) std.process.exit(2);
+        const model_source = try std.Io.Dir.cwd().readFileAlloc(io, model_path, gpa, .limited(16 << 20));
+        defer gpa.free(model_source);
+        const cert_source = try std.Io.Dir.cwd().readFileAlloc(io, cert_path, gpa, .limited(16 << 20));
+        defer gpa.free(cert_source);
+        var nl = try logic.aiger.parse(gpa, model_source);
+        defer nl.deinit();
+        var candidate = try logic.certificate.InductiveInvariant.parseText(gpa, cert_source);
+        defer candidate.deinit();
+        const properties = nl.badProps();
+        const matches = properties.len == 1 and candidate.bad == properties[0];
+        const verified = matches and try candidate.verify(gpa, &nl);
+        var buffer: [1024]u8 = undefined;
+        var stdout = std.Io.File.stdout().writer(io, &buffer);
+        try std.json.Stringify.value(.{
+            .schema_version = @as(u32, 1),
+            .status = if (verified) @as([]const u8, "INVARIANT_VERIFIED") else "INVARIANT_REFUSED",
+            .verified = verified,
+            .property_matches = matches,
+            .scope = "internal checks of invariant exclusion, initiation and transition preservation for one encoded bad property",
+        }, .{ .whitespace = .indent_2 }, &stdout.interface);
+        try stdout.interface.writeAll("\n");
+        try stdout.interface.flush();
+        if (!verified) std.process.exit(1);
+        return;
+    }
     if (std.mem.eql(u8, cmd, "profile")) {
         std.debug.print("profile={s}\n{s}\nproof={}\n", .{ prof.name, prof.blurb, prof.solver.proof });
         return;
@@ -155,7 +185,7 @@ pub fn main(init: std.process.Init) !void {
             @tagName(r.check),
             r.proof_lines,
         });
-        if (r.status == .unsat and r.check == .failed) std.process.exit(1);
+        if (r.status == .unsat and r.check != .verified) std.process.exit(1);
         return;
     }
     std.debug.print("unknown: {s}\n", .{cmd});
