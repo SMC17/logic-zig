@@ -9,6 +9,7 @@
 //! Proof level: unit-tested harness; run CLI for `benchmarked` evidence.
 
 const std = @import("std");
+const host = @import("../core/host.zig");
 const dimacs = @import("../bridge/dimacs.zig");
 const solver = @import("../sat/solver.zig");
 const external = @import("../sat/external.zig");
@@ -57,11 +58,7 @@ pub const SuiteResult = struct {
     }
 };
 
-fn monoNs() u64 {
-    var ts: std.os.linux.timespec = undefined;
-    _ = std.os.linux.clock_gettime(std.os.linux.CLOCK.MONOTONIC, &ts);
-    return @as(u64, @intCast(ts.sec)) * std.time.ns_per_s + @as(u64, @intCast(ts.nsec));
-}
+const monoNs = host.monoNs;
 
 fn statusFromSolve(s: solver.SolveStatus) Status {
     return switch (s) {
@@ -133,15 +130,8 @@ pub fn timeExternal(
     // unique-ish temp path
     var tmp_buf: [64]u8 = undefined;
     const tmp = try std.fmt.bufPrint(&tmp_buf, "/tmp/logic-zig-bench-{d}.cnf", .{monoNs() & 0xffff_ffff});
-    {
-        var path_z: [80]u8 = undefined;
-        @memcpy(path_z[0..tmp.len], tmp);
-        path_z[tmp.len] = 0;
-        const fd = std.os.linux.open(@ptrCast(&path_z), .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, 0o644);
-        if (@as(isize, @bitCast(fd)) < 0) return .{ .status = .error_, .ns = 0, .available = true };
-        _ = std.os.linux.write(@intCast(fd), body.ptr, body.len);
-        _ = std.os.linux.close(@intCast(fd));
-    }
+    host.writeFile(io, tmp, body) catch return .{ .status = .error_, .ns = 0, .available = true };
+    defer std.Io.Dir.cwd().deleteFile(io, tmp) catch {};
 
     const t0 = monoNs();
     const result = std.process.run(allocator, io, .{
@@ -234,11 +224,7 @@ pub fn timeProcess(allocator: std.mem.Allocator, io: std.Io, argv: []const []con
 }
 
 fn findSelfLogicZig(allocator: std.mem.Allocator) !?[]const u8 {
-    var buf: [std.fs.max_path_bytes]u8 = undefined;
-    const n = std.os.linux.readlink("/proc/self/exe", &buf, buf.len);
-    const ni: isize = @bitCast(n);
-    if (ni < 0) return null;
-    return try allocator.dupe(u8, buf[0..@intCast(ni)]);
+    return std.process.executablePathAlloc(std.Options.debug_io, allocator) catch null;
 }
 
 /// Run frozen suite under `suite_dir` (default `corpus/bench/sat`).

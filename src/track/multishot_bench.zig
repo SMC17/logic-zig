@@ -6,6 +6,7 @@
 //! Proof level: unit-tested; CLI produces `benchmarked` numbers.
 
 const std = @import("std");
+const host = @import("../core/host.zig");
 const cnf_mod = @import("../sat/cnf.zig");
 const solver_mod = @import("../sat/solver.zig");
 const lit_mod = @import("../core/lit.zig");
@@ -18,11 +19,7 @@ const Lit = lit_mod.Lit;
 const Var = lit_mod.Var;
 const Solver = solver_mod.Solver;
 
-fn monoNs() u64 {
-    var ts: std.os.linux.timespec = undefined;
-    _ = std.os.linux.clock_gettime(std.os.linux.CLOCK.MONOTONIC, &ts);
-    return @as(u64, @intCast(ts.sec)) * std.time.ns_per_s + @as(u64, @intCast(ts.nsec));
-}
+const monoNs = host.monoNs;
 
 pub const MultishotResult = struct {
     queries: u32,
@@ -143,15 +140,8 @@ pub fn benchExternalCold(
 
         var tmp_buf: [64]u8 = undefined;
         const tmp = try std.fmt.bufPrint(&tmp_buf, "/tmp/logic-zig-ms-{d}-{d}.cnf", .{ monoNs() & 0xffff, q });
-        {
-            var path_z: [96]u8 = undefined;
-            @memcpy(path_z[0..tmp.len], tmp);
-            path_z[tmp.len] = 0;
-            const fd = std.os.linux.open(@ptrCast(&path_z), .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, 0o644);
-            if (@as(isize, @bitCast(fd)) < 0) continue;
-            _ = std.os.linux.write(@intCast(fd), body.ptr, body.len);
-            _ = std.os.linux.close(@intCast(fd));
-        }
+        host.writeFile(io, tmp, body) catch continue;
+        defer std.Io.Dir.cwd().deleteFile(io, tmp) catch {};
         const result = std.process.run(allocator, io, .{
             .argv = &.{ path.?, tmp },
             .stdout_limit = .limited(256 * 1024),

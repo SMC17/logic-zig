@@ -1,0 +1,96 @@
+{
+  "schema": 1,
+  "project": "logic-zig",
+  "visibility": "public",
+  "systems": [
+    "Darwin",
+    "Linux"
+  ],
+  "required_files": [
+    "README.md",
+    "LICENSE"
+  ],
+  "task": "Try independent reasoning CLI tasks without a model service or API key. External trust checking is a separate installation step.",
+  "steps": [
+    {
+      "name": "unit suite",
+      "argv": [
+        "zig",
+        "build",
+        "test",
+        "-Doptimize=ReleaseSafe",
+        "--summary",
+        "all"
+      ],
+      "minimum_tests": 391,
+      "timeout_seconds": 300
+    },
+    {
+      "name": "build CLIs",
+      "argv": [
+        "zig",
+        "build",
+        "-Doptimize=ReleaseSafe"
+      ],
+      "timeout_seconds": 300
+    },
+    {
+      "name": "doctor",
+      "argv": [
+        "./zig-out/bin/logic-zig",
+        "doctor"
+      ],
+      "contains": "DOCTOR_OK"
+    },
+    {
+      "name": "certificate fixtures",
+      "argv": [
+        "./zig-out/bin/logic-cert",
+        "suite"
+      ]
+    },
+    {
+      "name": "bit-vector addition fixture",
+      "argv": [
+        "./zig-out/bin/logic-smt",
+        "demo-add"
+      ]
+    },
+    {
+      "name": "bounded CTL fixture",
+      "argv": [
+        "./zig-out/bin/logic-ctl",
+        "demo"
+      ]
+    },
+    {
+      "name": "strip debug symbols",
+      "argv": [
+        "strip",
+        "-S",
+        "zig-out/bin/logic-zig",
+        "zig-out/bin/logic-sat",
+        "zig-out/bin/logic-hwmcc",
+        "zig-out/bin/logic-cert",
+        "zig-out/bin/logic-smt",
+        "zig-out/bin/logic-ctl",
+        "zig-out/bin/logic-agent"
+      ]
+    }
+  ],
+  "bundle_paths": [
+    "zig-out/bin/logic-zig",
+    "zig-out/bin/logic-sat",
+    "zig-out/bin/logic-hwmcc",
+    "zig-out/bin/logic-cert",
+    "zig-out/bin/logic-smt",
+    "zig-out/bin/logic-ctl",
+    "zig-out/bin/logic-agent"
+  ],
+  "limitations": [
+    "Finite local fixture checks; no general solver-correctness or performance claim.",
+    "External checkers are not bundled. TRUST_OK still requires independent tools and positive evidence.",
+    "Bounded CTL and named SMT/certificate tasks retain the maturity limits in STATUS.md.",
+    "Hosted jobs remain unexecuted while account billing blocks Actions."
+  ]
+}

@@ -1,5 +1,7 @@
 # logic-zig
 
+**[Status](STATUS.md) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md) · [Issues](https://github.com/SMC17/logic-zig/issues) · [All SMC17 work](https://github.com/users/SMC17/projects/16)**
+
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Zig](https://img.shields.io/badge/Zig-0.16-orange.svg)](https://ziglang.org/)
 [![CI](https://github.com/SMC17/logic-zig/actions/workflows/ci.yml/badge.svg)](https://github.com/SMC17/logic-zig/actions/workflows/ci.yml)
@@ -30,6 +32,8 @@ Graph: [`GRAPH.md`](GRAPH.md).
 
 ---
 
+Choose one task: [self-serve reasoning labs](docs/SELF_SERVE_LABS.md).
+
 ## 90 seconds
 
 ```sh
@@ -48,6 +52,8 @@ zig build
 
 `trust-report` is fail-closed: missing CaDiCaL, DRAT-trim, or ABC is reported and
 blocks `TRUST_OK`. That is the intended agent-trust behavior, not a silent skip.
+
+Try an independent proof check: [`portable trust demo`](docs/PORTABLE_TRUST_DEMO.md).
 
 Step-by-step: [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md).
 Product matrix: [`docs/PRODUCTS.md`](docs/PRODUCTS.md).
@@ -131,7 +137,7 @@ const std = @import("std");
 const logic = @import("logic");
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa: std.heap.DebugAllocator(.{}) = .init;
     defer _ = gpa.deinit();
     const a = gpa.allocator();
 

@@ -611,14 +611,7 @@ fn cmdSatFile(
                     try p.writeDimacsLike(&aw.writer);
                     const body = try aw.toOwnedSlice();
                     defer gpa.free(body);
-                    var path_z: [512]u8 = undefined;
-                    if (dp.len >= path_z.len) return fail("path too long");
-                    @memcpy(path_z[0..dp.len], dp);
-                    path_z[dp.len] = 0;
-                    const fd = std.os.linux.open(@ptrCast(&path_z), .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, 0o644);
-                    if (@as(isize, @bitCast(fd)) < 0) return fail("open proof failed");
-                    _ = std.os.linux.write(@intCast(fd), body.ptr, body.len);
-                    _ = std.os.linux.close(@intCast(fd));
+                    std.Io.Dir.cwd().writeFile(io, .{ .sub_path = dp, .data = body }) catch return fail("write proof failed");
                     std.debug.print("dumped_proof={s} bytes={d}\n", .{ dp, body.len });
                 }
                 if (check_drat) {
@@ -779,15 +772,7 @@ fn cmdAigerWrite(gpa: std.mem.Allocator, io: std.Io, inp: []const u8, outp: []co
     else
         logic.aiger_write.writeAsciiSimple(gpa, &nl) catch return fail("write failed");
     defer gpa.free(bytes);
-    // write via linux open
-    var path_buf: [512]u8 = undefined;
-    if (outp.len >= path_buf.len) return fail("path too long");
-    @memcpy(path_buf[0..outp.len], outp);
-    path_buf[outp.len] = 0;
-    const fd = std.os.linux.open(@ptrCast(&path_buf), .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, 0o644);
-    if (@as(isize, @bitCast(fd)) < 0) return fail("open out failed");
-    _ = std.os.linux.write(@intCast(fd), bytes.ptr, bytes.len);
-    _ = std.os.linux.close(@intCast(fd));
+    std.Io.Dir.cwd().writeFile(io, .{ .sub_path = outp, .data = bytes }) catch return fail("write output failed");
     std.debug.print("WROTE {s} bytes={d} binary={} extended={}\n", .{ outp, bytes.len, binary, extended });
 }
 

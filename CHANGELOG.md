@@ -7,6 +7,24 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Packaging
+
+- Add seven-CLI clean-source packs, task-oriented entry points, checksums and a gated native preview workflow. External proof checkers remain a separate installation.
+
+
+### Fixed
+
+- Host discovery, monotonic timing, proof/export writes, and file-size checks
+  use Zig's platform-aware APIs instead of direct Linux system calls.
+- External-tool discovery reads the startup environment on native platforms
+  without depending on `/proc`. Temporary solver inputs are removed after use.
+- Proof and AIGER writes report failures instead of ignoring partial writes.
+
+- `trust-report` now requires positive evidence on every required axis and
+  refuses missing independent checkers or inconclusive differential checks.
+- `logic-sat check-drat` no longer returns UNSAT success without a verified
+  external proof. CI builds pinned checkers and explicitly checks SAT exit codes.
+
 ### Docs
 
 - Visitor README: executable museum / agent-trust kernel (not a SAT-solver pitch).
