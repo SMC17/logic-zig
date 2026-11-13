@@ -53,6 +53,12 @@ checks, ABC availability, and positive results on every internal evidence axis.
 No missing checker or zero-run axis counts as successful evidence. See
 [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) for pinned checker setup.
 
+### Native verification, 12 November 2026
+
+After merging the museum and Lean-oracle branch (#2): on macOS ARM64 with
+Zig 0.16.0, `zig build test --summary all` passes 541/541 and
+`zig fmt --check src build.zig` is clean.
+
 ### Native verification, 11 November 2026
 
 On macOS ARM64 with Zig 0.16.0: `zig build test --summary all` passes
