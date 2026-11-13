@@ -3,5 +3,8 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: monthly
-    labels: ["dependencies"]
+      interval: weekly
+    labels:
+      - dependencies
+      - github-actions
+    open-pull-requests-limit: 5

@@ -5,11 +5,28 @@ const std = @import("std");
 pub const Maturity = enum { absent, documented, skeleton, fragment, engine, industrial, external };
 
 pub const Family = enum {
-    classical_prop, classical_fol, higher_order, constructive, type_theory,
-    modal_temporal, substructural, many_valued, nonmonotonic, probabilistic,
-    inductive_abductive, informal, metalogic, computational_sat, computational_smt,
-    computational_mc, computational_atp, description_kr, algebraic_categorical,
-    historical_term, applied_domain, philosophical,
+    classical_prop,
+    classical_fol,
+    higher_order,
+    constructive,
+    type_theory,
+    modal_temporal,
+    substructural,
+    many_valued,
+    nonmonotonic,
+    probabilistic,
+    inductive_abductive,
+    informal,
+    metalogic,
+    computational_sat,
+    computational_smt,
+    computational_mc,
+    computational_atp,
+    description_kr,
+    algebraic_categorical,
+    historical_term,
+    applied_domain,
+    philosophical,
 };
 
 pub const System = struct {
@@ -77,6 +94,28 @@ pub const systems = [_]System{
     .{ .id = "ext-z3", .name = "Z3 (external)", .family = .computational_smt, .maturity = .external, .module = "bridge/giants", .notes = "" },
     .{ .id = "ext-abc", .name = "ABC (external)", .family = .computational_mc, .maturity = .external, .module = "bridge/abc_interop", .notes = "" },
     .{ .id = "ext-vampire", .name = "Vampire (external)", .family = .computational_atp, .maturity = .external, .module = "bridge/giants", .notes = "" },
+
+    // PR #2 additional engines (parallel modules; ids do not replace v0.24 rows)
+    .{ .id = "abductive-marco", .name = "MARCO-style CNF abduction", .family = .inductive_abductive, .maturity = .fragment, .module = "reason/abduction.zig", .notes = "subset-minimal consistent explanations" },
+    .{ .id = "inductive-dnf", .name = "k-term DNF synthesis", .family = .inductive_abductive, .maturity = .fragment, .module = "reason/induction.zig", .notes = "SAT-exact minimal-k" },
+    .{ .id = "maxsat", .name = "MaxSAT optimization", .family = .computational_sat, .maturity = .fragment, .module = "sat/maxsat.zig", .notes = "weighted partial" },
+    .{ .id = "klm-rational", .name = "KLM rational closure (reason/)", .family = .nonmonotonic, .maturity = .fragment, .module = "reason/klm.zig", .notes = "Lehmann–Magidor ranks" },
+    .{ .id = "default-reiter", .name = "Reiter default logic (reason/)", .family = .nonmonotonic, .maturity = .fragment, .module = "reason/default_logic.zig", .notes = "grounded/stable extensions" },
+    .{ .id = "dung-af", .name = "Abstract argumentation (Dung)", .family = .nonmonotonic, .maturity = .fragment, .module = "reason/argumentation.zig", .notes = "" },
+    .{ .id = "asp-stable", .name = "Answer-set programming", .family = .nonmonotonic, .maturity = .fragment, .module = "reason/asp.zig", .notes = "" },
+    .{ .id = "agm-revision", .name = "AGM belief revision", .family = .nonmonotonic, .maturity = .fragment, .module = "reason/agm.zig", .notes = "" },
+    .{ .id = "circumscription", .name = "Circumscription", .family = .nonmonotonic, .maturity = .fragment, .module = "reason/circumscription.zig", .notes = "" },
+    .{ .id = "analogical", .name = "Analogical reasoning", .family = .inductive_abductive, .maturity = .fragment, .module = "reason/analogy.zig", .notes = "" },
+    .{ .id = "alp", .name = "Abductive logic programming", .family = .inductive_abductive, .maturity = .fragment, .module = "reason/alp.zig", .notes = "" },
+    .{ .id = "intuitionistic-g4ip", .name = "Intuitionistic G4ip", .family = .constructive, .maturity = .fragment, .module = "logic/intuitionistic.zig", .notes = "Glivenko-verified" },
+    .{ .id = "linear-mll", .name = "MLL linear logic", .family = .substructural, .maturity = .fragment, .module = "logic/linear.zig", .notes = "" },
+    .{ .id = "dynamic-pdl", .name = "Propositional Dynamic Logic", .family = .modal_temporal, .maturity = .fragment, .module = "modal/pdl.zig", .notes = "" },
+    .{ .id = "syllogistic-venn", .name = "Aristotelian syllogistic (Venn)", .family = .historical_term, .maturity = .fragment, .module = "logic/syllogistic.zig", .notes = "" },
+    .{ .id = "manyvalued-matrix", .name = "Finite matrices K3/LP/FDE/Ł3", .family = .many_valued, .maturity = .fragment, .module = "logic/manyvalued.zig", .notes = "" },
+    .{ .id = "epistemic-s5", .name = "Multi-agent S5 epistemic", .family = .philosophical, .maturity = .fragment, .module = "modal/epistemic.zig", .notes = "" },
+    .{ .id = "deontic-sdl", .name = "SDL/KD deontic", .family = .philosophical, .maturity = .fragment, .module = "modal/deontic.zig", .notes = "" },
+    .{ .id = "description-el", .name = "EL subsumption", .family = .description_kr, .maturity = .fragment, .module = "logic/el.zig", .notes = "" },
+    .{ .id = "cert-rup-checker", .name = "Standalone RUP checker", .family = .metalogic, .maturity = .fragment, .module = "proof/rup_checker.zig", .notes = "" },
     .{ .id = "ext-drat-trim", .name = "drat-trim (external)", .family = .metalogic, .maturity = .external, .module = "sat/drat_external", .notes = "" },
 };
 

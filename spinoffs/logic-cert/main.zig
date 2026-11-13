@@ -100,7 +100,7 @@ pub fn main(init: std.process.Init) !void {
                     var ii = i.*;
                     ii.deinit();
                 }
-                if (try i.verify(gpa, &d.nl)) ok += 1 else fail += 1;
+                if (try i.verify(gpa, &d.nl) == .verified) ok += 1 else fail += 1;
             } else fail += 1;
         }
         // kind on stuck

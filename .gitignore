@@ -24,3 +24,5 @@ third_party/
 *.log
 tmp/
 .cache/
+.lake/
+.aristotle/

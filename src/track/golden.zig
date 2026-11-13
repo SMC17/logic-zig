@@ -110,7 +110,7 @@ pub fn runBuiltin(allocator: std.mem.Allocator) !GoldenResult {
                 var ii = i.*;
                 ii.deinit();
             }
-            pass(&res, try i.verify(allocator, &nl));
+            pass(&res, try i.verify(allocator, &nl) == .verified);
         } else pass(&res, false);
     }
     // BMC counter
@@ -195,7 +195,7 @@ pub fn runBuiltin(allocator: std.mem.Allocator) !GoldenResult {
         try nl.addGate(.not, &.{q}, nq);
         try nl.addLatch(d, q, false);
         const r = try ctl.checkAg(allocator, &nl, nq, 4);
-        pass(&res, r.status == .holds);
+        pass(&res, r.status == .holds_within_bound);
     }
     // agent session
     {
@@ -392,7 +392,7 @@ pub fn runBuiltin(allocator: std.mem.Allocator) !GoldenResult {
                 var ii = i.*;
                 ii.deinit();
             }
-            pass(&res, try i.verify(allocator, &d.nl));
+            pass(&res, try i.verify(allocator, &d.nl) == .verified);
         } else pass(&res, false);
     }
     {

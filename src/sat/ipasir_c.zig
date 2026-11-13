@@ -27,19 +27,27 @@ export fn ipasir_release(solver: ?*anyopaque) callconv(.c) void {
 export fn ipasir_add(solver: ?*anyopaque, lit_or_zero: c_int) callconv(.c) void {
     if (solver == null) return;
     const s: *CSolver = @ptrCast(@alignCast(solver));
-    s.add(lit_or_zero) catch {};
+    s.add(lit_or_zero) catch {
+        s.fatal = true;
+    };
 }
 
 export fn ipasir_assume(solver: ?*anyopaque, lit: c_int) callconv(.c) void {
     if (solver == null) return;
     const s: *CSolver = @ptrCast(@alignCast(solver));
-    s.assume(lit) catch {};
+    s.assume(lit) catch {
+        s.fatal = true;
+    };
 }
 
 export fn ipasir_solve(solver: ?*anyopaque) callconv(.c) c_int {
     if (solver == null) return 0;
     const s: *CSolver = @ptrCast(@alignCast(solver));
-    const r = s.solve() catch return 0;
+    if (s.fatal) return 0;
+    const r = s.solve() catch {
+        s.fatal = true;
+        return 0;
+    };
     return @intFromEnum(r);
 }
 
@@ -55,17 +63,14 @@ export fn ipasir_failed(solver: ?*anyopaque, lit: c_int) callconv(.c) c_int {
     return s.failed(lit);
 }
 
-/// Partial IPASIR: termination callback not yet wired (no-op).
 export fn ipasir_set_terminate(solver: ?*anyopaque, state: ?*anyopaque, cb: ?*const fn (?*anyopaque) callconv(.c) c_int) callconv(.c) void {
-    _ = solver;
-    _ = state;
-    _ = cb;
+    if (solver == null) return;
+    const s: *CSolver = @ptrCast(@alignCast(solver));
+    s.setTerminate(state, cb);
 }
 
-/// Partial IPASIR: learned-clause callback not yet wired (no-op).
 export fn ipasir_set_learn(solver: ?*anyopaque, state: ?*anyopaque, max_len: c_int, cb: ?*const fn (?*anyopaque, [*c]const c_int) callconv(.c) void) callconv(.c) void {
-    _ = solver;
-    _ = state;
-    _ = max_len;
-    _ = cb;
+    if (solver == null) return;
+    const s: *CSolver = @ptrCast(@alignCast(solver));
+    s.setLearn(state, max_len, cb);
 }

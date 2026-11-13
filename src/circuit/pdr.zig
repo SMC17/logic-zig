@@ -806,8 +806,8 @@ pub fn check(
         .generalizations = stats.gens,
         .pushes = stats.pushes,
         .ctg_blocks = stats.ctg_blocks,
-                    .obligations = stats.obligations,
-                    .ternary_drops = stats.ternary_drops,
+        .obligations = stats.obligations,
+        .ternary_drops = stats.ternary_drops,
     };
 }
 
