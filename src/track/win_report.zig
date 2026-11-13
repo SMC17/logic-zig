@@ -2,6 +2,7 @@
 //! Prints a scoreboard; exit 1 if any required axis fails.
 
 const std = @import("std");
+const host = @import("../core/host.zig");
 const correctness_suite = @import("correctness_suite.zig");
 const bench = @import("bench.zig");
 const multishot_bench = @import("multishot_bench.zig");
@@ -10,23 +11,11 @@ const comp_bench = @import("comp_bench.zig");
 const external = @import("../sat/external.zig");
 const drat_external = @import("../sat/drat_external.zig");
 
-fn monoNs() u64 {
-    var ts: std.os.linux.timespec = undefined;
-    _ = std.os.linux.clock_gettime(std.os.linux.CLOCK.MONOTONIC, &ts);
-    return @as(u64, @intCast(ts.sec)) * std.time.ns_per_s + @as(u64, @intCast(ts.nsec));
-}
+const monoNs = host.monoNs;
 
 fn fileSize(path: []const u8) ?u64 {
-    var path_z: [512]u8 = undefined;
-    if (path.len >= path_z.len) return null;
-    @memcpy(path_z[0..path.len], path);
-    path_z[path.len] = 0;
-    const fd = std.os.linux.open(@ptrCast(&path_z), .{ .ACCMODE = .RDONLY }, 0);
-    if (@as(isize, @bitCast(fd)) < 0) return null;
-    defer _ = std.os.linux.close(@intCast(fd));
-    const end = std.os.linux.lseek(@intCast(fd), 0, std.os.linux.SEEK.END);
-    if (@as(isize, @bitCast(end)) < 0) return null;
-    return @intCast(end);
+    const stat = std.Io.Dir.cwd().statFile(std.Options.debug_io, path, .{}) catch return null;
+    return stat.size;
 }
 
 pub const WinReport = struct {

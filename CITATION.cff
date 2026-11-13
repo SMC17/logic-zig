@@ -5,7 +5,6 @@ type: software
 authors:
   - family-names: Collins
     given-names: Sean
-    email: seancollins2027@u.northwestern.edu
 repository-code: "https://github.com/SMC17/logic-zig"
 url: "https://github.com/SMC17/logic-zig"
 abstract: >-
