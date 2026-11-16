@@ -18,7 +18,7 @@ Built for:
 - **Agent platforms** that must *check* reasoning — incremental SAT, deletion-minimal
   cores, RUP/DRAT proofs, inductive safety certificates, stable `api/v1`.
 - **Lean / Zig tooling** — fast Zig engines next to a documented Lean semantic-oracle
-  contract. A kernel-checked Lean project is a named residual, not a README claim.
+  contract. A kernel-checked Lean project remains among the open obligations, not a README claim.
 
 | Surface | What ships on `main` |
 |---------|----------------------|
@@ -27,7 +27,7 @@ Built for:
 | **Agent surface** | `logic-agent` multishot profile, assumption cores, `api/v1` |
 | **Lean oracle** | Contract + Zig fixture schema in [`docs/LEAN_ORACLE.md`](docs/LEAN_ORACLE.md) |
 
-Proof posture: [`STATUS.md`](STATUS.md). Non-fiction rules: [`docs/UNIVERSAL.md`](docs/UNIVERSAL.md).
+Proof posture: [`STATUS.md`](STATUS.md). Verified rules: [`docs/UNIVERSAL.md`](docs/UNIVERSAL.md).
 Graph: [`GRAPH.md`](GRAPH.md).
 
 ---
@@ -194,7 +194,7 @@ Add via `build.zig.zon` / `b.dependency`, or vendor `src/` and import the `logic
 | [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) | Clone → doctor |
 | [docs/TRUST.md](docs/TRUST.md) | Certificates and `TRUST_OK` gates |
 | [docs/LEAN_ORACLE.md](docs/LEAN_ORACLE.md) | Lean oracle contract (kernel work is residual) |
-| [docs/UNIVERSAL.md](docs/UNIVERSAL.md) | North star + non-fiction rules |
+| [docs/UNIVERSAL.md](docs/UNIVERSAL.md) | North star + verified rules |
 | [docs/TAXONOMY_COVERAGE.md](docs/TAXONOMY_COVERAGE.md) | Honest coverage map |
 | [docs/PRODUCTS.md](docs/PRODUCTS.md) | Spin-off product matrix |
 | [docs/INDUSTRIAL.md](docs/INDUSTRIAL.md) | SAT/MC/SMT/FOL depth program |
@@ -218,7 +218,7 @@ Narrow, testable contracts over marketing language:
 - Registry maturity is raised only when code + tests land in the same change.
 - Fair k-liveness `proven_infinite` is complete relative to the safety engine on the round-robin reduction.
 - External parity (Kissat, Z3, Vampire, …) is **never claimed** without scoreboard evidence.
-- Lean output, including any Aristotle-generated proof, is untrusted until the
+- Lean output, including machine-checked Lean 4 proofs, is untrusted until the
   pinned kernel builds it.
 
 Known residuals live in [`STATUS.md`](STATUS.md).
