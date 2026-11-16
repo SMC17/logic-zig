@@ -1,0 +1,14 @@
+# logic-zig (`SMC17/logic-zig`)
+
+> An executable museum of logic: one system, one evidence file, Zig.
+
+## Repository & Docs
+- **Repository**: https://github.com/SMC17/logic-zig
+- [README](https://github.com/SMC17/logic-zig/blob/main/README.md)
+- [Graph](https://github.com/SMC17/logic-zig/blob/main/GRAPH.md)
+- [Build](https://github.com/SMC17/logic-zig/blob/main/build.zig)
+- [Source](https://github.com/SMC17/logic-zig/tree/main/src) & [Tests](https://github.com/SMC17/logic-zig/tree/main/tests)
+
+## Ecosystem & Author
+- **Unified Substrate (`SMC17/zinging`)**: https://github.com/SMC17/zinging
+- **Author / Org**: https://github.com/SMC17
